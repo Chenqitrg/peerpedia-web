@@ -161,6 +161,7 @@ async def api_fork_article(article_id: str, forker_id: str = Form(...)):
             keywords=article.keywords or [],
         )
         fork.forked_from = article_id
+        fork.status = article.status  # inherit published status so merge button appears
         # Bump fork count on source
         article.fork_count = (article.fork_count or 0) + 1
         session.commit()
