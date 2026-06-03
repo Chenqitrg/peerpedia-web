@@ -12,9 +12,8 @@
 ```bash
 cd ~/Projects/peerpedia
 source .venv/bin/activate
-peerpedia --help                          # 验证 CLI 可用
-python -m pytest tests/ -v                # 跑测试（应 19 passed）
-open design/brainstorm.md                 # 打开设计文档
+.venv/bin/python -m pytest tests/ -v          # 跑测试（应 157 passed）
+open design/brainstorm.md                     # 打开设计文档
 ```
 
 ---
@@ -60,7 +59,7 @@ tests/                   # 19 tests, 0 failures
 - 信誉/权重算法在 Layer 1，可通过 PIP 升级
 - 使用 Python 3.14 + FastAPI + Jinja2 + HTMX + SQLite + GitPython
 
-### Phase 3: MVP 实现 ⏸ 待开始
+### Phase 3: MVP 实现 ✅ 已完成（M1-M5 全部功能）
 
 **目标**: 按 TDD 节奏实现核心功能闭环。一个人能在本地提交文章、找人审稿、发布。
 
@@ -121,6 +120,7 @@ tests/                   # 19 tests, 0 failures
 | FastAPI 启动 | ✅ |
 | Web 模板 (首页/文章/提交/审稿) | ✅ |
 | 126 个测试全部通过 | ✅ |
+| **代码审查** (2026-06-03) | ✅ bug修复 + 模块拆分 + SMI 3.7→2.5 |
 
 ### M3 新增功能
 
@@ -168,9 +168,9 @@ tests/                   # 19 tests, 0 failures
 ## 技术栈速查
 
 ```bash
-source .venv/bin/activate    # 激活虚拟环境
-python -m pytest tests/ -v   # 跑测试
-peerpedia --help             # CLI 帮助
+source .venv/bin/activate            # 激活虚拟环境
+.venv/bin/python -m pytest tests/ -v  # 跑测试
+peerpedia --help                     # CLI 帮助
 ```
 
 | 组件 | 技术 | 文档 |
@@ -184,16 +184,12 @@ peerpedia --help             # CLI 帮助
 
 ---
 
-## 下一步（重新启动时）
+## 下一步
 
 1. 打开 `design/brainstorm.md` 回顾设计文档
-2. 运行 `python -m pytest tests/ -v` 确认 19 tests pass
-3. 从 Phase 3 M1 开始：让 `peerpedia submit` 真正工作
-   - 先写测试
-   - 集成 Typst 编译器（subprocess）
-   - 创建 git repo + 首次 commit
-   - 存入 SQLite 元数据
-   - Web 文章列表从数据库读取真实数据
+2. 运行 `.venv/bin/python -m pytest tests/ -v` 确认 157 tests pass
+3. Phase 3 M1-M5 全部完成 ✅
+4. 待实现: LAN 节点发现 + 同步 (M4 LAN Cluster)
 
 ---
 
@@ -201,12 +197,12 @@ peerpedia --help             # CLI 帮助
 
 ```
 ~/Projects/peerpedia/
-├── design/brainstorm.md     ← 完整设计文档（986 行）
+├── design/brainstorm.md     ← 完整设计文档（39项决策）
 ├── STATUS.md                ← 本文件，重启指南
 ├── README.md                ← 项目简介
 ├── pyproject.toml           ← 构建配置 + 依赖
 ├── .venv/                   ← Python 虚拟环境
-├── peerpedia_core/          ← 协议库
-├── peerpedia/               ← 参考客户端
-└── tests/                   ← 测试（19 passed）
+├── peerpedia_core/          ← 协议库（5子包，16模块）
+├── peerpedia/               ← 参考客户端（CLI + Web，12模块）
+└── tests/                   ← 测试（157 passed, 0 failures）
 ```
