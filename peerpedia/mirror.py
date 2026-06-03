@@ -87,63 +87,59 @@ def fetch_arxiv_metadata(arxiv_id: str) -> Optional[ArxivMetadata]:
         req = Request(url, headers={"User-Agent": "PeerPedia/0.1 (mailto:peerpedia@localhost)"})
         with urlopen(req, timeout=15) as response:
             xml_data = response.read().decode("utf-8")
-    except URLError as e:
-        reason = getattr(e, 'reason', str(e))
-        code = getattr(e, 'code', None)
-        return None  # caller uses generic error; detailed logging would go here
+    except URLError:
+        return None  # caller provides generic error message
 
     return _parse_arxiv_xml(xml_data)
 
 
 def _parse_arxiv_xml(xml_data: str) -> Optional[ArxivMetadata]:
-    """Parse arXiv API XML response into ArxivMetadata."""
-    # Remove namespace prefixes for easier parsing
-    xml_clean = re.sub(r'<(\w+):(\w+)', r'<\1_\2', xml_data)
-    xml_clean = re.sub(r'</(\w+):(\w+)', r'</\1_\2', xml_clean)
+    """Parse arXiv API XML response into ArxivMetadata.
 
-    # Safe: xml.etree.ElementTree does not resolve external entities or DTDs by default
+    Uses proper XML namespace handling via ElementTree.
+    """
+    # Define namespaces
+    ns = {"atom": "http://www.w3.org/2005/Atom",
+          "arxiv": "http://arxiv.org/schemas/atom"}
+
     try:
-        root = ET.fromstring(xml_clean)
+        root = ET.fromstring(xml_data)
     except ET.ParseError:
         return None
 
-    # Namespace
-    ns = "{http://www.w3.org/2005/Atom}"
-    arxiv_ns = "{http://arxiv.org/schemas/atom}"
-
-    entry = root.find(f"{ns}entry")
+    entry = root.find("atom:entry", ns)
     if entry is None:
         return None
 
     # ID
-    id_elem = entry.find(f"{ns}id")
+    id_elem = entry.find("atom:id", ns)
     arxiv_id = id_elem.text.strip().split("/")[-1] if id_elem is not None and id_elem.text else ""
     arxiv_id = re.sub(r'v\d+$', '', arxiv_id)
 
     # Title
-    title_elem = entry.find(f"{ns}title")
+    title_elem = entry.find("atom:title", ns)
     title = title_elem.text.strip().replace("\n", " ") if title_elem is not None and title_elem.text else "Untitled"
 
     # Abstract
-    summary_elem = entry.find(f"{ns}summary")
+    summary_elem = entry.find("atom:summary", ns)
     abstract = summary_elem.text.strip().replace("\n", " ") if summary_elem is not None and summary_elem.text else ""
 
     # Authors
     authors = []
-    for author_elem in entry.findall(f"{ns}author"):
-        name_elem = author_elem.find(f"{ns}name")
+    for author_elem in entry.findall("atom:author", ns):
+        name_elem = author_elem.find("atom:name", ns)
         if name_elem is not None and name_elem.text:
             authors.append(name_elem.text.strip())
 
     # Categories
     categories = []
-    for cat_elem in entry.findall(f"{ns}category"):
+    for cat_elem in entry.findall("atom:category", ns):
         term = cat_elem.attrib.get("term", "")
         if term:
             categories.append(term)
 
     # Published date
-    published_elem = entry.find(f"{ns}published")
+    published_elem = entry.find("atom:published", ns)
     published_date = published_elem.text.strip() if published_elem is not None and published_elem.text else ""
 
     # PDF URL

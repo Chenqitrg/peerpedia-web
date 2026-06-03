@@ -4,7 +4,7 @@ Protocol evolution mechanism. Analogous to Python PEPs or Bitcoin BIPs.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
@@ -35,7 +35,7 @@ class PIP:
     summary: str
     specification: str
     status: PIPStatus = PIPStatus.DRAFT
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     discussion_url: Optional[str] = None
     votes_for: int = 0
     votes_against: int = 0

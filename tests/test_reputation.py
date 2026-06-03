@@ -1,7 +1,7 @@
 """Tests for reputation algorithm v1."""
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from peerpedia_core.protocol import ReputationVector, IdentityType
 from peerpedia_core.reputation import ReputationV1, ReputationParams
 
@@ -17,7 +17,7 @@ class TestReputationV1:
             collaboration_spirit=50.0,
             education_outreach=50.0,
         )
-        yesterday = datetime.utcnow() - timedelta(days=1)
+        yesterday = datetime.now(timezone.utc) - timedelta(days=1)
         result = algo.apply_decay(vec, yesterday)
         assert result.academic_contribution == 50.0
 
@@ -31,7 +31,7 @@ class TestReputationV1:
             education_outreach=100.0,
         )
         # 100 days inactive: 10 days of decay
-        inactive_since = datetime.utcnow() - timedelta(days=100)
+        inactive_since = datetime.now(timezone.utc) - timedelta(days=100)
         result = algo.apply_decay(vec, inactive_since)
 
         # After 10 days of 0.1% daily decay: 100 * 0.999^10 ≈ 99.0

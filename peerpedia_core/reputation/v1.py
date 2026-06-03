@@ -10,7 +10,7 @@ Current v1:
 """
 
 from abc import ABC, abstractmethod
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from peerpedia_core.protocol import IdentityType, ReputationVector
@@ -107,16 +107,45 @@ class ReputationV1(BaseReputation):
             return ReputationVector(user_id=user_id)
 
         from peerpedia_core.storage.db import (
-            Article, Review, ContributionRecord, Identity,
+            Article, Review, ContributionRecord,
             get_user, get_identities_for_user, update_user_last_active,
         )
         from sqlalchemy import func
-        from datetime import datetime, timezone
 
-        # ── Update last_active ──
         update_user_last_active(session, user_id)
 
-        # ── 1. Aggregate activity data ──
+        activity = self._aggregate_activity(session, user_id, Article, Review,
+                                            ContributionRecord, func)
+        identity_multiplier = self._compute_identity_multiplier(session, user_id,
+                                                                get_identities_for_user)
+        user = get_user(session, user_id)
+        decay = self._compute_decay(user)
+
+        academic = min(100.0, (activity["article_count"] * 10.0
+                       + activity["contrib_weight_total"] / 100.0)
+                       * identity_multiplier * decay)
+        review = min(100.0, (activity["review_count"] * 15.0
+                     + activity["review_points"] / 10.0)
+                     * identity_multiplier * decay)
+        collaboration = min(100.0, (activity["collab_count"] * 20.0)
+                            * identity_multiplier * decay)
+        education = min(100.0, (activity["outreach"] * 5.0)
+                        * identity_multiplier * decay)
+
+        return ReputationVector(
+            user_id=user_id,
+            academic_contribution=round(academic, 1),
+            review_quality=round(review, 1),
+            collaboration_spirit=round(collaboration, 1),
+            education_outreach=round(education, 1),
+            total_points=activity["review_points"],
+        )
+
+    # ── Private helpers ────────────────────────────────────────────────────
+
+    def _aggregate_activity(self, session, user_id: str, Article, Review,
+                            ContributionRecord, func) -> dict:
+        """Query the database for all user activity metrics."""
         article_count = session.query(func.count(Article.id)).filter(
             Article.founding_authors.contains(user_id)
         ).scalar() or 0
@@ -131,65 +160,60 @@ class ReputationV1(BaseReputation):
 
         contrib_weight_total = session.query(
             func.sum(ContributionRecord.contribution_weight)
-        ).filter(
-            ContributionRecord.user_id == user_id
-        ).scalar() or 0
+        ).filter(ContributionRecord.user_id == user_id).scalar() or 0
 
-        # Count collaborations (articles where user co-authors with others)
-        collab_count = 0
         articles = session.query(Article).filter(
             Article.founding_authors.contains(user_id)
         ).all()
-        for a in articles:
-            if len(a.founding_authors) > 1:
-                collab_count += 1
 
-        # Education outreach: pinned_by on user's articles
+        collab_count = sum(1 for a in articles if len(a.founding_authors) > 1)
         outreach = sum(a.pinned_by for a in articles)
 
-        # ── 2. Identity multiplier ──
+        return {
+            "article_count": article_count,
+            "review_count": review_count,
+            "review_points": review_points,
+            "contrib_weight_total": contrib_weight_total,
+            "collab_count": collab_count,
+            "outreach": outreach,
+        }
+
+    def _compute_identity_multiplier(self, session, user_id: str,
+                                     get_identities_for_user) -> float:
+        """Compute multiplier from verified identity trust weights."""
         identities = get_identities_for_user(session, user_id)
-        identity_multiplier = 1.0
+        multiplier = 1.0
         for ident in identities:
             if ident.verified:
-                identity_multiplier += (ident.trust_weight / 100.0) * 0.1
+                multiplier += (ident.trust_weight / 100.0) * 0.1
+        return multiplier
 
-        # ── 3. Time decay ──
-        user = get_user(session, user_id)
-        decay = 1.0
-        if user is not None and user.last_active is not None:
-            now = datetime.now(timezone.utc)
-            last_active = user.last_active
-            # SQLite may or may not preserve timezone info on readback; normalize
-            if last_active.tzinfo is None:
-                last_active = last_active.replace(tzinfo=timezone.utc)
-            days_inactive = (now - last_active).days
-            if days_inactive > self.params.decay_grace_days:
-                decay_days = days_inactive - self.params.decay_grace_days
-                decay = max(0.5, (1.0 - self.params.decay_rate_per_day) ** decay_days)
+    def _compute_decay(self, user) -> float:
+        """Compute time-decay factor based on user's last_active timestamp."""
+        if user is None or user.last_active is None:
+            return 1.0
 
-        # ── 4. Compute four dimensions ──
-        academic = min(100.0, (article_count * 10.0 + contrib_weight_total / 100.0)
-                       * identity_multiplier * decay)
-        review = min(100.0, (review_count * 15.0 + review_points / 10.0)
-                     * identity_multiplier * decay)
-        collaboration = min(100.0, (collab_count * 20.0)
-                            * identity_multiplier * decay)
-        education = min(100.0, (outreach * 5.0)
-                        * identity_multiplier * decay)
+        from datetime import datetime, timezone
 
-        return ReputationVector(
-            user_id=user_id,
-            academic_contribution=round(academic, 1),
-            review_quality=round(review, 1),
-            collaboration_spirit=round(collaboration, 1),
-            education_outreach=round(education, 1),
-            total_points=review_points,
-        )
+        now = datetime.now(timezone.utc)
+        last_active = user.last_active
+        if last_active.tzinfo is None:
+            last_active = last_active.replace(tzinfo=timezone.utc)
+
+        days_inactive = (now - last_active).days
+        if days_inactive <= self.params.decay_grace_days:
+            return 1.0
+
+        decay_days = days_inactive - self.params.decay_grace_days
+        return max(0.5, (1.0 - self.params.decay_rate_per_day) ** decay_days)
 
     def apply_decay(self, vector: ReputationVector, last_active: datetime) -> ReputationVector:
         """Decay reputation for inactive users."""
-        days_inactive = (datetime.utcnow() - last_active).days
+        now = datetime.now(timezone.utc)
+        # Normalize: SQLite may return naive datetimes
+        if last_active.tzinfo is None:
+            last_active = last_active.replace(tzinfo=timezone.utc)
+        days_inactive = (now - last_active).days
         if days_inactive <= self.params.decay_grace_days:
             return vector
 

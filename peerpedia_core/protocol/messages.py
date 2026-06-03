@@ -5,7 +5,7 @@ constitute a protocol fork. See design/brainstorm.md Section 10 for details.
 """
 
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from pydantic import BaseModel, Field
 
@@ -77,7 +77,7 @@ class UserProfile(BaseModel):
     expertise: list[str] = Field(default_factory=list)
     identities: list[Identity] = Field(default_factory=list)
     public_key: str = ""
-    joined_at: datetime = Field(default_factory=datetime.utcnow)
+    joined_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class ContributorShare(BaseModel):
@@ -146,8 +146,8 @@ class ArticleMeta(BaseModel):
     cited_by: list[str] = Field(default_factory=list)
     cid: Optional[str] = None
     pinned_by: int = 0
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class ReviewMessage(BaseModel):
@@ -162,7 +162,7 @@ class ReviewMessage(BaseModel):
     collaboration_request: bool = False
     collaboration_message: str = ""
     points_earned: int = 0
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class EditProposal(BaseModel):
@@ -176,7 +176,7 @@ class EditProposal(BaseModel):
     diff_stat: str = ""
     status: ProposalStatus = ProposalStatus.PENDING
     points_stake: int = 0
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     resolved_at: Optional[datetime] = None
 
 
@@ -199,4 +199,4 @@ class PIPProposal(BaseModel):
     summary: str
     specification: str
     status: str = "draft"  # draft | discussion | voting | accepted | rejected
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

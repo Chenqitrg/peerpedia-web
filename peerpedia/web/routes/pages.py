@@ -5,9 +5,9 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
 
-from peerpedia.config.settings import settings
+from peerpedia.web.db_session import get_db_session
 from peerpedia_core.storage.db import (
-    get_engine, get_session, init_db, list_articles, get_article,
+    list_articles, get_article,
     Article,
 )
 
@@ -17,17 +17,10 @@ templates_dir = Path(__file__).parent.parent / "templates"
 templates = Jinja2Templates(directory=str(templates_dir))
 
 
-def _get_db_session():
-    """Get a database session, ensuring tables exist."""
-    engine = get_engine(settings.database_url)
-    init_db(engine)
-    return get_session(engine)
-
-
 @router.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     """Home page — article listing from database."""
-    session = _get_db_session()
+    session = get_db_session()
     try:
         articles = list_articles(session)
         return templates.TemplateResponse(
@@ -45,7 +38,7 @@ async def home(request: Request):
 @router.get("/article/{article_id}", response_class=HTMLResponse)
 async def view_article(request: Request, article_id: str):
     """View a single article with rendered content."""
-    session = _get_db_session()
+    session = get_db_session()
     try:
         article = get_article(session, article_id)
         if article is None:
@@ -83,7 +76,7 @@ async def submit_page(request: Request):
 @router.get("/review/{article_id}", response_class=HTMLResponse)
 async def review_article_page(request: Request, article_id: str):
     """Review form for a specific article."""
-    session = _get_db_session()
+    session = get_db_session()
     try:
         article = get_article(session, article_id)
         if article is None:
@@ -112,7 +105,7 @@ async def review_article_page(request: Request, article_id: str):
 @router.get("/review", response_class=HTMLResponse)
 async def review_queue(request: Request):
     """Review queue — list articles pending review."""
-    session = _get_db_session()
+    session = get_db_session()
     try:
         articles = list_articles(session, status="submitted")
         return templates.TemplateResponse(
@@ -130,7 +123,7 @@ async def review_queue(request: Request):
 @router.get("/user/{user_id}", response_class=HTMLResponse)
 async def user_profile(request: Request, user_id: str):
     """User profile page — personal arXiv and activity footprint."""
-    session = _get_db_session()
+    session = get_db_session()
     try:
         # Articles authored by this user
         authored = (

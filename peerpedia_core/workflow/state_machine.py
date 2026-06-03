@@ -19,18 +19,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-
-# ── Status constants (mirrors protocol enum) ───────────────────────────────────
-
-class ArticleStatus:
-    DRAFT = "draft"
-    SUBMITTED = "submitted"
-    IN_REVIEW = "in_review"
-    REVISIONS_REQUESTED = "revisions_requested"
-    ACCEPTED = "accepted"
-    PUBLISHED = "published"
-    EDIT_PROPOSED = "edit_proposed"
-    REJECTED = "rejected"
+from peerpedia_core.protocol.messages import ArticleStatus
 
 
 # ── Valid transitions ──────────────────────────────────────────────────────────

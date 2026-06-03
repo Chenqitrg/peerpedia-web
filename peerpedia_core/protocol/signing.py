@@ -31,11 +31,16 @@ def verify_signature(
     Phase 2+: Ed25519 verification.
     """
     expected = sign_message(message, public_key_pem)
-    return hashlib.sha256(
-        expected.encode()
-    ).hexdigest() == hashlib.sha256(
-        signature.encode()
-    ).hexdigest()
+    # Constant-time comparison to prevent timing attacks
+    return _constant_time_compare(expected, signature)
+
+
+def _constant_time_compare(a: str, b: str) -> bool:
+    """Constant-time string comparison.
+    Uses hmac.compare_digest to prevent timing side-channel attacks.
+    """
+    import hmac
+    return hmac.compare_digest(a.encode(), b.encode())
 
 
 def generate_keypair() -> tuple[str, str]:

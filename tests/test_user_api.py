@@ -12,15 +12,14 @@ from peerpedia.web.app import app
 
 
 def _setup_test_db(tmp_path):
-    """Create a test database and return a session factory."""
+    """Create a test database and return the database URL."""
     db_path = tmp_path / "test.db"
     engine = get_engine(f"sqlite:///{db_path}")
     init_db(engine)
-
-    def make_session():
-        return get_session(engine)
-
-    return make_session
+    # Pre-create a session to ensure tables exist, then close
+    session = get_session(engine)
+    session.close()
+    return f"sqlite:///{db_path}"
 
 
 class TestUserAPI:
@@ -28,9 +27,9 @@ class TestUserAPI:
     def test_create_user(self):
         """POST /api/v1/users should create a user."""
         with tempfile.TemporaryDirectory() as tmp:
-            session_factory = _setup_test_db(Path(tmp))
+            db_url = _setup_test_db(Path(tmp))
 
-            with mock.patch("peerpedia.web.routes.api._get_db_session", session_factory):
+            with mock.patch("peerpedia.web.db_session.settings.database_url", db_url):
                 client = TestClient(app)
 
                 resp = client.post("/api/v1/users", json={
@@ -48,9 +47,9 @@ class TestUserAPI:
     def test_get_user(self):
         """GET /api/v1/users/{user_id} should return user info."""
         with tempfile.TemporaryDirectory() as tmp:
-            session_factory = _setup_test_db(Path(tmp))
+            db_url = _setup_test_db(Path(tmp))
 
-            with mock.patch("peerpedia.web.routes.api._get_db_session", session_factory):
+            with mock.patch("peerpedia.web.db_session.settings.database_url", db_url):
                 client = TestClient(app)
 
                 # Create user first
@@ -67,9 +66,9 @@ class TestUserAPI:
     def test_get_user_not_found(self):
         """GET /api/v1/users/{user_id} should 404 for unknown user."""
         with tempfile.TemporaryDirectory() as tmp:
-            session_factory = _setup_test_db(Path(tmp))
+            db_url = _setup_test_db(Path(tmp))
 
-            with mock.patch("peerpedia.web.routes.api._get_db_session", session_factory):
+            with mock.patch("peerpedia.web.db_session.settings.database_url", db_url):
                 client = TestClient(app)
                 resp = client.get("/api/v1/users/nobody")
                 assert resp.status_code == 404
@@ -77,9 +76,9 @@ class TestUserAPI:
     def test_create_identity(self):
         """POST /api/v1/users/{user_id}/identities should bind identity."""
         with tempfile.TemporaryDirectory() as tmp:
-            session_factory = _setup_test_db(Path(tmp))
+            db_url = _setup_test_db(Path(tmp))
 
-            with mock.patch("peerpedia.web.routes.api._get_db_session", session_factory):
+            with mock.patch("peerpedia.web.db_session.settings.database_url", db_url):
                 client = TestClient(app)
 
                 client.post("/api/v1/users", json={
@@ -99,9 +98,9 @@ class TestUserAPI:
     def test_create_identity_user_not_found(self):
         """POST /api/v1/users/{user_id}/identities should 404 if user missing."""
         with tempfile.TemporaryDirectory() as tmp:
-            session_factory = _setup_test_db(Path(tmp))
+            db_url = _setup_test_db(Path(tmp))
 
-            with mock.patch("peerpedia.web.routes.api._get_db_session", session_factory):
+            with mock.patch("peerpedia.web.db_session.settings.database_url", db_url):
                 client = TestClient(app)
                 resp = client.post("/api/v1/users/ghost/identities", json={
                     "type": "orcid",
@@ -112,9 +111,9 @@ class TestUserAPI:
     def test_get_reputation(self):
         """GET /api/v1/users/{user_id}/reputation should return ReputationVector."""
         with tempfile.TemporaryDirectory() as tmp:
-            session_factory = _setup_test_db(Path(tmp))
+            db_url = _setup_test_db(Path(tmp))
 
-            with mock.patch("peerpedia.web.routes.api._get_db_session", session_factory):
+            with mock.patch("peerpedia.web.db_session.settings.database_url", db_url):
                 client = TestClient(app)
 
                 client.post("/api/v1/users", json={
@@ -134,9 +133,9 @@ class TestUserAPI:
     def test_get_reputation_nonexistent_user(self):
         """GET /api/v1/users/{user_id}/reputation should return zeros for unknown user."""
         with tempfile.TemporaryDirectory() as tmp:
-            session_factory = _setup_test_db(Path(tmp))
+            db_url = _setup_test_db(Path(tmp))
 
-            with mock.patch("peerpedia.web.routes.api._get_db_session", session_factory):
+            with mock.patch("peerpedia.web.db_session.settings.database_url", db_url):
                 client = TestClient(app)
 
                 resp = client.get("/api/v1/users/nobody/reputation")
