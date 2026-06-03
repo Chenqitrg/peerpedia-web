@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>{{ title }} — PeerPedia</title>
     <link rel="stylesheet" href="/static/style.css">
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
 </head>
 <body>
     <header>
@@ -11,13 +12,97 @@
         <nav>
             <a href="/">Home</a>
             <a href="/submit">Submit</a>
+            <a href="/review">Review Queue</a>
         </nav>
     </header>
 
     <main>
+    {% if article %}
+        <h2>Review: {{ article.title }}</h2>
+
+        <div class="article-meta">
+            <span>Status: <span class="status {{ article.status }}">{{ article.status }}</span></span>
+            <span>Format: {{ article.format }}</span>
+            <span>Authors: {{ article.founding_authors | join(", ") }}</span>
+        </div>
+
+        <div class="article-abstract">
+            <h3>Abstract</h3>
+            <p>{{ article.abstract }}</p>
+        </div>
+
+        {% if reviews %}
+        <section class="existing-reviews">
+            <h3>Existing Reviews ({{ reviews | length }})</h3>
+            {% for r in reviews %}
+            <div class="review-card">
+                <p class="meta">
+                    {{ r.reviewer_id }} · {{ r.decision }} ·
+                    Scientific: {{ r.scientific_correctness }}/5 ·
+                    Clarity: {{ r.clarity }}/5 ·
+                    +{{ r.points_earned }} pts
+                </p>
+                <p>{{ r.comments }}</p>
+            </div>
+            {% endfor %}
+        </section>
+        {% endif %}
+
+        <section class="review-form">
+            <h3>Submit Your Review</h3>
+            <form action="/api/v1/articles/{{ article.id }}/reviews" method="post"
+                  hx-post="/api/v1/articles/{{ article.id }}/reviews"
+                  hx-target="#review-result"
+                  hx-swap="innerHTML">
+                <label>Your Name/ID: <input type="text" name="reviewer_id" required></label>
+                <label>Decision:
+                    <select name="decision" required>
+                        <option value="accept">Accept</option>
+                        <option value="revise">Revise</option>
+                        <option value="reject">Reject</option>
+                    </select>
+                </label>
+                <label>Scientific Correctness (1-5):
+                    <input type="range" name="scientific_correctness" min="1" max="5" value="3">
+                </label>
+                <label>Clarity (1-5):
+                    <input type="range" name="clarity" min="1" max="5" value="3">
+                </label>
+                <label>Comments (Markdown):
+                    <textarea name="comments" rows="6"></textarea>
+                </label>
+                <button type="submit">Submit Review</button>
+            </form>
+            <div id="review-result"></div>
+        </section>
+
+        <section class="decision-action">
+            <h3>Make Decision</h3>
+            <button hx-post="/api/v1/articles/{{ article.id }}/decide"
+                    hx-target="#decision-result"
+                    hx-swap="innerHTML">
+                Decide Now
+            </button>
+            <div id="decision-result"></div>
+        </section>
+
+    {% elif articles is defined and articles %}
+        <h2>Review Queue</h2>
+        <p>{{ articles | length }} article(s) pending review.</p>
+        {% for a in articles %}
+        <article class="article-card">
+            <h3><a href="/review/{{ a.id }}">{{ a.title }}</a></h3>
+            <p class="meta">
+                {{ a.founding_authors | join(", ") }} · {{ a.format }} ·
+                <span class="status {{ a.status }}">{{ a.status }}</span>
+            </p>
+            <p class="abstract">{{ a.abstract[:200] }}</p>
+        </article>
+        {% endfor %}
+    {% else %}
         <h2>Review Queue</h2>
         <p class="empty-state">No articles pending review.</p>
-        <!-- TODO: list submitted articles awaiting review -->
+    {% endif %}
     </main>
 </body>
 </html>

@@ -108,6 +108,87 @@ async def api_create_article(
             tmp_path.unlink()
 
 
+@router.get("/articles/{article_id}/reviews")
+async def api_get_reviews(article_id: str):
+    """Get all reviews for an article."""
+    from peerpedia_core.storage.db import get_reviews_for_article
+    session = _get_db_session()
+    try:
+        article = get_article(session, article_id)
+        if article is None:
+            raise HTTPException(status_code=404, detail="Article not found")
+        reviews = get_reviews_for_article(session, article_id)
+        return {
+            "article_id": article_id,
+            "reviews": [r.to_dict() for r in reviews],
+            "total": len(reviews),
+        }
+    finally:
+        session.close()
+
+
+@router.post("/articles/{article_id}/reviews")
+async def api_submit_review(
+    article_id: str,
+    reviewer_id: str = Form(...),
+    decision: str = Form(...),
+    comments: str = Form(""),
+    scientific_correctness: int = Form(0),
+    clarity: int = Form(0),
+):
+    """Submit a review for an article."""
+    from peerpedia_core.workflow.review import assign_reviewer, submit_review
+
+    # Assign (no-op if already in_review)
+    assign_result = assign_reviewer(
+        article_id=article_id,
+        reviewer_id=reviewer_id,
+        database_url=settings.database_url,
+    )
+    if not assign_result.success and "must be" not in assign_result.error:
+        raise HTTPException(status_code=400, detail=assign_result.error)
+
+    # Submit review
+    result = submit_review(
+        article_id=article_id,
+        reviewer_id=reviewer_id,
+        decision=decision,
+        comments=comments,
+        scientific_correctness=scientific_correctness,
+        clarity=clarity,
+        database_url=settings.database_url,
+    )
+
+    if not result.success:
+        raise HTTPException(status_code=400, detail=result.error)
+
+    return {
+        "review_id": result.review_id,
+        "points_earned": result.points_earned,
+        "status": "submitted",
+    }
+
+
+@router.post("/articles/{article_id}/decide")
+async def api_decide_article(article_id: str):
+    """Make a decision on an article."""
+    from peerpedia_core.workflow.review import make_decision
+
+    result = make_decision(
+        article_id=article_id,
+        database_url=settings.database_url,
+    )
+
+    if not result.success:
+        raise HTTPException(status_code=400, detail=result.error)
+
+    return {
+        "article_id": article_id,
+        "new_status": result.new_status,
+        "author_points": result.author_points,
+    }
+
+
 @router.get("/health")
 async def health_check():
     """Health check endpoint."""

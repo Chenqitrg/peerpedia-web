@@ -93,6 +93,35 @@ async def submit_page(request: Request):
     )
 
 
+@router.get("/review/{article_id}", response_class=HTMLResponse)
+async def review_article_page(request: Request, article_id: str):
+    """Review form for a specific article."""
+    session = _get_db_session()
+    try:
+        article = get_article(session, article_id)
+        if article is None:
+            return templates.TemplateResponse(
+                "review.html",
+                {"request": request, "title": "Not Found", "article": None, "reviews": []},
+                status_code=404,
+            )
+
+        from peerpedia_core.storage.db import get_reviews_for_article
+        reviews = get_reviews_for_article(session, article_id)
+
+        return templates.TemplateResponse(
+            "review.html",
+            {
+                "request": request,
+                "title": f"Review: {article.title}",
+                "article": article.to_dict(),
+                "reviews": [r.to_dict() for r in reviews],
+            },
+        )
+    finally:
+        session.close()
+
+
 @router.get("/review", response_class=HTMLResponse)
 async def review_queue(request: Request):
     """Review queue — list articles pending review."""
