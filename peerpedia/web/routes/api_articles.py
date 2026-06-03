@@ -133,6 +133,11 @@ async def api_submit_review(
     comments: str = Form(""),
     scientific_correctness: int = Form(0),
     clarity: int = Form(0),
+    review_originality: int = Form(0),
+    review_rigor: int = Form(0),
+    review_completeness: int = Form(0),
+    review_pedagogy: int = Form(0),
+    review_impact: int = Form(0),
 ):
     """Submit a review for an article. Returns HTML for HTMX swap."""
     from fastapi.responses import HTMLResponse
@@ -154,6 +159,11 @@ async def api_submit_review(
         comments=comments,
         scientific_correctness=scientific_correctness,
         clarity=clarity,
+        review_originality=review_originality,
+        review_rigor=review_rigor,
+        review_completeness=review_completeness,
+        review_pedagogy=review_pedagogy,
+        review_impact=review_impact,
         database_url=settings.database_url,
     )
     if not result.success:
