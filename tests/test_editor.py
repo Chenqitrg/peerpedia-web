@@ -201,8 +201,8 @@ def test_editor_and_preview_separate_panes():
 
 
 def test_codemirror_container_sized():
-    """Editor pane must have width:50% and CodeMirror fills height."""
+    """CodeMirror wrapper must have width:50% to keep panes equal."""
     response = client.get("/edit")
     html = response.text
-    assert '#editor-area { width: 50%' in html.replace('; ', ';')
-    assert '.CodeMirror { height: 100%' in html.replace('; ', ';')
+    assert '#editor-container .CodeMirror { width: 50%' in html.replace('; ', ';')
+    assert 'flex-shrink: 0' in html
