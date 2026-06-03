@@ -272,12 +272,14 @@
     </script>
 
     <!-- Typst WASM preview (lazy load) -->
-    <script type="module">
-    import * as typst from 'https://cdn.jsdelivr.net/npm/@myriaddreamin/typst.ts@0.5.5/dist/esm/contrib/all-in-one.bundle.js';
-    window.$typst = typst;
-
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@myriaddreamin/typst-all-in-one.ts@0.6.0/dist/esm/index.js"></script>
+    <script>
     function previewTypst(content, preview, status) {
         status.textContent = '编译中...';
+        if (!window.$typst) {
+            preview.innerHTML = '<p style="color:#888;">Typst WASM 加载中，请稍候...</p>';
+            return;
+        }
         window.$typst.svg({ mainContent: content }).then(function(svg) {
             preview.innerHTML = svg;
             status.textContent = '';
