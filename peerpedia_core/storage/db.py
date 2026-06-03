@@ -225,6 +225,84 @@ class Review(Base):
         }
 
 
+# ── ORM Model: ContributionRecord ──────────────────────────────────────────────
+
+class ContributionRecord(Base):
+    """Per-commit contribution record for git blame timeline."""
+
+    __tablename__ = "contribution_records"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    article_id = Column(String(36), ForeignKey("articles.id"), nullable=False, index=True)
+    user_id = Column(String(100), nullable=False)
+    timestamp = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    commit_hash = Column(String(40), nullable=False)
+    commit_message = Column(Text, nullable=False, default="")
+    lines_added = Column(Integer, nullable=False, default=0)
+    lines_deleted = Column(Integer, nullable=False, default=0)
+    files_changed = Column(JSONList, nullable=False, default=list)
+    change_type = Column(String(30), nullable=False, default="content")
+    # "new_theorem" | "proof_fix" | "content" | "prose" | "format"
+    contribution_weight = Column(Integer, nullable=False, default=0)
+    # Scaled integer: weight * 100 to avoid floating point in DB
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "article_id": self.article_id,
+            "user_id": self.user_id,
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            "commit_hash": self.commit_hash,
+            "commit_message": self.commit_message,
+            "lines_added": self.lines_added,
+            "lines_deleted": self.lines_deleted,
+            "files_changed": self.files_changed,
+            "change_type": self.change_type,
+            "contribution_weight": self.contribution_weight,
+        }
+
+
+# ── ORM Model: EditProposal ───────────────────────────────────────────────────
+
+class EditProposal(Base):
+    """Post-publication edit proposal."""
+
+    __tablename__ = "edit_proposals"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    article_id = Column(String(36), ForeignKey("articles.id"), nullable=False, index=True)
+    proposer_id = Column(String(100), nullable=False)
+    proposal_type = Column(String(20), nullable=False)
+    # "minor" | "medium" | "major"
+    description = Column(Text, nullable=False, default="")
+    git_branch = Column(String(200), nullable=False, default="")
+    diff_stat = Column(Text, nullable=False, default="")
+    status = Column(String(20), nullable=False, default="pending")
+    # "pending" | "approved" | "rejected" | "auto_approved"
+    reviewer_id = Column(String(100), nullable=True)
+    review_comment = Column(Text, nullable=False, default="")
+    points_stake = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    resolved_at = Column(DateTime, nullable=True)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "article_id": self.article_id,
+            "proposer_id": self.proposer_id,
+            "proposal_type": self.proposal_type,
+            "description": self.description,
+            "git_branch": self.git_branch,
+            "diff_stat": self.diff_stat,
+            "status": self.status,
+            "reviewer_id": self.reviewer_id,
+            "review_comment": self.review_comment,
+            "points_stake": self.points_stake,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "resolved_at": self.resolved_at.isoformat() if self.resolved_at else None,
+        }
+
+
 # ── CRUD Operations ────────────────────────────────────────────────────────────
 
 def create_article(
@@ -350,3 +428,165 @@ def get_reviews_for_article(session: Session, article_id: str) -> list[Review]:
         .order_by(Review.created_at.asc())
         .all()
     )
+
+
+# ── ContributionRecord CRUD ────────────────────────────────────────────────────
+
+def create_contribution_record(
+    session: Session,
+    *,
+    article_id: str,
+    user_id: str,
+    commit_hash: str,
+    commit_message: str = "",
+    lines_added: int = 0,
+    lines_deleted: int = 0,
+    files_changed: Optional[list[str]] = None,
+    change_type: str = "content",
+    contribution_weight: int = 0,
+) -> ContributionRecord:
+    """Create a contribution record."""
+    record = ContributionRecord(
+        id=str(uuid.uuid4()),
+        article_id=article_id,
+        user_id=user_id,
+        commit_hash=commit_hash,
+        commit_message=commit_message,
+        lines_added=lines_added,
+        lines_deleted=lines_deleted,
+        files_changed=files_changed or [],
+        change_type=change_type,
+        contribution_weight=contribution_weight,
+    )
+    session.add(record)
+    return record
+
+
+def get_contribution_records(
+    session: Session,
+    article_id: str,
+) -> list[ContributionRecord]:
+    """Get all contribution records for an article, oldest first."""
+    return (
+        session.query(ContributionRecord)
+        .filter(ContributionRecord.article_id == article_id)
+        .order_by(ContributionRecord.timestamp.asc())
+        .all()
+    )
+
+
+def get_user_contribution_total(
+    session: Session,
+    article_id: str,
+    user_id: str,
+) -> int:
+    """Get total contribution weight for a user on an article."""
+    result = (
+        session.query(ContributionRecord)
+        .filter(
+            ContributionRecord.article_id == article_id,
+            ContributionRecord.user_id == user_id,
+        )
+        .all()
+    )
+    return sum(r.contribution_weight for r in result)
+
+
+# ── EditProposal CRUD ──────────────────────────────────────────────────────────
+
+def create_edit_proposal(
+    session: Session,
+    *,
+    article_id: str,
+    proposer_id: str,
+    proposal_type: str,
+    description: str = "",
+    git_branch: str = "",
+    diff_stat: str = "",
+    points_stake: int = 0,
+) -> EditProposal:
+    """Create an edit proposal record."""
+    proposal = EditProposal(
+        id=str(uuid.uuid4()),
+        article_id=article_id,
+        proposer_id=proposer_id,
+        proposal_type=proposal_type,
+        description=description,
+        git_branch=git_branch,
+        diff_stat=diff_stat,
+        status="pending",
+        points_stake=points_stake,
+    )
+    session.add(proposal)
+    return proposal
+
+
+def get_edit_proposal(session: Session, proposal_id: str) -> Optional[EditProposal]:
+    """Get an edit proposal by ID."""
+    return session.query(EditProposal).filter(EditProposal.id == proposal_id).first()
+
+
+def get_edit_proposals_for_article(
+    session: Session,
+    article_id: str,
+    *,
+    status: Optional[str] = None,
+) -> list[EditProposal]:
+    """Get all edit proposals for an article, newest first."""
+    q = (
+        session.query(EditProposal)
+        .filter(EditProposal.article_id == article_id)
+        .order_by(EditProposal.created_at.desc())
+    )
+    if status:
+        q = q.filter(EditProposal.status == status)
+    return q.all()
+
+
+def update_edit_proposal_status(
+    session: Session,
+    proposal_id: str,
+    new_status: str,
+    *,
+    reviewer_id: Optional[str] = None,
+    review_comment: str = "",
+) -> Optional[EditProposal]:
+    """Update an edit proposal's status."""
+    proposal = get_edit_proposal(session, proposal_id)
+    if proposal:
+        proposal.status = new_status
+        proposal.resolved_at = datetime.now(timezone.utc)
+        if reviewer_id:
+            proposal.reviewer_id = reviewer_id
+        if review_comment:
+            proposal.review_comment = review_comment
+    return proposal
+
+
+def update_article_founding_authors(
+    session: Session,
+    article_id: str,
+    new_author_id: str,
+) -> Optional[Article]:
+    """Add a new author to the article's founding_authors list (co-author join)."""
+    article = get_article(session, article_id)
+    if article:
+        authors = list(article.founding_authors)
+        if new_author_id not in authors:
+            authors.append(new_author_id)
+            article.founding_authors = authors
+            article.updated_at = datetime.now(timezone.utc)
+    return article
+
+
+def update_article_version(
+    session: Session,
+    article_id: str,
+    new_version: str,
+) -> Optional[Article]:
+    """Increment an article's version string."""
+    article = get_article(session, article_id)
+    if article:
+        article.version = new_version
+        article.updated_at = datetime.now(timezone.utc)
+    return article
