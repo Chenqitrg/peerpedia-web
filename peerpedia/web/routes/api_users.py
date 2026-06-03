@@ -8,11 +8,7 @@ from pydantic import Field
 from peerpedia.web.db_session import get_db_session
 from peerpedia_core.storage.db import (
     create_identity as db_create_identity,
-)
-from peerpedia_core.storage.db import (
     create_user as db_create_user,
-)
-from peerpedia_core.storage.db import (
     get_identities_for_user,
     get_user,
 )
