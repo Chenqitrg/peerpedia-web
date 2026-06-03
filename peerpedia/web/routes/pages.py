@@ -210,14 +210,16 @@ async def review_queue(request: Request):
     session = get_db_session()
     viewer = get_viewer(request)
     try:
-        articles = list_articles(session, status="submitted")
+        # Pool: submitted + in_review (legacy)
+        pool = list_articles(session, status="submitted")
+        pool += list_articles(session, status="in_review")
         return templates.TemplateResponse(
             request=request,
             name="review.html",
             context={
                 "request": request,
                 "title": "沉淀池",
-                "articles": [a.to_dict() for a in articles],
+                "articles": [a.to_dict() for a in pool],
                 "viewer": viewer,
                 "all_users": get_all_users(),
             },

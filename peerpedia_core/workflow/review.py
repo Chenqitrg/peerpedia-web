@@ -83,11 +83,9 @@ def assign_reviewer(
     *,
     database_url: str,
 ) -> AssignResult:
-    """Assign a reviewer to an article. Transitions submitted -> in_review.
+    """Verify article is in a valid state for rating (sedimentation pool model).
 
-    MVP rule: any user can self-assign as reviewer.
-    Also handles draft -> in_review for convenience (auto-transitions
-    through submitted).
+    No status transition needed — articles stay in 'submitted' until auto-published.
     """
     engine = get_engine(database_url)
     init_db(engine)
@@ -98,23 +96,18 @@ def assign_reviewer(
         if article is None:
             return AssignResult(success=False, article_id=article_id, error="Article not found")
 
-        # Accept both 'submitted' and 'draft' as valid starting points for MVP
-        if article.status not in (ArticleStatus.SUBMITTED, ArticleStatus.DRAFT):
+        if article.status not in (ArticleStatus.SUBMITTED, ArticleStatus.IN_REVIEW, ArticleStatus.DRAFT):
             return AssignResult(
                 success=False,
                 article_id=article_id,
-                error=f"Cannot assign reviewer: article status is '{article.status}', must be 'submitted'",
+                error=f"Cannot rate: article status is '{article.status}', must be 'submitted'",
             )
-
-        # Transition to in_review
-        update_article_status(session, article_id, ArticleStatus.IN_REVIEW)
-        session.commit()
 
         return AssignResult(
             success=True,
             article_id=article_id,
             reviewer_id=reviewer_id,
-            new_status=ArticleStatus.IN_REVIEW,
+            new_status=article.status,
         )
     except Exception as e:
         session.rollback()
@@ -155,31 +148,49 @@ def submit_review(
         if article is None:
             return ReviewResult(success=False, article_id=article_id, error="Article not found")
 
-        if article.status != ArticleStatus.IN_REVIEW:
+        # Accept submitted or in_review for sedimentation pool
+        if article.status not in (ArticleStatus.SUBMITTED, ArticleStatus.IN_REVIEW):
             return ReviewResult(
                 success=False,
                 article_id=article_id,
-                error=f"Cannot submit review: article status is '{article.status}', must be 'in_review'",
+                error=f"Cannot submit review: article status is '{article.status}', must be 'submitted' or 'in_review'",
             )
 
-        # Validate decision enum
-        VALID_DECISIONS = {"accept", "revise", "reject"}
-        if decision not in VALID_DECISIONS:
-            return ReviewResult(
-                success=False,
-                article_id=article_id,
-                error=f"Invalid decision '{decision}'. Must be one of: {VALID_DECISIONS}",
-            )
-
-        # Check for duplicate reviewer
+        # If same reviewer already has a review, update it instead of creating new
         existing = get_reviews_for_article(session, article_id)
+        existing_review = None
         for r in existing:
             if r.reviewer_id == reviewer_id:
-                return ReviewResult(
-                    success=False,
-                    article_id=article_id,
-                    error=f"Reviewer '{reviewer_id}' has already reviewed this article",
-                )
+                existing_review = r
+                break
+
+        if existing_review:
+            # Update existing review. Only overwrite ratings if any dimension is non-zero
+            # (a comment-only submission keeps the old ratings)
+            has_new_ratings = any(v > 0 for v in [
+                review_originality, review_rigor, review_completeness,
+                review_pedagogy, review_impact,
+            ])
+            existing_review.decision = decision
+            existing_review.comments = comments
+            if has_new_ratings:
+                existing_review.review_originality = review_originality
+                existing_review.review_rigor = review_rigor
+                existing_review.review_completeness = review_completeness
+                existing_review.review_pedagogy = review_pedagogy
+                existing_review.review_impact = review_impact
+            existing_review.collaboration_request = 1 if collaboration_request else 0
+            if collaboration_message:
+                existing_review.collaboration_message = collaboration_message
+            session.commit()
+
+            return ReviewResult(
+                success=True,
+                review_id=existing_review.id,
+                article_id=article_id,
+                reviewer_id=reviewer_id,
+                points_earned=existing_review.points_earned,
+            )
 
         # Calculate points
         points = calculate_review_points(scientific_correctness, clarity)
