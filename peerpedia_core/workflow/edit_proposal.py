@@ -23,6 +23,7 @@ from peerpedia_core.storage.db import (
 )
 from peerpedia_core.workflow.contribution import compute_change_type_weight
 from peerpedia_core.workflow.state_machine import ArticleStatus
+from peerpedia_core.workflow.versioning import bump_minor_version
 
 VALID_PROPOSAL_TYPES = {"minor", "medium", "major"}
 
@@ -251,13 +252,7 @@ def merge_proposal(
             )
 
         # Bump version
-        current_version = article.version or "v0.1"
-        try:
-            parts = current_version.lstrip("v").split(".")
-            minor = int(parts[1]) if len(parts) > 1 else 1
-            new_version = f"v{parts[0]}.{minor + 1}"
-        except (ValueError, IndexError):
-            new_version = "v0.2"
+        new_version = bump_minor_version(article.version or "v0.1")
 
         update_article_version(session, article_id, new_version)
 

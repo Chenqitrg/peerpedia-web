@@ -15,6 +15,7 @@ from peerpedia_core.storage.db import (
     update_article_founding_authors,
 )
 from peerpedia_core.workflow.citations import get_citation_info, inject_citation_links
+from peerpedia_core.workflow.versioning import bump_minor_version
 
 router = APIRouter()
 
@@ -284,7 +285,7 @@ async def api_review_merge_proposal(
                 )
 
             # Bump version
-            new_version = _bump_version(target.version)
+            new_version = bump_minor_version(target.version)
             update_article_version(session, proposal.target_article_id, new_version)
 
             # ── Merge credit (placeholder — simple formula) ──────────────────
@@ -324,15 +325,6 @@ async def api_review_merge_proposal(
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         session.close()
-
-
-def _bump_version(version_str: str) -> str:
-    """Bump minor version: v0.1 → v0.2, v1.5 → v1.6."""
-    try:
-        parts = version_str.lstrip("v").split(".")
-        return f"v{parts[0]}.{int(parts[1]) + 1}"
-    except Exception:
-        return "v0.2"
 
 
 @router.get("/articles/{article_id}/merge-proposals")
