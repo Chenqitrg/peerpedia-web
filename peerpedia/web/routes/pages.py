@@ -150,8 +150,41 @@ async def review_article_page(request: Request, article_id: str):
                 status_code=404,
             )
 
-        from peerpedia_core.storage.db import get_reviews_for_article
+        from peerpedia_core.storage.db import get_reviews_for_article, update_article_status
         reviews = get_reviews_for_article(session, article_id)
+
+        # Compute sink progress
+        sink_pct = 0
+        days_left = 7
+        if reviews:
+            dims = ["originality", "rigor", "completeness", "pedagogy", "impact"]
+            scores = []
+            for r in reviews:
+                vals = [getattr(r, f"review_{d}", 0) for d in dims]
+                if any(v > 0 for v in vals):
+                    scores.append(sum(vals) / len(vals))
+            if scores:
+                avg = sum(scores) / len(scores)
+                # Score 5.0 → 2 days, Score 1.0 → 180 days
+                base_days = 7
+                days_left = max(2, min(180, int(base_days * 5.0 / max(avg, 0.01))))
+                elapsed = (base_days - days_left) if days_left < base_days else 0
+                total = max(base_days, days_left)
+                sink_pct = min(95, int((1 - days_left / max(base_days, 1)) * 100))
+        else:
+            # No reviews yet — full 7 days
+            from datetime import datetime, timezone
+            if article.created_at:
+                now = datetime.now(timezone.utc).replace(tzinfo=None)
+                age_days = (now - article.created_at).days
+                days_left = max(0, 7 - age_days)
+                sink_pct = min(95, int((age_days / 7) * 100))
+
+        # Auto-publish if sedimented
+        if days_left <= 0 and article.status == "submitted":
+            update_article_status(session, article.id, "published")
+            session.commit()
+            article = get_article(session, article_id)  # refresh
 
         return templates.TemplateResponse(
             request=request,
@@ -163,6 +196,8 @@ async def review_article_page(request: Request, article_id: str):
                 "reviews": [r.to_dict() for r in reviews],
                 "viewer": viewer,
                 "all_users": get_all_users(),
+                "sink_pct": sink_pct,
+                "days_left": days_left,
             },
         )
     finally:
