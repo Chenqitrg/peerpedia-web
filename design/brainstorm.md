@@ -1,4 +1,4 @@
-# PeerPedia — Brainstorming Document
+# 知著网 (PeerPedia) — 设计蓝图
 
 > 日期: 2026-06-03
 > 状态: Phase 3 M1+M2+M2.5+M2.6+M3 完成（126 tests, 0 failures）
@@ -968,6 +968,10 @@ Phase 2: 跨学科扩张
 | 28 | 用户足迹 | **个人 arXiv**：/user/{user_id} 显示原创文章、搬运文章、审稿记录、积分统计、活动时间线 |
 | 29 | PDF 策略 | **不存 PDF**：Typst 按需编译（毫秒级），git 仓库只存纯文本源码。阅读时 GET /compile?fmt=html|pdf |
 | 30 | 编译时机 | **阅读时编译**：submit 时不做编译，文章页面通过 HTMX hx-trigger="load" 请求 /compile 端点 |
+| 31 | 审稿期协作 | **accept_collaboration**：作者同意后审稿人加入 founding_authors，共同拥有文章 |
+| 32 | 编辑提案治理 | **三级分类**：minor（自动通过）→ medium（原作者 review）→ major（社区投票，M4 实现） |
+| 33 | 贡献度计算 | **git blame + change_type 权重**：new_theorem(5×) / proof_fix(4×) / content(2×) / prose(1×) / format(0.3×) |
+| 34 | 中文名 | **知著网**：谐音「著作」「蜘蛛网」🕸️，典出「见微知著」 |
 
 ---
 
@@ -1013,18 +1017,18 @@ peerpedia_core/
   storage/         # Layer 0: git backend + SQLite DB + compiler backends
 
 peerpedia/
-  cli/             # 7 个 CLI 命令（init, serve, submit, review, decide, mirror, collaborate, propose_edit）
-  web/             # FastAPI + Jinja2 + HTMX（17 routes, 4 templates）
+  cli/             # 9 个 CLI 命令（init, serve, submit, review, decide, mirror, collaborate, propose-edit, merge-proposal）
+  web/             # FastAPI + Jinja2 + HTMX（24 routes, 5 templates）
   submit.py        # 提交编排器
   mirror.py        # ArXiv 搬运编排器
   config/          # 设置
 
-tests/             # 87 tests, 0 failures
+tests/             # 126 tests, 0 failures
 ```
 
 ---
 
-> 本文档随实现进展持续更新。最新决策见 Section 13（#25-#30）。
+> 本文档随实现进展持续更新。最新决策见 Section 13（#31-#34）。
 
 > 本文档遵循 Superpowers 方法论：先 brainstorm，充分讨论后再进入 coding。
 > 所有设计决策在进入 Phase 2 之前都可以修改。
