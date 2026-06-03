@@ -285,7 +285,12 @@ async def api_review_merge_proposal(
             new_version = _bump_version(target.version)
             update_article_version(session, proposal.target_article_id, new_version)
 
-            # Contribution records for both
+            # ── Merge credit (placeholder — simple formula) ──────────────────
+            # Current: fork author gets full content weight, reviewer gets half.
+            # Future: weight = f(diff_lines, change_type_complexity, reviewer_score,
+            #                     original_author_contribution_pct, time_decay)
+            # The compute_merge_credit() function will live in
+            # peerpedia_core/workflow/contribution.py and be versioned via PIP.
             weight = compute_change_type_weight("content")
             create_contribution_record(
                 session, article_id=proposal.target_article_id,
@@ -293,7 +298,6 @@ async def api_review_merge_proposal(
                 commit_message=f"Merge proposal: {proposal.description[:80]}",
                 change_type="content", contribution_weight=weight,
             )
-            # Add proportional credit to original author for accepting
             create_contribution_record(
                 session, article_id=proposal.target_article_id,
                 user_id=reviewer_id, commit_hash="merge-review",
