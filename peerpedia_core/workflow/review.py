@@ -1,0 +1,265 @@
+"""Layer 1: Review workflow orchestration.
+
+Coordinates the full review lifecycle:
+    assign reviewer -> submit review -> make decision -> award points
+
+This is a versioned module -- review rules (quorum size, point values)
+can be upgraded via PIP.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Optional
+
+from peerpedia_core.workflow.state_machine import ArticleStatus
+from peerpedia_core.storage.db import (
+    get_engine,
+    init_db,
+    get_session,
+    get_article,
+    get_reviews_for_article,
+    create_review,
+    update_article_status,
+)
+from peerpedia_core.reputation.v1 import ReputationParams
+
+
+# -- Result types -----------------------------------------------------------------
+
+@dataclass
+class AssignResult:
+    """Result of assigning a reviewer."""
+    success: bool
+    article_id: str = ""
+    reviewer_id: str = ""
+    new_status: str = ""
+    error: str = ""
+
+
+@dataclass
+class ReviewResult:
+    """Result of submitting a review."""
+    success: bool
+    review_id: Optional[str] = None
+    article_id: str = ""
+    reviewer_id: str = ""
+    points_earned: int = 0
+    error: str = ""
+
+
+@dataclass
+class DecisionResult:
+    """Result of making a decision on an article."""
+    success: bool
+    article_id: str = ""
+    new_status: str = ""
+    author_points: int = 0
+    error: str = ""
+
+
+# -- Points calculation -----------------------------------------------------------
+
+def calculate_review_points(
+    scientific_correctness: int = 0,
+    clarity: int = 0,
+) -> int:
+    """Calculate points earned for a review.
+
+    MVP: flat 20 points per review. Quality bonus (M4+): extra points
+    for high scores from the author's rating of the review.
+    """
+    params = ReputationParams()
+    return params.points_review
+
+
+# -- Review assignment ------------------------------------------------------------
+
+def assign_reviewer(
+    article_id: str,
+    reviewer_id: str,
+    *,
+    database_url: str,
+) -> AssignResult:
+    """Assign a reviewer to an article. Transitions submitted -> in_review.
+
+    MVP rule: any user can self-assign as reviewer.
+    Also handles draft -> in_review for convenience (auto-transitions
+    through submitted).
+    """
+    engine = get_engine(database_url)
+    init_db(engine)
+    session = get_session(engine)
+
+    try:
+        article = get_article(session, article_id)
+        if article is None:
+            return AssignResult(success=False, article_id=article_id, error="Article not found")
+
+        # Accept both 'submitted' and 'draft' as valid starting points for MVP
+        if article.status not in (ArticleStatus.SUBMITTED, ArticleStatus.DRAFT):
+            return AssignResult(
+                success=False,
+                article_id=article_id,
+                error=f"Cannot assign reviewer: article status is '{article.status}', must be 'submitted'",
+            )
+
+        # Transition to in_review
+        update_article_status(session, article_id, ArticleStatus.IN_REVIEW)
+        session.commit()
+
+        return AssignResult(
+            success=True,
+            article_id=article_id,
+            reviewer_id=reviewer_id,
+            new_status=ArticleStatus.IN_REVIEW,
+        )
+    except Exception as e:
+        session.rollback()
+        return AssignResult(success=False, article_id=article_id, error=str(e))
+    finally:
+        session.close()
+
+
+# -- Review submission ------------------------------------------------------------
+
+def submit_review(
+    article_id: str,
+    reviewer_id: str,
+    decision: str,
+    comments: str,
+    *,
+    database_url: str,
+    scientific_correctness: int = 0,
+    clarity: int = 0,
+    collaboration_request: bool = False,
+    collaboration_message: str = "",
+) -> ReviewResult:
+    """Submit a review for an article.
+
+    The article must be in_review. A reviewer can only review once.
+    """
+    engine = get_engine(database_url)
+    init_db(engine)
+    session = get_session(engine)
+
+    try:
+        article = get_article(session, article_id)
+        if article is None:
+            return ReviewResult(success=False, article_id=article_id, error="Article not found")
+
+        if article.status != ArticleStatus.IN_REVIEW:
+            return ReviewResult(
+                success=False,
+                article_id=article_id,
+                error=f"Cannot submit review: article status is '{article.status}', must be 'in_review'",
+            )
+
+        # Check for duplicate reviewer
+        existing = get_reviews_for_article(session, article_id)
+        for r in existing:
+            if r.reviewer_id == reviewer_id:
+                return ReviewResult(
+                    success=False,
+                    article_id=article_id,
+                    error=f"Reviewer '{reviewer_id}' has already reviewed this article",
+                )
+
+        # Calculate points
+        points = calculate_review_points(scientific_correctness, clarity)
+
+        # Create review record
+        review = create_review(
+            session,
+            article_id=article_id,
+            reviewer_id=reviewer_id,
+            decision=decision,
+            comments=comments,
+            scientific_correctness=scientific_correctness,
+            clarity=clarity,
+            collaboration_request=collaboration_request,
+            collaboration_message=collaboration_message,
+            points_earned=points,
+        )
+        session.commit()
+
+        return ReviewResult(
+            success=True,
+            review_id=review.id,
+            article_id=article_id,
+            reviewer_id=reviewer_id,
+            points_earned=points,
+        )
+    except Exception as e:
+        session.rollback()
+        return ReviewResult(success=False, article_id=article_id, error=str(e))
+    finally:
+        session.close()
+
+
+# -- Decision ---------------------------------------------------------------------
+
+def make_decision(
+    article_id: str,
+    *,
+    database_url: str,
+) -> DecisionResult:
+    """Make a decision on an article based on accumulated reviews.
+
+    MVP rule: if any review says 'accept', accept. If any say 'revise'
+    (and none accept), revise. If all reject, reject.
+    """
+    engine = get_engine(database_url)
+    init_db(engine)
+    session = get_session(engine)
+
+    try:
+        article = get_article(session, article_id)
+        if article is None:
+            return DecisionResult(success=False, article_id=article_id, error="Article not found")
+
+        if article.status != ArticleStatus.IN_REVIEW:
+            return DecisionResult(
+                success=False,
+                article_id=article_id,
+                error=f"Cannot decide: article status is '{article.status}', must be 'in_review'",
+            )
+
+        reviews = get_reviews_for_article(session, article_id)
+        if not reviews:
+            return DecisionResult(
+                success=False,
+                article_id=article_id,
+                error="No reviews available for decision",
+            )
+
+        # Count decisions
+        accepts = sum(1 for r in reviews if r.decision == "accept")
+        revises = sum(1 for r in reviews if r.decision == "revise")
+        rejects = sum(1 for r in reviews if r.decision == "reject")
+
+        # MVP logic: accept if any accept, else revise if any revise, else reject
+        if accepts > 0:
+            new_status = ArticleStatus.ACCEPTED
+            author_points = ReputationParams().points_accepted
+        elif revises > 0:
+            new_status = ArticleStatus.REVISIONS_REQUESTED
+            author_points = 0
+        else:
+            new_status = ArticleStatus.REJECTED
+            author_points = 0
+
+        update_article_status(session, article_id, new_status)
+        session.commit()
+
+        return DecisionResult(
+            success=True,
+            article_id=article_id,
+            new_status=new_status,
+            author_points=author_points,
+        )
+    except Exception as e:
+        session.rollback()
+        return DecisionResult(success=False, article_id=article_id, error=str(e))
+    finally:
+        session.close()
