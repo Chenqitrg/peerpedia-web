@@ -26,8 +26,9 @@ async def home(request: Request):
         viewer = request.query_params.get("user", "")
         articles = list_articles(session)
         return templates.TemplateResponse(
-            "index.html",
-            {
+            request=request,
+            name="index.html",
+            context={
                 "request": request,
                 "title": "PeerPedia",
                 "articles": [a.to_dict() for a in articles],
@@ -47,8 +48,9 @@ async def view_article(request: Request, article_id: str):
         article = get_article(session, article_id)
         if article is None:
             return templates.TemplateResponse(
-                "article.html",
-                {"request": request, "title": "Not Found", "article": None},
+                request=request,
+                name="article.html",
+                context={"request": request, "title": "Not Found", "article": None},
                 status_code=404,
             )
 
@@ -57,8 +59,9 @@ async def view_article(request: Request, article_id: str):
         article_dict["content"] = None  # Compiled on demand via HTMX
 
         return templates.TemplateResponse(
-            "article.html",
-            {
+            request=request,
+            name="article.html",
+            context={
                 "request": request,
                 "title": article_dict["title"],
                 "article": article_dict,
@@ -72,8 +75,9 @@ async def view_article(request: Request, article_id: str):
 async def submit_page(request: Request):
     """Article submission page."""
     return templates.TemplateResponse(
-        "submit.html",
-        {"request": request, "title": "Submit Article"},
+        request=request,
+        name="submit.html",
+        context={"request": request, "title": "Submit Article"},
     )
 
 
@@ -85,8 +89,9 @@ async def review_article_page(request: Request, article_id: str):
         article = get_article(session, article_id)
         if article is None:
             return templates.TemplateResponse(
-                "review.html",
-                {"request": request, "title": "Not Found", "article": None, "reviews": []},
+                request=request,
+                name="review.html",
+                context={"request": request, "title": "Not Found", "article": None, "reviews": []},
                 status_code=404,
             )
 
@@ -94,8 +99,9 @@ async def review_article_page(request: Request, article_id: str):
         reviews = get_reviews_for_article(session, article_id)
 
         return templates.TemplateResponse(
-            "review.html",
-            {
+            request=request,
+            name="review.html",
+            context={
                 "request": request,
                 "title": f"Review: {article.title}",
                 "article": article.to_dict(),
@@ -113,8 +119,9 @@ async def review_queue(request: Request):
     try:
         articles = list_articles(session, status="submitted")
         return templates.TemplateResponse(
-            "review.html",
-            {
+            request=request,
+            name="review.html",
+            context={
                 "request": request,
                 "title": "Review Queue",
                 "articles": [a.to_dict() for a in articles],
@@ -212,8 +219,9 @@ async def user_profile(request: Request, user_id: str):
             follower_count = get_follower_count(session, user_id)
 
         return templates.TemplateResponse(
-            "user.html",
-            {
+            request=request,
+            name="user.html",
+            context={
                 "request": request,
                 "title": f"用户: {user_id}",
                 "user_id": user_id,
