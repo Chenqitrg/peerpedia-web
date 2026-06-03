@@ -165,12 +165,12 @@ async def review_article_page(request: Request, article_id: str):
                     scores.append(sum(vals) / len(vals))
             if scores:
                 avg = sum(scores) / len(scores)
-                # Score 5.0 → 2 days, Score 1.0 → 180 days
+                # Higher avg → faster sink → higher sink_pct
+                # avg=5 → sink_pct=95, days_left≈0 (auto-publish)
+                # avg=1 → sink_pct≈19, days_left≈6
                 base_days = 7
-                days_left = max(2, min(180, int(base_days * 5.0 / max(avg, 0.01))))
-                elapsed = (base_days - days_left) if days_left < base_days else 0
-                total = max(base_days, days_left)
-                sink_pct = min(95, int((1 - days_left / max(base_days, 1)) * 100))
+                sink_pct = min(95, int(avg / 5.0 * 95))
+                days_left = max(0, base_days - int(avg / 5.0 * base_days))
         else:
             # No reviews yet — full 7 days
             from datetime import datetime, timezone
