@@ -204,6 +204,16 @@
                         mathBlocks.push({display: false, math: g});
                         return 'MATHPLACEHOLDER' + (mathBlocks.length - 1);
                     });
+                // Unordered lists: lines starting with - or * become <li>
+                var hasList = /^[-*] /m.test(pbody);
+                if (hasList) {
+                    pbody = pbody.replace(/(?:^[-*] .+(?:\n|$))+/gm, function(m) {
+                        var items = m.trim().split('\n').map(function(line) {
+                            return '<li>' + line.replace(/^[-*] /, '') + '</li>';
+                        }).join('');
+                        return '<ul>' + items + '</ul>';
+                    });
+                }
                 var html = pbody
                     .replace(/^### (.+)$/gm, '<h4>$1</h4>')
                     .replace(/^## (.+)$/gm, '<h3>$1</h3>')
