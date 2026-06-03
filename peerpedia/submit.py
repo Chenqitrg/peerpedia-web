@@ -56,6 +56,11 @@ class SubmissionResult:
     compile_output: Optional[str] = None   # Path to compiled PDF/HTML
     cid: Optional[str] = None
     error: Optional[str] = None
+    self_originality: int = 0
+    self_rigor: int = 0
+    self_completeness: int = 0
+    self_pedagogy: int = 0
+    self_impact: int = 0
 
 
 def _setup_repo_and_commit(
@@ -75,13 +80,25 @@ def _setup_repo_and_commit(
     except Exception as e:
         return SubmissionResult(success=False, error=f"Git init failed: {e}")
 
+    _SOURCE_EXTS = {".typ", ".md", ".tex", ".rst", ".txt"}
+    _ASSET_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".pdf",
+                   ".bib", ".yaml", ".yml", ".json", ".csv", ".py",
+                   ".c", ".h", ".cpp", ".rs", ".jl", ".ipynb"}
+
     try:
         dest_file = repo_path / source_path.name
         shutil.copy2(source_path, dest_file)
         for sibling in source_path.parent.iterdir():
             if sibling == source_path:
                 continue
-            if sibling.is_file():
+            if not sibling.is_file():
+                continue
+            ext = sibling.suffix.lower()
+            # Skip other source documents — they belong to different articles
+            if ext in _SOURCE_EXTS:
+                continue
+            # Copy assets (images, data files, scripts) that support the article
+            if ext in _ASSET_EXTS:
                 dest_sibling = repo_path / sibling.name
                 if not dest_sibling.exists():
                     shutil.copy2(sibling, dest_sibling)
@@ -132,6 +149,11 @@ def submit_article(
     articles_dir: Path,
     author_name: str = "peerpedia",
     author_email: str = "peerpedia@localhost",
+    self_originality: int = 0,
+    self_rigor: int = 0,
+    self_completeness: int = 0,
+    self_pedagogy: int = 0,
+    self_impact: int = 0,
 ) -> SubmissionResult:
     """Submit an article from a Typst or Markdown source file."""
     # 1. Read source
@@ -174,6 +196,11 @@ def submit_article(
             abstract_zh=abstract_zh, categories=categories,
             keywords=keywords, language=language, format=fmt,
             about_person=about_person, git_repo_path=str(repo_path),
+            self_originality=self_originality,
+            self_rigor=self_rigor,
+            self_completeness=self_completeness,
+            self_pedagogy=self_pedagogy,
+            self_impact=self_impact,
         )
         _store_and_scan_references(session, article, source_path)
         session.commit()
@@ -199,4 +226,9 @@ def submit_article(
         abstract=abstract, categories=categories, format=fmt,
         git_repo_path=str(repo_path), git_commit_hash=commit_hash,
         cid=cid,
+        self_originality=self_originality,
+        self_rigor=self_rigor,
+        self_completeness=self_completeness,
+        self_pedagogy=self_pedagogy,
+        self_impact=self_impact,
     )
