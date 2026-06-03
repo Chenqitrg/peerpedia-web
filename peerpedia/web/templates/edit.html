@@ -8,6 +8,8 @@
     <link rel="stylesheet" href="/static/katex/katex.min.css">
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js"></script>
     <script defer src="/static/katex/katex.min.js"></script>
     <script defer src="/static/katex/auto-render.min.js"></script>
 </head>
@@ -174,12 +176,19 @@
             });
         });
 
-        // ── Editor ─────────────────────────────────────────────────────
-        var ta = document.getElementById('editor-area');
-        // Editor starts empty — metadata goes in the form below
+        // ── Editor (EasyMDE) ──────────────────────────────────────────
+        var easyMDE = new EasyMDE({
+            element: document.getElementById('editor-area'),
+            spellChecker: false,
+            status: false,
+            toolbar: false,
+            autoDownloadFontAwesome: false,
+            indentWithTabs: false,
+            tabSize: 2,
+        });
 
         function updatePreview() {
-            var content = ta.value;
+            var content = easyMDE.value();
             var format = document.getElementById('format-select').value;
             var preview = document.getElementById('preview-pane');
             var status = document.getElementById('preview-status');
@@ -227,7 +236,7 @@
             }
         }
 
-        ta.addEventListener('input', updatePreview);
+        easyMDE.codemirror.on('change', updatePreview);
         updatePreview();
 
         // ── Format switch ──────────────────────────────────────────────
@@ -246,7 +255,7 @@
 
             var form = document.getElementById('metadata-form');
             var formData = new FormData(form);
-            var content = ta.value;
+            var content = easyMDE.value();
             var format = document.getElementById('format-select').value;
             var ext = format === 'typst' ? '.typ' : '.md';
             formData.append('article_file', new Blob([content], {type: 'text/plain'}), 'article' + ext);
