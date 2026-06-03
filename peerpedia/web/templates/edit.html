@@ -183,9 +183,14 @@
 
         // ── Monaco Init ────────────────────────────────────────────────
         var currentTheme = 'vs';
+        {% autoescape false %}
         var initialContent = {{ article.source_content|tojson if article and article.source_content else '""' }};
+        {% endautoescape %}
 
-        require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
+        require.config({
+            paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' },
+            'vs/nls': { availableLanguages: { '*': 'en' } }
+        });
         require(['vs/editor/editor.main'], function() {
             window.editor = monaco.editor.create(document.getElementById('monaco-editor'), {
                 value: initialContent,
