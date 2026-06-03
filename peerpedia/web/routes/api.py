@@ -11,12 +11,14 @@ from peerpedia.web.routes.api_citations import router as citations_router
 from peerpedia.web.routes.api_collab import router as collab_router
 from peerpedia.web.routes.api_lan import router as lan_router
 from peerpedia.web.routes.api_comments import router as comments_router
+from peerpedia.web.routes.api_compile import router as compile_router
 from peerpedia.web.routes.api_users import router as users_router
 
 router = APIRouter(prefix="/api/v1")
 
 router.include_router(articles_router)
 router.include_router(comments_router)
+router.include_router(compile_router)
 router.include_router(users_router)
 router.include_router(collab_router)
 router.include_router(citations_router)
