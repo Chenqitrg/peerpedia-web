@@ -356,6 +356,44 @@ class Follow(Base):
         }
 
 
+# ── ORM Model: MergeProposal ─────────────────────────────────────────────
+
+class MergeProposal(Base):
+    """Proposal to merge a fork back into the original article."""
+
+    __tablename__ = "merge_proposals"
+    __table_args__ = (
+        Index("ix_mp_target", "target_article_id"),
+        Index("ix_mp_fork", "fork_article_id"),
+    )
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    fork_article_id = Column(String(36), ForeignKey("articles.id"), nullable=False)
+    target_article_id = Column(String(36), ForeignKey("articles.id"), nullable=False)
+    proposer_id = Column(String(100), nullable=False)
+    description = Column(Text, nullable=False, default="")
+    status = Column(String(20), nullable=False, default="pending")
+    # "pending" | "approved" | "rejected" | "merged"
+    reviewer_id = Column(String(100), nullable=True)
+    review_comment = Column(Text, nullable=False, default="")
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    resolved_at = Column(DateTime, nullable=True)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "fork_article_id": self.fork_article_id,
+            "target_article_id": self.target_article_id,
+            "proposer_id": self.proposer_id,
+            "description": self.description,
+            "status": self.status,
+            "reviewer_id": self.reviewer_id,
+            "review_comment": self.review_comment,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "resolved_at": self.resolved_at.isoformat() if self.resolved_at else None,
+        }
+
+
 # ── ORM Model: ReviewComment ────────────────────────────────────────────────
 
 class ReviewComment(Base):

@@ -258,3 +258,66 @@ def apply_comment_suggestion(
     if comment:
         comment.resolved = 1
     return comment
+
+
+# ── MergeProposal CRUD ────────────────────────────────────────────────────────
+
+def create_merge_proposal(
+    session: Session,
+    *,
+    fork_article_id: str,
+    target_article_id: str,
+    proposer_id: str,
+    description: str = "",
+) -> "MergeProposal":
+    """Create a merge proposal from a fork back to the original."""
+    from peerpedia_core.storage.db.models import MergeProposal as MP
+    proposal = MP(
+        id=str(uuid.uuid4()),
+        fork_article_id=fork_article_id,
+        target_article_id=target_article_id,
+        proposer_id=proposer_id,
+        description=description,
+    )
+    session.add(proposal)
+    return proposal
+
+
+def get_merge_proposal(session: Session, proposal_id: str) -> Optional["MergeProposal"]:
+    """Get a merge proposal by ID."""
+    from peerpedia_core.storage.db.models import MergeProposal as MP
+    return session.query(MP).filter(MP.id == proposal_id).first()
+
+
+def get_merge_proposals_for_article(
+    session: Session,
+    article_id: str,
+    *,
+    status: Optional[str] = None,
+) -> list:
+    """Get merge proposals targeting an article, newest first."""
+    from peerpedia_core.storage.db.models import MergeProposal as MP
+    q = session.query(MP).filter(MP.target_article_id == article_id)
+    if status:
+        q = q.filter(MP.status == status)
+    return q.order_by(MP.created_at.desc()).all()
+
+
+def update_merge_proposal_status(
+    session: Session,
+    proposal_id: str,
+    new_status: str,
+    *,
+    reviewer_id: Optional[str] = None,
+    review_comment: str = "",
+) -> Optional["MergeProposal"]:
+    """Update a merge proposal's status."""
+    proposal = get_merge_proposal(session, proposal_id)
+    if proposal:
+        proposal.status = new_status
+        proposal.resolved_at = datetime.now(timezone.utc)
+        if reviewer_id:
+            proposal.reviewer_id = reviewer_id
+        if review_comment:
+            proposal.review_comment = review_comment
+    return proposal

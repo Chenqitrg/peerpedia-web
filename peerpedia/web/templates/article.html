@@ -100,6 +100,57 @@
             </div>
             {% endif %}
 
+            <!-- Merge proposal button on fork articles -->
+            {% if article.forked_from and viewer and article.status == 'published' %}
+            <div style="margin-bottom:12px;">
+                <button onclick="showMergeForm()"
+                        style="padding:6px 14px;background:#6366f1;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:0.9em;">
+                    🔄 提议合并回原文
+                </button>
+                <div id="merge-form" style="display:none;margin-top:8px;padding:12px;background:#f8f9fa;border-radius:6px;">
+                    <form onsubmit="submitMerge(event, '{{ article.id }}', '{{ article.forked_from }}', '{{ viewer }}')">
+                        <label>改动描述:
+                            <textarea name="description" rows="3" placeholder="简述你做了哪些改动..."
+                                style="width:100%;margin-top:4px;"></textarea>
+                        </label>
+                        <button type="submit" style="margin-top:6px;">提交合并提议</button>
+                    </form>
+                    <span id="merge-status" style="margin-left:8px;font-size:0.85em;"></span>
+                </div>
+            </div>
+            <script>
+            function showMergeForm() {
+                document.getElementById('merge-form').style.display = 'block';
+            }
+            function submitMerge(event, forkId, targetId, proposerId) {
+                event.preventDefault();
+                var desc = event.target.querySelector('textarea').value;
+                var status = document.getElementById('merge-status');
+                status.textContent = '提交中...';
+                var formData = new URLSearchParams();
+                formData.append('target_article_id', targetId);
+                formData.append('proposer_id', proposerId);
+                formData.append('description', desc);
+                fetch('/api/v1/articles/' + forkId + '/merge-proposal', {
+                    method: 'POST', body: formData
+                }).then(function(r) { return r.text(); })
+                  .then(function(html) {
+                      status.innerHTML = html;
+                      setTimeout(function() { location.reload(); }, 1500);
+                  });
+            }
+            </script>
+            {% endif %}
+
+            <!-- Merge proposal list on original articles -->
+            {% if article.fork_count and article.fork_count > 0 %}
+            <div id="merge-proposals"
+                 hx-get="/api/v1/articles/{{ article.id }}/merge-proposals?format=html"
+                 hx-trigger="load" hx-swap="innerHTML"
+                 style="margin-bottom:12px;font-size:0.85em;">
+            </div>
+            {% endif %}
+
             <!-- Fork button -->
             {% if viewer and article.status == 'published' %}
             <div style="margin-bottom:12px;">
@@ -444,6 +495,17 @@ function submitComment(event, articleId) {
         statusEl.textContent = '✗ ' + err.message;
         statusEl.style.color = '#c00';
     });
+}
+
+// ── Review merge proposal ─────────────────────────────────────────────────
+function reviewMerge(proposalId, decision, reviewerId) {
+    var formData = new URLSearchParams();
+    formData.append('reviewer_id', reviewerId);
+    formData.append('decision', decision);
+    fetch('/api/v1/merge-proposals/' + proposalId + '/review', {
+        method: 'POST', body: formData
+    }).then(function(r) { return r.text(); })
+      .then(function() { location.reload(); });
 }
 
 // ── Citation panel ─────────────────────────────────────────────────────────

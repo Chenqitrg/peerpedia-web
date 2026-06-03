@@ -12,6 +12,7 @@ from peerpedia_core.storage.db import (
     get_article,
     get_reviews_for_article,
     list_articles,
+    update_article_founding_authors,
 )
 from peerpedia_core.workflow.citations import get_citation_info, inject_citation_links
 
@@ -172,6 +173,191 @@ async def api_fork_article(article_id: str, forker_id: str = Form(...)):
     except Exception as e:
         session.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        session.close()
+
+
+@router.post("/articles/{article_id}/merge-proposal")
+async def api_create_merge_proposal(
+    article_id: str,
+    target_article_id: str = Form(...),
+    proposer_id: str = Form(...),
+    description: str = Form(""),
+):
+    """Propose merging this fork back into the original article."""
+    from fastapi.responses import HTMLResponse
+
+    from peerpedia_core.storage.db import (
+        create_merge_proposal, get_article,
+    )
+
+    session = get_db_session()
+    try:
+        fork = get_article(session, article_id)
+        if fork is None:
+            raise HTTPException(status_code=404, detail="Fork article not found")
+        if fork.forked_from != target_article_id:
+            raise HTTPException(status_code=400, detail="target_article_id must match forked_from")
+
+        target = get_article(session, target_article_id)
+        if target is None:
+            raise HTTPException(status_code=404, detail="Target article not found")
+
+        proposal = create_merge_proposal(
+            session,
+            fork_article_id=article_id,
+            target_article_id=target_article_id,
+            proposer_id=proposer_id,
+            description=description,
+        )
+        session.commit()
+
+        return HTMLResponse(
+            f'<div style="padding:12px;background:#d1fae5;border-radius:6px;">'
+            f'✓ 合并提议已提交，等待原作者审核。</div>'
+            f'<script>setTimeout(function(){{location.reload()}},1200)</script>'
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        session.close()
+
+
+@router.post("/merge-proposals/{proposal_id}/review")
+async def api_review_merge_proposal(
+    proposal_id: str,
+    reviewer_id: str = Form(...),
+    decision: str = Form(...),  # "approve" or "reject"
+    comment: str = Form(""),
+):
+    """Review (approve/reject) a merge proposal."""
+    import shutil
+    from pathlib import Path
+
+    from fastapi.responses import HTMLResponse
+
+    from peerpedia.config.settings import settings as s
+    from peerpedia_core.storage.db import (
+        get_merge_proposal, update_merge_proposal_status,
+        get_article, update_article_version, create_contribution_record,
+    )
+    from peerpedia_core.workflow.contribution import compute_change_type_weight
+    from peerpedia_core.storage.git_backend import commit_article, init_article_repo
+
+    session = get_db_session()
+    try:
+        proposal = get_merge_proposal(session, proposal_id)
+        if proposal is None:
+            raise HTTPException(status_code=404, detail="Proposal not found")
+        if proposal.status != "pending":
+            raise HTTPException(status_code=400, detail="Proposal already resolved")
+
+        new_status = "approved" if decision == "approve" else "rejected"
+        update_merge_proposal_status(
+            session, proposal_id, new_status,
+            reviewer_id=reviewer_id, review_comment=comment,
+        )
+
+        if decision == "approve":
+            # Merge: copy fork files into original repo, commit, bump version
+            fork = get_article(session, proposal.fork_article_id)
+            target = get_article(session, proposal.target_article_id)
+            fork_repo = Path(fork.git_repo_path) if fork and fork.git_repo_path else None
+            target_repo = Path(target.git_repo_path) if target and target.git_repo_path else None
+
+            if fork_repo and target_repo:
+                # Copy files from fork to target
+                for f in fork_repo.glob("*.md"):
+                    shutil.copy2(f, target_repo / f.name)
+                for f in fork_repo.glob("*.typ"):
+                    shutil.copy2(f, target_repo / f.name)
+                commit_article(
+                    target_repo,
+                    f"Merge: {proposal.description or 'Merge from fork'} by {proposal.proposer_id}",
+                    author_name=reviewer_id,
+                    author_email=f"{reviewer_id}@peerpedia.local",
+                )
+
+            # Bump version
+            new_version = _bump_version(target.version)
+            update_article_version(session, proposal.target_article_id, new_version)
+
+            # Contribution records for both
+            weight = compute_change_type_weight("content")
+            create_contribution_record(
+                session, article_id=proposal.target_article_id,
+                user_id=proposal.proposer_id, commit_hash="merge",
+                commit_message=f"Merge proposal: {proposal.description[:80]}",
+                change_type="content", contribution_weight=weight,
+            )
+            # Add proportional credit to original author for accepting
+            create_contribution_record(
+                session, article_id=proposal.target_article_id,
+                user_id=reviewer_id, commit_hash="merge-review",
+                commit_message=f"Reviewed merge from {proposal.proposer_id}",
+                change_type="content", contribution_weight=weight // 2,
+            )
+
+            proposal.status = "merged"
+            update_article_founding_authors(session, proposal.target_article_id, proposal.proposer_id)
+
+        session.commit()
+
+        return HTMLResponse(
+            f'<div style="padding:12px;background:#d1fae5;border-radius:6px;">'
+            f'✓ {decision} — 合并完成</div>'
+            f'<script>setTimeout(function(){{location.reload()}},1200)</script>'
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        session.close()
+
+
+def _bump_version(version_str: str) -> str:
+    """Bump minor version: v0.1 → v0.2, v1.5 → v1.6."""
+    try:
+        parts = version_str.lstrip("v").split(".")
+        return f"v{parts[0]}.{int(parts[1]) + 1}"
+    except Exception:
+        return "v0.2"
+
+
+@router.get("/articles/{article_id}/merge-proposals")
+async def api_get_merge_proposals(article_id: str, format: str = "json"):
+    """Get merge proposals targeting an article."""
+    from fastapi.responses import HTMLResponse
+
+    from peerpedia_core.storage.db import get_merge_proposals_for_article, get_article
+
+    session = get_db_session()
+    try:
+        article = get_article(session, article_id)
+        proposals = get_merge_proposals_for_article(session, article_id)
+        if format == "html":
+            if not proposals:
+                return HTMLResponse("")
+            html = '<div style="margin-top:8px;"><strong>🔄 合并提议</strong>'
+            for p in proposals:
+                status_label = {"pending": "⏳ 待审核", "approved": "✅ 已批准", "rejected": "❌ 已拒绝", "merged": "🔀 已合并"}.get(p.status, p.status)
+                html += (
+                    f'<div style="padding:6px 8px;margin:4px 0;background:#fff;'
+                    f'border:1px solid var(--border);border-radius:4px;">'
+                    f'{status_label} · <strong>{p.proposer_id}</strong>'
+                    f' · <a href="/article/{p.fork_article_id}">查看派生</a>'
+                )
+                if p.description:
+                    html += f'<div style="color:#666;font-size:0.85em;">{p.description[:200]}</div>'
+                html += '</div>'
+            html += '</div>'
+            return HTMLResponse(html)
+        return {"article_id": article_id, "proposals": [p.to_dict() for p in proposals], "total": len(proposals)}
     finally:
         session.close()
 

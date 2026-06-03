@@ -16,10 +16,13 @@ Prefer importing from ``peerpedia_core.storage.db`` directly.
 from peerpedia_core.storage.db.crud_article import (  # noqa: F401
     apply_comment_suggestion,
     create_article,
+    create_merge_proposal,
     create_review,
     create_review_comment,
     get_article,
     get_comments_for_article,
+    get_merge_proposal,
+    get_merge_proposals_for_article,
     get_review,
     get_review_comment,
     get_reviews_for_article,
@@ -29,6 +32,7 @@ from peerpedia_core.storage.db.crud_article import (  # noqa: F401
     update_article_founding_authors,
     update_article_status,
     update_article_version,
+    update_merge_proposal_status,
 )
 from peerpedia_core.storage.db.crud_events import (  # noqa: F401
     cleanup_stale_nodes,

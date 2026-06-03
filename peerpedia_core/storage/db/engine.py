@@ -83,5 +83,5 @@ def init_db(engine: Engine) -> None:
 
 def get_session(engine: Engine) -> Session:
     """Create a new session bound to the given engine."""
-    SessionLocal = sessionmaker(bind=engine)
+    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     return SessionLocal()
