@@ -9,8 +9,7 @@
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script defer src="/static/katex/katex.min.js"></script>
     <script defer src="/static/katex/auto-render.min.js"></script>
-    <link rel="stylesheet" data-name="vs/editor/editor.main"
-          href="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/editor/editor.main.min.css">
+    <!-- CodeMirror CSS loaded below -->
 </head>
 <body>
     <header>
@@ -98,7 +97,7 @@
     </div>
 
     <div id="editor-container" style="display:flex;gap:12px;height:60vh;min-height:400px;">
-        <div id="monaco-editor" style="flex:1;min-width:0;border:1px solid var(--border);"></div>
+        <div id="editor-area" style="flex:1;min-width:0;border:1px solid var(--border);"></div>
         <div id="preview-pane" style="flex:1;min-width:0;border:1px solid var(--border);padding:16px;overflow-y:auto;background:#fff;">
             <p style="color:#888;">预览区域。开始输入...</p>
         </div>
@@ -182,42 +181,46 @@
     {% endif %}
     </main>
 
-    <!-- Monaco Editor — ESM import for reliable loading -->
-    <script type="module">
-        import * as monaco from 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/+esm';
-
-        var format = document.getElementById('format-select').value;
-        var language = format === 'typst' ? 'plaintext' : 'markdown';
-        var initialContent = {{ article.source_content|tojson if article and article.source_content else '""' }};
-        if (!initialContent) {
-            initialContent = language === 'markdown'
-                ? '---\ntitle: \nabstract: \ncategories:\n  - \nkeywords:\n  - \nlanguage: en\n---\n\n'
-                : '// Typst article\n#let title = ""\n#let abstract = ""\n\n';
-        }
-
-        window.editor = monaco.editor.create(document.getElementById('monaco-editor'), {
-            value: initialContent,
-            language: language,
-            theme: 'vs',
-            automaticLayout: true,
-            minimap: { enabled: false },
-            fontSize: 14,
-            lineNumbers: 'on',
-            wordWrap: 'on',
-            scrollBeyondLastLine: false,
-        });
-
-        updatePreview();
-        window.editor.onDidChangeModelContent(function() {
-            updatePreview();
-        });
-    </script>
+    <!-- CodeMirror Editor — reliable, small, CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/eclipse.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/markdown/markdown.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/stex/stex.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/yaml/yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/mode/overlay.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
     <script>
+    var format = document.getElementById('format-select').value;
+    var language = format === 'typst' ? 'stex' : 'markdown';
+    var initialContent = {{ article.source_content|tojson if article and article.source_content else '""' }};
+    if (!initialContent) {
+        initialContent = language === 'markdown'
+            ? '---\ntitle: \nabstract: \ncategories:\n  - \nkeywords:\n  - \nlanguage: en\n---\n\n'
+            : '// Typst article\n#let title = ""\n#let abstract = ""\n\n';
+    }
+
+    window.editor = CodeMirror(document.getElementById('editor-area'), {
+        value: initialContent,
+        mode: language,
+        theme: 'eclipse',
+        lineNumbers: true,
+        lineWrapping: true,
+        autofocus: true,
+        tabSize: 2,
+        extraKeys: { 'Tab': function(cm) { cm.replaceSelection('  '); } }
+    });
+    // Fix: the div id is still "monaco-editor" for CSS compat
+
+    updatePreview();
+    window.editor.on('change', function() {
+        updatePreview();
+    });
+    </script>
 
     function switchFormat(fmt) {
-        var lang = fmt === 'typst' ? 'plaintext' : 'markdown';
-        var model = window.editor.getModel();
-        monaco.editor.setModelLanguage(model, lang);
+        var lang = fmt === 'typst' ? 'stex' : 'markdown';
+        window.editor.setOption('mode', lang);
         updatePreview();
     }
 
