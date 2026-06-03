@@ -151,7 +151,7 @@
             <!-- Merge proposal list on original articles -->
             {% if article.fork_count and article.fork_count > 0 %}
             <div id="merge-proposals"
-                 hx-get="/api/v1/articles/{{ article.id }}/merge-proposals?format=html"
+                 hx-get="/api/v1/articles/{{ article.id }}/merge-proposals?format=html&viewer={{ viewer or '' }}"
                  hx-trigger="load" hx-swap="innerHTML"
                  style="margin-bottom:12px;font-size:0.85em;">
             </div>

@@ -321,8 +321,8 @@ async def api_review_merge_proposal(
 
 
 @router.get("/articles/{article_id}/merge-proposals")
-async def api_get_merge_proposals(article_id: str, format: str = "json"):
-    """Get merge proposals targeting an article."""
+async def api_get_merge_proposals(article_id: str, format: str = "json", viewer: str = ""):
+    """Get merge proposals targeting an article. Set ?format=html for HTMX fragment."""
     from fastapi.responses import HTMLResponse
 
     from peerpedia_core.storage.db import get_merge_proposals_for_article, get_article
@@ -331,6 +331,7 @@ async def api_get_merge_proposals(article_id: str, format: str = "json"):
     try:
         article = get_article(session, article_id)
         proposals = get_merge_proposals_for_article(session, article_id)
+        is_author = viewer and article and viewer in (article.founding_authors or [])
         if format == "html":
             if not proposals:
                 return HTMLResponse("")
@@ -345,6 +346,18 @@ async def api_get_merge_proposals(article_id: str, format: str = "json"):
                 )
                 if p.description:
                     html += f'<div style="color:#666;font-size:0.85em;">{p.description[:200]}</div>'
+                # Show accept/reject buttons for pending proposals when viewer is the original author
+                if p.status == "pending" and is_author:
+                    html += (
+                        f'<div style="margin-top:6px;display:flex;gap:6px;">'
+                        f'<button onclick="reviewMerge(\'{p.id}\', \'approve\', \'{viewer}\')" '
+                        f'style="padding:3px 12px;background:#16a34a;color:#fff;border:none;'
+                        f'border-radius:3px;cursor:pointer;font-size:0.8em;">✅ 接受合并</button>'
+                        f'<button onclick="reviewMerge(\'{p.id}\', \'reject\', \'{viewer}\')" '
+                        f'style="padding:3px 12px;background:#e53e3e;color:#fff;border:none;'
+                        f'border-radius:3px;cursor:pointer;font-size:0.8em;">❌ 拒绝</button>'
+                        f'</div>'
+                    )
                 html += '</div>'
             html += '</div>'
             return HTMLResponse(html)
