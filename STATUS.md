@@ -1,8 +1,8 @@
 # PeerPedia — Project Status & Restart Guide
 
-> 最后更新: 2026-06-03
-> 当前状态: Phase 3 全部完成 + 沉淀池 + 五维评分 + Fork/Merge + 代码压缩重构
-> 测试: 342 passed, 26 test files
+> 最后更新: 2026-06-04
+> 当前状态: Phase 3 全部完成 + 在线编辑器(CodeMirror) + 沉淀池 + 五维评分 + Fork/Merge + 代码压缩重构
+> 测试: 358 passed, 27 test files
 > 中文名: 知诸网 — 谐音「诸多」「蜘蛛网」🕸️
 
 ---
@@ -210,6 +210,19 @@ tests/                   # 19 tests, 0 failures
 | JSONList/JSONDict 去重 | 两个相同 TypeDecorator 合并为 `_make_json_type()` 工厂 | 消除重复类定义 |
 | 工作流模块简化 | review.py、edit_proposal.py、collaboration.py 用 db_session_scope 替代手动会话管理 | 每个函数减少 ~6 行 |
 | 路由模块数 | 1 个 monolith → 10 个路由文件（api.py 门面 + 9 个子路由） | 每个文件单一职责 |
+
+### 2026-06-04 在线编辑器
+
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| CodeMirror 编辑器 | Markdown 语法高亮 + 行号 + 自动缩进 | ✅ |
+| 实时 Markdown 预览 | marked.js + KaTeX 数学公式渲染 | ✅ |
+| $$ 公式自动补全 | 键入 `$$` 回车自动插入闭合标记，光标停在中间 | ✅ |
+| 五维自评必填 | 星星评分（沉淀池同款），未评不能提交 | ✅ |
+| 左右等宽分栏 | 编辑器 50% + 预览 50%，不随内容乱窜 | ✅ |
+| 本地资源托管 | 无 CDN 依赖，CodeMirror/marked 本地加载 | ✅ |
+| 回归测试 | 18 个测试覆盖所有已知 bug | ✅ |
+| 导航栏入口 | ✏️ 写作 链接在所有页面可见 | ✅ |
 
 ### 已知缺口
 

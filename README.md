@@ -44,6 +44,7 @@ peerpedia serve --lan
 
 | Category | Feature | Status |
 |---|---|---|
+| **Online Editor** | CodeMirror with live Markdown/KaTeX preview, $$ auto-close, 5D stars | ✅ |
 | **Submit** | Typst + Markdown/KaTeX with 5-dimension self-assessment | ✅ |
 | **Sedimentation Pool** | Anonymous ratings + discussion, auto-publish by sink score | ✅ |
 | **5D Scoring** | Originality/Rigor/Completeness/Pedagogy/Impact (self + community) | ✅ |

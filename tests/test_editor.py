@@ -109,6 +109,42 @@ def test_submit_typst_via_editor():
     assert "article_id" in data
 
 
+# ── Regression tests for bugs fixed 2026-06-04 ─────────────────────────────
+
+
+def test_dollar_math_autoclose_script_present():
+    """Bug: $$ auto-close used broken command, plain Enter didn't work.
+
+    The template must use CodeMirror.commands.newlineAndIndent (not the
+    nonexistent newlineAndIndentContinueMarkdownList).
+    """
+    response = client.get("/edit")
+    assert "CodeMirror.commands.newlineAndIndent" in response.text
+    assert "newlineAndIndentContinueMarkdownList" not in response.text
+
+
+def test_dollar_math_parity_check_present():
+    """Bug: $$ auto-close triggered on closing markers too.
+
+    Must count all $$ from doc start to cursor: odd = inside unclosed
+    math → auto-close, even = between blocks → normal Enter.
+    """
+    response = client.get("/edit")
+    assert "getRange" in response.text  # scans from doc start to cursor
+    assert "totalDollars" in response.text
+    assert "% 2" in response.text  # parity check
+
+
+def test_dollar_math_cursor_position():
+    """Bug: after auto-close, cursor ended after closing $$.
+
+    Must call setCursor to place cursor on the indented middle line.
+    """
+    response = client.get("/edit")
+    assert "setCursor" in response.text
+    assert ".replaceSelection" in response.text
+
+
 # ── Regression tests for bugs fixed 2026-06-03/04 ─────────────────────────
 
 
