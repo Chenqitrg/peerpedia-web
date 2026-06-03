@@ -1,8 +1,8 @@
 # PeerPedia — Project Status & Restart Guide
 
 > 最后更新: 2026-06-03
-> 当前状态: Phase 3 M1+M2+M2.5+M2.6+M3+M4(Rep)+M5 完成
-> 测试: 157 tests, 0 failures
+> 当前状态: Phase 3 全部完成 (M1+M2+M2.5+M2.6+M3+M4+M5)
+> 测试: 196 tests, 0 failures
 > 中文名: 知著网 — 谐音「著作」「蜘蛛网」🕸️，典出「见微知著」
 
 ---
@@ -12,7 +12,7 @@
 ```bash
 cd ~/Projects/peerpedia
 source .venv/bin/activate
-.venv/bin/python -m pytest tests/ -v          # 跑测试（应 157 passed）
+.venv/bin/python -m pytest tests/ -v          # 跑测试（应 196 passed）
 open design/brainstorm.md                     # 打开设计文档
 ```
 
@@ -70,7 +70,7 @@ tests/                   # 19 tests, 0 failures
 | M1 | 文章提交闭环 | ✅ CLI `peerpedia init` + `submit` 工作。Typst/Markdown 编译集成。git repo + commit。DB 存储。Web 文章列表可读。 | 🔴 最高 |
 | M2 | 审稿工作流 | ArticleStatus 状态机完整实现。审稿分配 → 打分 → 决策。积分首次计算。 | 🔴 最高 |
 | M3 | 协作+开放编辑 | ✅ 一键合作（审稿人→合作者）。EditProposal 提案流程（minor/medium/major）。git blame 贡献时间线。126 tests。 | 🟡 高 |
-| M4 | 信誉+LAN | 雷达图可视化。身份权重计算。User/Identity 表。4 API 端点。user register CLI。Chart.js 集成。LAN 节点发现/同步（下个迭代）。 | 🟡 高（Reputation Cluster ✅，LAN Cluster ⏸） |
+| M4 | 信誉+LAN | 雷达图可视化。身份权重计算。User/Identity 表。4 API 端点。user register CLI。Chart.js 集成。**LAN 节点发现 (UDP 广播)**。**Catalog.md 文章池同步**。 | 🟢 已完成 |
 | M5 | 引用跳转 | ✅ 引用扫描（Typst/Markdown）。NetworkX 引用图。cites/cited_by 查询。编译时引用链接注入。文章侧栏点击跳转。 | 🟢 中 |
 
 **Phase 3 完成后，系统可以**:
@@ -119,7 +119,10 @@ tests/                   # 19 tests, 0 failures
 | Git backend (init/commit/blame) | ✅ |
 | FastAPI 启动 | ✅ |
 | Web 模板 (首页/文章/提交/审稿) | ✅ |
-| 126 个测试全部通过 | ✅ |
+| 196 个测试全部通过 | ✅ |
+| LAN 节点发现 (UDP) | ✅ |
+| 文章池同步 (catalog.md) | ✅ |
+| 引用点击追踪 (跃迁概率) | ✅ |
 | **代码审查** (2026-06-03) | ✅ bug修复 + 模块拆分 + SMI 3.7→2.5 |
 
 ### M3 新增功能
@@ -143,8 +146,9 @@ tests/                   # 19 tests, 0 failures
 | ReputationV1.compute() | ✅ 四维信誉实时计算（文章+审稿+贡献+身份boost+衰减） |
 | 用户/身份/信誉 API | ✅ 4 个新端点（GET/POST users, POST identities, GET reputation） |
 | 信誉雷达图 | ✅ Chart.js 四维雷达图 + 分数表格，嵌入用户主页 |
-| LAN 节点发现 | ⏸ 下个迭代 |
-| 文章池同步 | ⏸ 下个迭代 |
+| LAN 节点发现 | ✅ UDP 广播心跳 (port 3690) |
+| 文章池同步 | ✅ catalog.md (YAML + Markdown) |
+| 引用点击追踪 | ✅ ClickEvent + 跃迁概率 API |
 
 ### M5 Citation Jump 新增功能
 
@@ -160,8 +164,9 @@ tests/                   # 19 tests, 0 failures
 
 | 功能 | 状态 |
 |---|---|
-| LAN 同步 | ❌ 无 |
-| LAN 节点发现 | ❌ 无 |
+| LAN 节点发现 | ✅ UDP 广播心跳 (port 3690) |
+| LAN 文章池同步 | ✅ catalog.md (YAML + Markdown) |
+| 引用点击追踪 | ✅ ClickEvent + 跃迁概率 API |
 
 ---
 
@@ -188,8 +193,8 @@ peerpedia --help                     # CLI 帮助
 
 1. 打开 `design/brainstorm.md` 回顾设计文档
 2. 运行 `.venv/bin/python -m pytest tests/ -v` 确认 157 tests pass
-3. Phase 3 M1-M5 全部完成 ✅
-4. 待实现: LAN 节点发现 + 同步 (M4 LAN Cluster)
+3. Phase 3 全部完成 ✅ (M1-M5, 196 tests)
+4. 下一步: Phase 4 IPFS 集成 或 Phase 5 种子社区测试
 
 ---
 
