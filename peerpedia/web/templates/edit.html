@@ -175,9 +175,7 @@
 
         // ── Editor ─────────────────────────────────────────────────────
         var ta = document.getElementById('editor-area');
-        if (!ta.value || !ta.value.trim()) {
-            ta.value = '---\ntitle: \nabstract: \ncategories:\n  - \nkeywords:\n  - \nlanguage: en\n---\n\n';
-        }
+        // Editor starts empty — metadata goes in the form below
 
         function updatePreview() {
             var content = ta.value;
