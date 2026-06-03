@@ -8,6 +8,7 @@ cites/cited_by query functions.
 from __future__ import annotations
 
 import re
+from collections import defaultdict
 from typing import Any
 
 # Regex: match peerpedia:<UUID> in text, or inside #cite("peerpedia:<UUID>")
@@ -162,7 +163,6 @@ def compute_transition_probabilities(
                            "clicks": int, "probability": float}, ...]}
         Sorted by probability descending.
     """
-    from collections import defaultdict
     from peerpedia_core.storage.db import (
         get_local_click_counts,
         get_article,
