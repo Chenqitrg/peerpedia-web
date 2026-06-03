@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "peerpedia"
+version = "0.1.0"
+description = "Decentralized academic publishing protocol — replacing arXiv and academic journals"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "Chenqi Meng", email = "mcqgravity@gmail.com"}
+]
+dependencies = [
+    "click>=8.0",
+    "fastapi>=0.100",
+    "uvicorn>=0.23",
+    "jinja2>=3.0",
+    "gitpython>=3.1",
+    "pydantic>=2.0",
+    "sqlalchemy>=2.0",
+    "networkx>=3.0",
+    "httpx>=0.24",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "black>=23.0",
+    "ruff>=0.1",
+    "mypy>=1.0",
+]
+
+[project.scripts]
+peerpedia = "peerpedia.cli.main:cli"
+
+[tool.setuptools]
+packages = ["peerpedia_core", "peerpedia_core.protocol", "peerpedia_core.reputation", "peerpedia_core.governance", "peerpedia_core.storage", "peerpedia", "peerpedia.cli", "peerpedia.web", "peerpedia.web.routes", "peerpedia.config"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.black]
+line-length = 100
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I", "N", "W"]

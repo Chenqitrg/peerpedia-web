@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }} — PeerPedia</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header>
+        <h1>📚 PeerPedia</h1>
+        <nav>
+            <a href="/">Home</a>
+            <a href="/submit">Submit</a>
+            <a href="/review">Review Queue</a>
+        </nav>
+    </header>
+
+    <main>
+        {% if article %}
+        <article class="article-view">
+            <h1>{{ article.title }}</h1>
+            <div class="article-meta">
+                <span>Authors: {{ article.founding_authors | join(", ") }}</span>
+                <span>Version: {{ article.version }}</span>
+                <span>Status: {{ article.status }}</span>
+            </div>
+            <div class="article-abstract">
+                <h2>Abstract</h2>
+                <p>{{ article.abstract }}</p>
+            </div>
+            <div class="article-content">
+                <!-- Rendered Typst/Markdown content -->
+                {{ article.content | safe }}
+            </div>
+            <aside class="reference-graph">
+                <h3>📚 References</h3>
+                <!-- Reference DAG -->
+            </aside>
+        </article>
+        {% else %}
+        <p class="empty-state">Article not found.</p>
+        {% endif %}
+    </main>
+</body>
+</html>

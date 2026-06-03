@@ -1,0 +1,23 @@
+"""PeerPedia Web Application — FastAPI reference server.
+
+This is the reference web client for the PeerPedia protocol.
+It serves a local web UI for browsing, submitting, and reviewing articles.
+"""
+
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
+
+app = FastAPI(
+    title="PeerPedia",
+    description="Decentralized academic publishing — reference client",
+    version="0.1.0",
+)
+
+# Static files (CSS, JS)
+static_dir = Path(__file__).parent / "static"
+static_dir.mkdir(exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+# Import route modules
+from peerpedia.web.routes import pages, api  # noqa: E402, F401
