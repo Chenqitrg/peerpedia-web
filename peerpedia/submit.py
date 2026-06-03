@@ -36,8 +36,10 @@ from peerpedia_core.storage.db import (
     init_db,
     get_session,
     create_article,
+    get_article,
 )
 from peerpedia_core.protocol.addressing import compute_article_cid
+from peerpedia_core.workflow.citations import extract_references
 
 
 @dataclass
@@ -157,6 +159,23 @@ def submit_article(
             about_person=about_person,
             git_repo_path=str(repo_path),
         )
+
+        # 9. Auto-populate references from source file
+        try:
+            source_text = source_path.read_text()
+            ref_ids = extract_references(source_text)
+            if ref_ids:
+                ref_dicts = []
+                for rid in ref_ids:
+                    target = get_article(session, rid)
+                    ref_dicts.append({
+                        "article_id": rid,
+                        "title": target.title if target else rid[:8] + "...",
+                    })
+                article.references = ref_dicts
+        except Exception:
+            pass  # Reference scanning is best-effort
+
         session.commit()
     except Exception as e:
         return SubmissionResult(success=False, error=f"Database error: {e}")
