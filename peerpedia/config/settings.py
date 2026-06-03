@@ -26,6 +26,13 @@ class Settings:
     # Reputation (Layer 2 — overridable)
     reputation_version: str = "v1"
 
+    # Database
+    database_url: str = ""
+
+    def __post_init__(self):
+        if not self.database_url:
+            self.database_url = f"sqlite:///{self.db_path}"
+
     def ensure_dirs(self):
         """Create all required directories."""
         for d in [self.peerpedia_home, self.articles_dir, self.profiles_dir, self.db_path.parent]:

@@ -183,6 +183,7 @@ class Article(Base):
 def create_article(
     session: Session,
     *,
+    id: Optional[str] = None,
     title: str,
     founding_authors: list[str],
     abstract: str,
@@ -197,7 +198,7 @@ def create_article(
 ) -> Article:
     """Create a new article record in the database."""
     article = Article(
-        id=str(uuid.uuid4()),
+        id=id or str(uuid.uuid4()),
         title=title,
         founding_authors=founding_authors,
         about_person=about_person,
