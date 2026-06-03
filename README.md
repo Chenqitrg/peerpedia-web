@@ -75,25 +75,26 @@ peerpedia lan status                              # LAN node status
 peerpedia lan sync [-n <node>]                    # Sync article catalog
 ```
 
-## API Endpoints (30 routes)
+## API Endpoints (30+ routes, 10 route modules)
 
-| Group | Endpoints |
+| Module | Endpoints |
 |---|---|
-| Articles | GET/POST `/api/v1/articles`, GET `/articles/{id}`, GET `/articles/{id}/compile`, GET `/articles/{id}/reviews`, POST reviews, POST decide |
-| Users | GET/POST `/api/v1/users`, GET `/users/{id}`, POST `/users/{id}/identities`, GET `/users/{id}/reputation` |
-| Citations | GET `/citations` (cites + cited-by), POST `/citations/click`, GET `/citations/transitions` |
-| Follow | POST/DELETE `/users/{id}/follow`, GET `/users/{id}/following`, GET `/users/{id}/followers`, GET `/following/feed` |
-| Collaboration | POST `/articles/{id}/collaborate`, GET `/articles/{id}/collaboration/{reviewer}` |
-| Edit Proposals | POST `/articles/{id}/proposals`, GET `/articles/{id}/proposals`, POST `/proposals/{id}/review`, POST `/proposals/{id}/merge` |
-| Contributions | GET `/articles/{id}/contributions` (timeline + breakdown) |
-| LAN | GET `/lan/catalog`, GET `/lan/nodes`, GET `/lan/status` |
-| Health | GET `/api/v1/health` |
+| `api_articles.py` | GET/POST `/articles`, GET `/articles/{id}`, POST `/articles/{id}/reviews`, POST `/articles/{id}/fork`, POST `/articles/{id}/merge-proposal`, GET `/articles/{id}/forks` |
+| `api_compile.py` | GET `/articles/{id}/compile` |
+| `api_contributions.py` | GET `/articles/{id}/contributions`, GET `/articles/{id}/commits`, GET `/articles/{id}/diff/*`, GET `/articles/{id}/blame` |
+| `api_comments.py` | GET/POST `/articles/{id}/comments`, POST `/articles/{id}/comments/{id}/resolve` |
+| `api_citations.py` | GET `/articles/{id}/citations`, POST `/citations/click`, GET `/citations/transitions` |
+| `api_users.py` | GET/POST `/users`, GET `/users/{id}`, POST `/users/{id}/identities`, GET `/users/{id}/reputation` |
+| `api_collab.py` | POST `/articles/{id}/collaborate`, POST `/articles/{id}/proposals`, POST `/proposals/{id}/review`, POST `/proposals/{id}/merge` |
+| `api_lan.py` | GET `/lan/catalog`, GET `/lan/nodes`, GET `/lan/status` |
+| `api_search.py` | GET `/search` |
+| `api.py` | Facade router (`/api/v1` prefix), health check |
 
 ## Development
 
 ```bash
 # Run tests
-pytest                    # 211 tests, 0 failures
+pytest                    # 342 tests passed, 26 test files
 
 # Run with coverage
 pytest --cov=peerpedia_core --cov=peerpedia

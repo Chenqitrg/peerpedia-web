@@ -1,8 +1,8 @@
 # PeerPedia — Project Status & Restart Guide
 
 > 最后更新: 2026-06-03
-> 当前状态: Phase 3 全部完成 + 沉淀池 + 五维评分 + Fork/Merge
-> 测试: 361 tests, 0 failures
+> 当前状态: Phase 3 全部完成 + 沉淀池 + 五维评分 + Fork/Merge + 代码压缩重构
+> 测试: 342 passed, 26 test files
 > 中文名: 知诸网 — 谐音「诸多」「蜘蛛网」🕸️
 
 ---
@@ -12,7 +12,7 @@
 ```bash
 cd ~/Projects/peerpedia
 source .venv/bin/activate
-.venv/bin/python -m pytest tests/ -v          # 跑测试（应 361 passed）
+.venv/bin/python -m pytest tests/ -v          # 跑测试（应 342 passed）
 peerpedia seed --force                        # 重建 demo 数据
 peerpedia serve                               # 启动 Web
 open design/brainstorm.md                     # 打开设计文档
@@ -129,7 +129,7 @@ tests/                   # 19 tests, 0 failures
 | 粉丝/关注列表 | ✅ HTMX 点击展开，format=html API |
 | 作者链接 | ✅ 首页/文章页作者名可点击跳转 |
 | 编译错误处理 | ✅ 返回 HTML 错误信息而非 JSON 异常 |
-| **代码审查** (2026-06-03) | ✅ bug修复 + 模块拆分 + SMI 3.7→2.5 |
+| **代码审查 + 压缩重构** (2026-06-03) | ✅ bug修复 + api_articles.py 1109行→439行，拆分为5个路由模块，提取8个共享模块，消除~250行重复代码 |
 
 ### M3 新增功能
 
@@ -199,6 +199,18 @@ tests/                   # 19 tests, 0 failures
 | seed 命令 | `peerpedia seed --force` 一键重建 4 用户 + 5 文章 | ✅ |
 | Demo 数据 | 5 篇文章（4 Markdown + 1 Typst）+ 自评 + 交叉引用 | ✅ |
 
+### 2026-06-03 代码压缩重构
+
+| 改动 | 说明 | 效果 |
+|------|------|------|
+| `api_articles.py` 拆分 | 1109行 → 439行，拆出 `api_comments.py` (174行) + `api_compile.py` (118行) + `api_contributions.py` (275行) + `api_search.py` (69行) | 5个专注模块，均通过 `api.py` 门面注册 |
+| `db_session_scope` 上下文管理器 | 替换 review/edit_proposal/collaboration 中 ~20 处 engine/session/commit/rollback/close 样板 | 消除 ~120 行重复代码 |
+| 共享模块提取 | `versioning.py` (bump_minor_version)、`review_dimensions.py` (REVIEW_DIMENSIONS)、`_helpers.py` (get_article_or_404)、`session_utils.py` (db_session_scope) | 消除跨文件重复 |
+| sessionmaker 缓存 | `engine.py` get_session() 按 engine URL 缓存 factory | 避免每次调用创建新 sessionmaker 类 |
+| JSONList/JSONDict 去重 | 两个相同 TypeDecorator 合并为 `_make_json_type()` 工厂 | 消除重复类定义 |
+| 工作流模块简化 | review.py、edit_proposal.py、collaboration.py 用 db_session_scope 替代手动会话管理 | 每个函数减少 ~6 行 |
+| 路由模块数 | 1 个 monolith → 10 个路由文件（api.py 门面 + 9 个子路由） | 每个文件单一职责 |
+
 ### 已知缺口
 
 | 缺口 | 说明 | 优先级 |
@@ -218,26 +230,26 @@ tests/                   # 19 tests, 0 failures
 
 ```bash
 source .venv/bin/activate            # 激活虚拟环境
-.venv/bin/python -m pytest tests/ -v  # 跑测试
+.venv/bin/python -m pytest tests/ -v  # 跑测试 (342 passed)
 peerpedia --help                     # CLI 帮助
 ```
 
 | 组件 | 技术 | 文档 |
 |---|---|---|
 | CLI | Python click | `peerpedia/cli/main.py` |
-| Web | FastAPI + Jinja2 + HTMX | `peerpedia/web/` |
-| ORM | SQLAlchemy (8 张表) | `pyproject.toml` |
+| Web | FastAPI + Jinja2 + HTMX | `peerpedia/web/` (10 route modules) |
+| ORM | SQLAlchemy (9 张表) | `peerpedia_core/storage/db/` |
 | Git | GitPython | `peerpedia_core/storage/git_backend.py` |
 | 消息模型 | Pydantic v2 | `peerpedia_core/protocol/messages.py` |
-| 测试 | pytest | `tests/` |
+| 测试 | pytest | `tests/` (26 test files) |
 
 ---
 
 ## 下一步
 
 1. 打开 `design/brainstorm.md` 回顾设计文档
-2. 运行 `.venv/bin/python -m pytest tests/ -v` 确认 242 tests pass
-3. Phase 3 全部完成 ✅ (M1-M5+, 242 tests)
+2. 运行 `.venv/bin/python -m pytest tests/ -v` 确认 342 tests passed
+3. Phase 3 全部完成 ✅ (M1-M5+, 342 tests)
 4. 下一步: Phase 5 种子社区测试（5-10 人实际使用）
 
 ---
@@ -252,7 +264,7 @@ peerpedia --help                     # CLI 帮助
 ├── pyproject.toml           ← 构建配置 + 依赖
 ├── docs/superpowers/        ← 设计规范 + 实现计划
 ├── .venv/                   ← Python 虚拟环境
-├── peerpedia_core/          ← 协议库（5子包，16模块）
-├── peerpedia/               ← 参考客户端（CLI + Web，12模块）
-└── tests/                   ← 测试（242 passed, 0 failures, 20 test files）
+├── peerpedia_core/          ← 协议库（5子包，33模块）
+├── peerpedia/               ← 参考客户端（CLI + Web，27模块，10路由文件）
+└── tests/                   ← 测试（342 passed, 26 test files）
 ```
