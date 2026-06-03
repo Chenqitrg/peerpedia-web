@@ -14,6 +14,11 @@ from peerpedia_core.storage.db import (
     get_local_click_counts,
 )
 
+from peerpedia_core.workflow.citations import (
+    record_click,
+    compute_transition_probabilities,
+)
+
 
 @pytest.fixture
 def db_url():
@@ -143,4 +148,104 @@ class TestClickEventCRUD:
         assert d["node_id"] == "n1"
         assert d["user_id"] == "alice"
         assert "timestamp" in d
+        session.close()
+
+
+class TestRecordClick:
+    def test_record_click_returns_dict(self, engine, articles):
+        session = get_session(engine)
+        result = record_click(
+            session,
+            from_article_id=articles["A"],
+            to_article_id=articles["B"],
+            node_id="node-01",
+            user_id="alice",
+        )
+        session.commit()
+        assert result["from_article_id"] == articles["A"]
+        assert result["to_article_id"] == articles["B"]
+        assert result["node_id"] == "node-01"
+        session.close()
+
+
+class TestTransitionProbabilities:
+
+    def test_empty_no_clicks(self, engine, articles):
+        """No clicks returns empty transitions."""
+        session = get_session(engine)
+        result = compute_transition_probabilities(session, articles["A"])
+        assert result["total_clicks"] == 0
+        assert result["transitions"] == []
+        session.close()
+
+    def test_single_target(self, engine, articles):
+        """Single click gives probability 1.0."""
+        session = get_session(engine)
+        create_click_event(session, from_article_id=articles["A"], to_article_id=articles["B"], node_id="n1")
+        session.commit()
+
+        result = compute_transition_probabilities(session, articles["A"])
+        assert result["total_clicks"] == 1
+        assert len(result["transitions"]) == 1
+        assert result["transitions"][0]["probability"] == 1.0
+        session.close()
+
+    def test_probabilities_sum_to_one(self, engine, articles):
+        """Probabilities always sum to 1.0."""
+        session = get_session(engine)
+        for _ in range(3):
+            create_click_event(session, from_article_id=articles["A"], to_article_id=articles["B"], node_id="n1")
+        for _ in range(2):
+            create_click_event(session, from_article_id=articles["A"], to_article_id=articles["C"], node_id="n1")
+        session.commit()
+
+        result = compute_transition_probabilities(session, articles["A"])
+        total_prob = sum(t["probability"] for t in result["transitions"])
+        assert total_prob == pytest.approx(1.0)
+        # B should have higher probability
+        assert result["transitions"][0]["to_article_id"] == articles["B"]
+        assert result["transitions"][0]["probability"] == pytest.approx(0.6)
+        session.close()
+
+    def test_sort_by_probability_desc(self, engine, articles):
+        """Transitions sorted by probability descending."""
+        session = get_session(engine)
+        for _ in range(5):
+            create_click_event(session, from_article_id=articles["A"], to_article_id=articles["C"], node_id="n1")
+        for _ in range(2):
+            create_click_event(session, from_article_id=articles["A"], to_article_id=articles["B"], node_id="n1")
+        session.commit()
+
+        result = compute_transition_probabilities(session, articles["A"])
+        probs = [t["probability"] for t in result["transitions"]]
+        assert probs == sorted(probs, reverse=True)
+        session.close()
+
+    def test_merge_other_nodes_clicks(self, engine, articles):
+        """Merge local + other nodes click counts."""
+        session = get_session(engine)
+        # Local: 3 clicks A→B
+        for _ in range(3):
+            create_click_event(session, from_article_id=articles["A"], to_article_id=articles["B"], node_id="n1")
+        session.commit()
+
+        # Other nodes: A→B 8, A→C 2
+        other = {articles["B"]: 8, articles["C"]: 2}
+        result = compute_transition_probabilities(session, articles["A"], other_nodes_clicks=other)
+
+        assert result["total_clicks"] == 13  # 3+8+2
+        assert len(result["transitions"]) == 2
+        b_trans = next(t for t in result["transitions"] if t["to_article_id"] == articles["B"])
+        assert b_trans["clicks"] == 11
+        assert b_trans["probability"] == pytest.approx(11 / 13, rel=0.01)
+        session.close()
+
+    def test_local_only_ignores_other(self, engine, articles):
+        """Without other_nodes_clicks, returns only local data."""
+        session = get_session(engine)
+        create_click_event(session, from_article_id=articles["A"], to_article_id=articles["B"], node_id="n1")
+        session.commit()
+
+        result = compute_transition_probabilities(session, articles["A"])
+        assert result["total_clicks"] == 1
         session.close()

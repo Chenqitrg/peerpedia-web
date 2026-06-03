@@ -112,3 +112,94 @@ def get_citation_info(
                 break
 
     return {"cites": cites, "cited_by": cited_by}
+
+
+# ── Click tracking ───────────────────────────────────────────────────────────────
+
+def record_click(
+    session,
+    from_article_id: str,
+    to_article_id: str,
+    *,
+    node_id: str,
+    user_id: str | None = None,
+) -> dict[str, Any]:
+    """Record a citation click event in the local database.
+
+    Returns the created event as a dict.
+    """
+    from peerpedia_core.storage.db.crud import create_click_event
+
+    event = create_click_event(
+        session,
+        from_article_id=from_article_id,
+        to_article_id=to_article_id,
+        node_id=node_id,
+        user_id=user_id,
+    )
+    return event.to_dict()
+
+
+def compute_transition_probabilities(
+    session,
+    from_article_id: str,
+    *,
+    other_nodes_clicks: dict[str, int] | None = None,
+) -> dict[str, Any]:
+    """Compute click-based transition probabilities from an article.
+
+    Merges local SQLite click events with aggregated click counts from
+    other LAN nodes (via catalog.md sync).
+
+    Args:
+        session: SQLAlchemy session.
+        from_article_id: Source article ID.
+        other_nodes_clicks: Dict of to_article_id -> click count from other nodes.
+
+    Returns:
+        {"article_id": str, "total_clicks": int,
+         "transitions": [{"to_article_id": str, "title": str,
+                           "clicks": int, "probability": float}, ...]}
+        Sorted by probability descending.
+    """
+    from collections import defaultdict
+    from peerpedia_core.storage.db import (
+        get_local_click_counts,
+        get_article,
+    )
+
+    # Local counts from SQLite (precise, per-event)
+    local_counts = get_local_click_counts(session, from_article_id)
+
+    # Merge with other nodes' aggregated counts (sum — disjoint readers)
+    merged: dict[str, int] = defaultdict(int)
+    for to_id, n in local_counts.items():
+        merged[to_id] += n
+    if other_nodes_clicks:
+        for to_id, n in other_nodes_clicks.items():
+            merged[to_id] += n
+
+    total = sum(merged.values())
+    if total == 0:
+        return {
+            "article_id": from_article_id,
+            "total_clicks": 0,
+            "transitions": [],
+        }
+
+    transitions = []
+    for to_id, clicks in sorted(merged.items(), key=lambda x: -x[1]):
+        target = get_article(session, to_id)
+        title = target.title if target else (to_id[:8] + "...")
+        transitions.append({
+            "to_article_id": to_id,
+            "title": title,
+            "clicks": clicks,
+            "probability": round(clicks / total, 4),
+        })
+
+    return {
+        "article_id": from_article_id,
+        "total_clicks": total,
+        "transitions": transitions,
+    }
