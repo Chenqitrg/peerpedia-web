@@ -13,6 +13,7 @@ from peerpedia_core.protocol.messages import (
     EditType,
     Identity,
     IdentityType,
+    OriginalWork,
     PIPProposal,
     ProposalStatus,
     ReputationVector,

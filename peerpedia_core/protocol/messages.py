@@ -116,11 +116,23 @@ class ArticleRef(BaseModel):
     cid: Optional[str] = None
 
 
+class OriginalWork(BaseModel):
+    """Reference to a historical/original work (can be authored by deceased persons)."""
+    title: str
+    original_authors: list[str]  # Name strings, not user_ids (can be deceased)
+    year: int
+    doi: Optional[str] = None
+    arxiv_id: Optional[str] = None
+    url: Optional[str] = None
+
+
 class ArticleMeta(BaseModel):
     """Article metadata (header fields)."""
     id: str
     title: str
-    founding_authors: list[str]  # user_ids — never changes
+    founding_authors: list[str]  # user_ids — never changes (living users who write the article)
+    about_person: Optional[str] = None  # If this article is about a person (e.g., "Albert Einstein", can be deceased)
+    original_works: list[OriginalWork] = Field(default_factory=list)  # Historical works being transcribed/referenced
     abstract: str
     abstract_zh: Optional[str] = None
     categories: list[str] = Field(default_factory=list)

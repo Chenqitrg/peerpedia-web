@@ -9,6 +9,7 @@ from peerpedia_core.protocol import (
     EditType,
     Identity,
     IdentityType,
+    OriginalWork,
     ReviewMessage,
     UserProfile,
     generate_keypair,
@@ -85,6 +86,46 @@ class TestMessageSchemas:
         )
         assert proposal.proposal_type == EditType.MINOR
         assert proposal.points_stake == 0  # minor edits don't require stake
+
+
+    def test_historical_figure_article(self):
+        """Article about Einstein — written by a living user, about a deceased person."""
+        article = ArticleMeta(
+            id="einstein-review-1",
+            title="Einstein's Annus Mirabilis: A Modern Perspective",
+            founding_authors=["user-zhang"],  # living user who wrote this
+            about_person="Albert Einstein",    # who the article is about (deceased)
+            original_works=[
+                OriginalWork(
+                    title="On the Electrodynamics of Moving Bodies",
+                    original_authors=["Albert Einstein"],
+                    year=1905,
+                    doi="10.1002/andp.19053221004",
+                ),
+                OriginalWork(
+                    title="Die Grundlage der allgemeinen Relativitätstheorie",
+                    original_authors=["Albert Einstein"],
+                    year=1916,
+                ),
+            ],
+            abstract="A modern review of Einstein's 1905 papers.",
+            categories=["physics", "history"],
+        )
+        assert article.about_person == "Albert Einstein"
+        assert article.founding_authors == ["user-zhang"]
+        assert len(article.original_works) == 2
+        assert article.original_works[0].year == 1905
+        assert article.original_works[0].original_authors == ["Albert Einstein"]
+
+    def test_original_work_with_arxiv(self):
+        work = OriginalWork(
+            title="A Modern Theorem",
+            original_authors=["Ada Lovelace", "Alan Turing"],
+            year=1843,
+            arxiv_id="2301.00001",
+        )
+        assert len(work.original_authors) == 2
+        assert work.arxiv_id == "2301.00001"
 
 
 class TestSigning:
