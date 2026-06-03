@@ -1,7 +1,9 @@
 # PeerPedia — Project Status & Restart Guide
 
 > 最后更新: 2026-06-03
-> 当前状态: Phase 3 M1 完成，准备进入 M2
+> 当前状态: Phase 3 M1+M2+M2.5+M2.6 完成，代码审查修复完成
+> 测试: 87 tests, 0 failures
+> 中文名: 待定（候选：知节点）
 
 ---
 
