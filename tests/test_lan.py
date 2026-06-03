@@ -1,4 +1,5 @@
 """Tests for LAN node discovery and catalog sync."""
+import json
 import pytest
 import uuid
 from datetime import datetime, timezone, timedelta
@@ -238,3 +239,57 @@ class TestCatalogYAML:
         result = parse_catalog_yaml("# Just a markdown file\n\n| Table | Here |")
         assert result["node_id"] == "unknown"
         assert result["articles"] == []
+
+
+from peerpedia_core.workflow.lan import (
+    build_heartbeat_message,
+    parse_heartbeat_message,
+)
+
+
+class TestHeartbeatMessages:
+
+    def test_build_heartbeat(self):
+        """Build a JSON heartbeat message."""
+        msg = build_heartbeat_message(
+            node_id="node-01",
+            host="192.168.1.10",
+            port=8080,
+            version="0.2.0",
+            articles_count=5,
+        )
+        parsed = json.loads(msg)
+        assert parsed["type"] == "peerpedia_hello"
+        assert parsed["node_id"] == "node-01"
+        assert parsed["host"] == "192.168.1.10"
+        assert parsed["port"] == 8080
+
+    def test_parse_heartbeat(self):
+        """Parse a valid heartbeat JSON message."""
+        msg = json.dumps({
+            "type": "peerpedia_hello",
+            "node_id": "node-x",
+            "host": "10.0.0.1",
+            "port": 9090,
+            "version": "0.2.0",
+            "articles_count": 12,
+        })
+        parsed = parse_heartbeat_message(msg)
+        assert parsed is not None
+        assert parsed["node_id"] == "node-x"
+        assert parsed["host"] == "10.0.0.1"
+        assert parsed["articles_count"] == 12
+
+    def test_parse_invalid_json(self):
+        """Invalid JSON returns None."""
+        assert parse_heartbeat_message("not json") is None
+
+    def test_parse_wrong_type(self):
+        """Non-heartbeat message returns None."""
+        msg = json.dumps({"type": "other", "data": "x"})
+        assert parse_heartbeat_message(msg) is None
+
+    def test_parse_missing_fields(self):
+        """Message missing required fields returns None."""
+        msg = json.dumps({"type": "peerpedia_hello", "node_id": "x"})
+        assert parse_heartbeat_message(msg) is None
