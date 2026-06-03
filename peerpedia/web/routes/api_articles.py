@@ -354,8 +354,10 @@ async def api_get_merge_proposals(article_id: str, format: str = "json"):
 
 
 @router.get("/articles/{article_id}/forks")
-async def api_get_forks(article_id: str):
-    """Get all forks of an article."""
+async def api_get_forks(article_id: str, format: str = "json"):
+    """Get all forks of an article. Set ?format=html for HTMX fragment."""
+    from fastapi.responses import HTMLResponse
+
     from peerpedia_core.storage.db import Article
 
     session = get_db_session()
@@ -366,6 +368,24 @@ async def api_get_forks(article_id: str):
             .order_by(Article.created_at.desc())
             .all()
         )
+
+        if format == "html":
+            if not forks:
+                return HTMLResponse(
+                    '<p style="color:#888;font-size:0.85em;padding:4px 0;">暂无派生。</p>'
+                )
+            html = '<ul style="margin:4px 0;padding-left:18px;font-size:0.85em;">'
+            for f in forks:
+                authors = ", ".join(f.founding_authors or [])
+                html += (
+                    f'<li style="margin:3px 0;">'
+                    f'<a href="/article/{f.id}">{f.title}</a>'
+                    f'<span style="color:#888;margin-left:6px;">{authors} · {f.status}</span>'
+                    f'</li>'
+                )
+            html += '</ul>'
+            return HTMLResponse(html)
+
         return {"article_id": article_id, "forks": [f.to_dict() for f in forks], "total": len(forks)}
     finally:
         session.close()

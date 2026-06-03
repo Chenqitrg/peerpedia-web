@@ -95,7 +95,13 @@
                 <span>🔗 派生自 <a href="/article/{{ article.forked_from }}">源文章</a></span>
                 {% endif %}
                 {% if article.fork_count %}
-                <span style="margin-left:12px;">🍴 {{ article.fork_count }} 派生</span>
+                <span style="margin-left:12px;cursor:pointer;"
+                      hx-get="/api/v1/articles/{{ article.id }}/forks?format=html"
+                      hx-trigger="click" hx-swap="innerHTML"
+                      hx-target="#fork-list-{{ article.id }}">
+                    🍴 {{ article.fork_count }} 派生 ▾
+                </span>
+                <div id="fork-list-{{ article.id }}" style="margin-top:4px;"></div>
                 {% endif %}
             </div>
             {% endif %}
