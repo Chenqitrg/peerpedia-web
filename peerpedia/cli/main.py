@@ -302,12 +302,14 @@ The surface code is a stabilizer code defined on a 2D lattice of qubits.
                 click.echo(f"    ✗ {ad['source'].split(chr(10))[1][7:40]}... 失败: {result.error}")
                 continue
 
-            # Set status via the existing engine
+            # Keep first article in submitted state for pool demo
             session = get_session(engine)
-            update_article_status(session, result.article_id, "submitted")
-            session.commit()
-
-            if ad["status"] == "published":
+            if i == 0:
+                update_article_status(session, result.article_id, "submitted")
+                session.commit()
+            elif ad["status"] == "published":
+                update_article_status(session, result.article_id, "submitted")
+                session.commit()
                 assign_reviewer(article_id=result.article_id, reviewer_id="liqun", database_url=settings.database_url)
                 submit_review(
                     article_id=result.article_id, reviewer_id="liqun",
