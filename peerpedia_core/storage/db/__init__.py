@@ -65,6 +65,7 @@ from peerpedia_core.storage.db.engine import (
     get_session,
     init_db,
 )
+from peerpedia_core.storage.db.session_utils import db_session_scope
 from peerpedia_core.storage.db.models import (
     Article,
     ClickEvent,
@@ -87,6 +88,7 @@ __all__ = [
     "get_engine",
     "get_session",
     "init_db",
+    "db_session_scope",
     # models
     "Article",
     "ArticleStatus",
