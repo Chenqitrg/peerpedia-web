@@ -1,7 +1,7 @@
 # PeerPedia — Brainstorming Document
 
 > 日期: 2026-06-03
-> 状态: Brainstorming (Superpowers Phase 1)
+> 状态: Phase 3 M1+M2+M2.5+M2.6 完成（87 tests, 0 failures）
 > 项目名: **PeerPedia**（peer review + encyclopedia）
 
 ---
@@ -957,30 +957,66 @@ Phase 2: 跨学科扩张
 | 22 | 代码架构 | `peerpedia-core`（协议库）+ `peerpedia`（参考客户端），分离为两个 Python 包 |
 | 23 | 协议演进 | **PIP**（PeerPedia Improvement Proposal），类比 Python PEP / Bitcoin BIP |
 | 24 | 历史参考 | **石渠阁**：Agent 硬件层解耦架构可继承，其他（浏览器 git、过早 P2P/AI）不再采用 |
+| 25 | 中文原生支持 | **UI 层中文化**：CLI + Web 全中文界面，Frontmatter 支持中文字段别名（标题→title 等）。协议层保持英文不变 |
+| 26 | ArXiv 搬运 | **peerpedia mirror**：调用 arXiv API 搬运文章。原作者成为悬空 founder（arxiv:slug 占位账户），搬运者 +5 积分。文章直接 published |
+| 27 | 悬空 Founder | **arxiv:lastname-firstname** 占位账户，原作者以后可 claim。搬运文章 founding_authors 使用悬空 ID |
+| 28 | 用户足迹 | **个人 arXiv**：/user/{user_id} 显示原创文章、搬运文章、审稿记录、积分统计、活动时间线 |
+| 29 | PDF 策略 | **不存 PDF**：Typst 按需编译（毫秒级），git 仓库只存纯文本源码。阅读时 GET /compile?fmt=html|pdf |
+| 30 | 编译时机 | **阅读时编译**：submit 时不做编译，文章页面通过 HTMX hx-trigger="load" 请求 /compile 端点 |
 
 ---
 
-## 14. Next Steps
+## 14. Progress（实际进度）
 
-1. ✅ Brainstorming doc v4（23 项决策 + 协议设计 + 冷启动策略 + 三层架构）
-2. [ ] 最终确认：还有没有要调整的？
-3. [ ] Superpowers Phase 2: 创建 worktree + 搭建 PeerPedia 项目骨架
-   - `peerpedia-core`（协议库：消息格式、签名、算法接口）
-   - `peerpedia`（参考客户端：CLI + Web）
-4. [ ] Phase 3: TDD 实现 MVP（种子阶段核心功能）
-   - Layer 0 协议消息格式（JSON schema 严格定义）
-   - CLI 框架 + `peerpedia init` / `peerpedia serve --lan`
-   - 文章提交（Typst + Markdown/KaTeX + git）
-   - Web 界面（文章列表 + 阅读 + 引用跳转）
-   - 审稿流程（assign → review → decision + 积分）
-   - 协作 + 开放编辑（一键合作 + EditProposal + 贡献时间线）
-   - 信誉/积分引擎 v1（多维雷达 + 身份权重，Layer 1 算法可升级）
-   - LAN 同步（节点发现 + 文章池共享）
-5. [ ] 种子用户测试：找 5-10 个物理/数学圈子的人实际用起来
-6. [ ] Phase 2: IPFS 集成
-7. [ ] 远期: PIP 治理流程、多客户端生态、AI 辅助
+| Phase | 内容 | 状态 | 测试 |
+|---|---|---|---|
+| Phase 1 | Brainstorming（25 项决策） | ✅ | — |
+| Phase 2 | 项目骨架（协议 + CLI + Web） | ✅ | 19 tests |
+| Phase 3 M1 | 文章提交闭环（submit + DB + 编译器） | ✅ | 42 tests |
+| Phase 3 M2 | 审稿工作流（状态机 + 审稿 + 决定 + 积分） | ✅ | 76 tests |
+| Phase 3 M2.5 | 中文 UI + ArXiv 搬运 | ✅ | 84 tests |
+| Phase 3 M2.6 | 用户足迹 + 按需编译 | ✅ | **87 tests** |
+| Phase 3 M3 | 协作+开放编辑 | ⏸ 待开始 | — |
+| Phase 3 M4 | 信誉+LAN | ⏸ 待开始 | — |
+| Phase 3 M5 | 引用跳转 | ⏸ 待开始 | — |
+| Phase 4 | IPFS 集成 | ⏸ 远期 | — |
+| Phase 5 | 种子社区测试 | ⏸ 远期 | — |
+| Phase 6 | AI 辅助 | ⏸ 远期 | — |
+
+### 当前可用的命令
+
+```bash
+peerpedia init                              # 初始化
+peerpedia serve                             # 启动 Web（17 条路由）
+peerpedia submit article.typ --author 张三    # 提交文章
+peerpedia review <id> -d accept -c "很好"     # 审稿
+peerpedia decide <id>                        # 决定
+peerpedia mirror 2301.00001 -u 张三          # 搬运 arXiv
+```
+
+### 系统架构（实际）
+
+```
+peerpedia_core/
+  protocol/        # Layer 0: 消息格式 + 签名 + CID
+  reputation/      # Layer 1: 四维信誉算法 v1
+  governance/      # Layer 1: PIP 提案流程
+  workflow/        # Layer 1: 状态机 + 审稿编排
+  storage/         # Layer 0: git backend + SQLite DB + compiler backends
+
+peerpedia/
+  cli/             # 7 个 CLI 命令（init, serve, submit, review, decide, mirror, collaborate, propose_edit）
+  web/             # FastAPI + Jinja2 + HTMX（17 routes, 4 templates）
+  submit.py        # 提交编排器
+  mirror.py        # ArXiv 搬运编排器
+  config/          # 设置
+
+tests/             # 87 tests, 0 failures
+```
 
 ---
+
+> 本文档随实现进展持续更新。最新决策见 Section 13（#25-#30）。
 
 > 本文档遵循 Superpowers 方法论：先 brainstorm，充分讨论后再进入 coding。
 > 所有设计决策在进入 Phase 2 之前都可以修改。
