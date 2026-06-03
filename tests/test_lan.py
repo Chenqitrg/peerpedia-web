@@ -152,3 +152,89 @@ class TestNodeInfoCRUD:
         assert "myself" in remaining_ids
         assert "old" not in remaining_ids
         session.close()
+
+
+from peerpedia_core.workflow.lan import (
+    catalog_to_yaml_string,
+    parse_catalog_yaml,
+    CATALOG_YAML_DELIMITER,
+)
+
+
+class TestCatalogYAML:
+
+    def test_roundtrip(self):
+        """Serialize and parse back produces same data."""
+        data = {
+            "node_id": "node-sh-01",
+            "updated": "2026-06-03T10:30:00Z",
+            "articles": [
+                {"id": "a1", "title": "Article 1", "authors": ["alice"], "version": "v1.0"},
+                {"id": "a2", "title": "Article 2", "authors": ["bob"], "version": "v2.1"},
+            ],
+        }
+        yaml_str = catalog_to_yaml_string(data)
+        parsed = parse_catalog_yaml(yaml_str)
+        assert parsed["node_id"] == "node-sh-01"
+        assert len(parsed["articles"]) == 2
+        assert parsed["articles"][0]["id"] == "a1"
+
+    def test_empty_articles(self):
+        """Catalog with no articles."""
+        data = {"node_id": "node-x", "updated": "2026-06-03T00:00:00Z", "articles": []}
+        yaml_str = catalog_to_yaml_string(data)
+        parsed = parse_catalog_yaml(yaml_str)
+        assert parsed["articles"] == []
+
+    def test_articles_with_clicks_local(self):
+        """Articles with clicks_local field survive roundtrip."""
+        data = {
+            "node_id": "node-01",
+            "updated": "2026-06-03T10:00:00Z",
+            "articles": [
+                {
+                    "id": "a1", "title": "Test", "authors": ["alice"], "version": "v1.0",
+                    "references": [
+                        {"target": "b1", "title": "Ref 1", "clicks_local": 15},
+                    ],
+                },
+            ],
+        }
+        yaml_str = catalog_to_yaml_string(data)
+        parsed = parse_catalog_yaml(yaml_str)
+        refs = parsed["articles"][0]["references"]
+        assert refs[0]["clicks_local"] == 15
+
+    def test_delimiter_in_yaml(self):
+        """YAML output uses --- delimiter."""
+        data = {"node_id": "n1", "updated": "2026-01-01T00:00:00Z", "articles": []}
+        yaml_str = catalog_to_yaml_string(data)
+        assert yaml_str.startswith(CATALOG_YAML_DELIMITER)
+        # Count: exactly two delimiters
+        assert yaml_str.count(CATALOG_YAML_DELIMITER + "\n") >= 2
+
+    def test_parse_multiline_string(self):
+        """Abstract with newlines survives roundtrip."""
+        data = {
+            "node_id": "n1",
+            "updated": "2026-01-01T00:00:00Z",
+            "articles": [
+                {"id": "a1", "title": "Test", "authors": ["alice"],
+                 "version": "v1.0", "abstract": "Line 1\\nLine 2"},
+            ],
+        }
+        yaml_str = catalog_to_yaml_string(data)
+        parsed = parse_catalog_yaml(yaml_str)
+        assert parsed["articles"][0]["abstract"] == "Line 1\\nLine 2"
+
+    def test_parse_empty_input(self):
+        """Empty or invalid input returns default dict."""
+        result = parse_catalog_yaml("")
+        assert result["node_id"] == "unknown"
+        assert result["articles"] == []
+
+    def test_parse_no_delimiters(self):
+        """Content without YAML delimiters returns default."""
+        result = parse_catalog_yaml("# Just a markdown file\n\n| Table | Here |")
+        assert result["node_id"] == "unknown"
+        assert result["articles"] == []
