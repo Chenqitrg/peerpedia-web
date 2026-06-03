@@ -1,7 +1,7 @@
 # 知著网 (PeerPedia) — 设计蓝图
 
 > 日期: 2026-06-03
-> 状态: Phase 3 M1+M2+M2.5+M2.6+M3 完成（126 tests, 0 failures）
+> 状态: Phase 3 全部完成（211 tests, 0 failures）
 > 英文名: **PeerPedia**（peer review + encyclopedia）
 > 中文名: **知著网**
 >   - 知 = 求知，著 = 著述，网 = 网络
@@ -885,8 +885,9 @@ M2 ████████████████████ ✅ 审稿工作
 M2.5 ███████████████████ ✅ 中文 + 搬运
 M2.6 ███████████████████ ✅ 用户 + 编译
 M3 ███████████████████ ✅ 协作 + 开放编辑
-M4 ████████████░░░░░░░░ ✅ 信誉（雷达图+身份权重）| ⏸ LAN（下个迭代）
-M5 ███████████████████ ✅ 引用跳转
+M4 ███████████████████ ✅ 信誉 + LAN 集群（UDP 广播 + catalog.md）
+M5 ███████████████████ ✅ 引用跳转 + 点击跃迁概率
+M5+ ███████████████████ ✅ 用户关注（Follow + Feed）
 ```
 
 ### Phase 6: AI 辅助（远期展望）
@@ -999,7 +1000,21 @@ Phase 2: 跨学科扩张
 | 36 | 身份权重存储 | **整数 ×100**：trust_weight 在 DB 存整数（100=1.0），和 contribution_weight 风格一致 |
 | 37 | 引用扫描 | **正则提取**：Typst `#cite("peerpedia:id")` + 内联 `peerpedia:id` 两种格式，submit 时自动填充 Article.references |
 | 38 | 引用图 | **NetworkX DiGraph**：实时构建，不缓存。侧栏 JavaScript fetch API 加载，文本链接跳转 |
-| 39 | LAN 数据协议 | **🔮 待讨论**：用 markdown 文件做节点间数据交换格式（catalog.md），比 JSON API 更人类可读、git 友好 |
+| 39 | LAN 数据协议 | **catalog.md**（YAML frontmatter + Markdown 表格），git 友好，人类可直接编辑 |
+| 40 | LAN 节点发现 | **UDP 广播心跳**（:3690），超时 30s，清理 1h |
+| 41 | 文章池同步 | HTTP GET catalog.md；发现新节点时全量 + 每 60s 增量 |
+| 42 | MD 数据格式 | YAML frontmatter 机器读写 + Markdown 表格人类可读 |
+| 43 | Catalog 同步频率 | 发现新节点时全量同步 + 每 60s 增量 |
+| 44 | 引用点击追踪 | 本地 SQLite 逐条记录 + catalog clicks_local 聚合 |
+| 45 | 跃迁概率合并 | 本地精确（SQLite）+ 跨节点聚合（catalog），取 sum（读者不重叠） |
+| 46 | Click API | fire-and-forget（sendBeacon），不阻塞页面跳转 |
+| 47 | YAML 解析 | 手写，不引入 pyyaml 依赖 |
+| 48 | LAN 手动后备 | `--peers` CLI 选项，UDP 被挡时手动指定 |
+| 49 | 引用点击 UI | 编译时注入 `data-target-id`，事件委托 `closest('.citation-link')` |
+| 50 | Follow 数据模型 | 复合主键 (follower_id, followed_id)，单表 |
+| 51 | 关注动态范围 | 近 30 天，类型：new_article + new_version |
+| 52 | Follow UI 交互 | HTMX 按钮 swap（POST/DELETE），无需 JS |
+| 53 | Follow LAN 同步 | MVP 不同步关注关系（本地行为） |
 
 ---
 
@@ -1015,8 +1030,9 @@ Phase 2: 跨学科扩张
 | Phase 3 M2.6 | 用户足迹 + 按需编译 | ✅ | **87 tests** |
 | Phase 3 M3 | 协作+开放编辑 | ✅ | 126 tests |
 | Phase 3 M4 | 信誉集群（雷达图+身份权重） | ✅ | 144 tests |
-| Phase 3 M4 | LAN 集群（节点发现+同步） | ⏸ 待开始 | — |
-| Phase 3 M5 | 引用跳转 | ✅ | **157 tests** |
+| Phase 3 M4 | LAN 集群（UDP 节点发现 + catalog.md 同步） | ✅ | 196 tests |
+| Phase 3 M5 | 引用跳转 + 点击跃迁概率 | ✅ | **196 tests** |
+| Phase 3 M5+ | 用户关注（Follow + 动态 Feed） | ✅ | **211 tests** |
 | Phase 4 | IPFS 集成 | ⏸ 远期 | — |
 | Phase 5 | 种子社区测试 | ⏸ 远期 | — |
 | Phase 6 | AI 辅助 | ⏸ 远期 | — |
@@ -1025,7 +1041,7 @@ Phase 2: 跨学科扩张
 
 ```bash
 peerpedia init                              # 初始化
-peerpedia serve                             # 启动 Web（24 routes）
+peerpedia serve [--lan] [--port 8080]       # 启动 Web（30 routes）
 peerpedia submit article.typ --author 张三    # 提交文章（自动扫描引用）
 peerpedia review <id> -d accept -c "很好"     # 审稿
 peerpedia decide <id>                        # 决定
@@ -1034,6 +1050,8 @@ peerpedia collaborate <id> -r 审稿人         # 接受协作申请
 peerpedia propose-edit <id> -t minor -d "修改" # 提交修改提案
 peerpedia merge-proposal <pid> <aid>          # 合并提案
 peerpedia user register <id> --name 张三 --email a@b.com  # 注册用户
+peerpedia lan status                         # 查看 LAN 节点
+peerpedia lan sync [-n <node>]               # 手动同步文章目录
 ```
 
 ### 系统架构（实际）
@@ -1044,16 +1062,18 @@ peerpedia_core/
   reputation/      # Layer 1: 四维信誉算法 v1（实时计算+身份boost+衰减）
   governance/      # Layer 1: PIP 提案流程
   workflow/        # Layer 1: 状态机 + 审稿编排 + 协作 + 编辑提案 + 贡献追踪 + 引用扫描
-  storage/         # Layer 0: git backend + SQLite DB（7表）+ compiler backends
+                   #          + 引用点击追踪 + LAN 节点发现（UDP）+ catalog 同步
+  storage/         # Layer 0: git backend + SQLite DB（10表）+ compiler backends
 
 peerpedia/
-  cli/             # 10 个 CLI 命令（init, serve, submit, review, decide, mirror, collaborate, propose-edit, merge-proposal, user register）
-  web/             # FastAPI + Jinja2 + HTMX（24 routes, 5 templates, Chart.js）
+  cli/             # 12 个 CLI 命令（init, serve, submit, review, decide, mirror,
+                   #   collaborate, propose-edit, merge-proposal, user register, lan status, lan sync）
+  web/             # FastAPI + Jinja2 + HTMX（30 routes, 5 templates, Chart.js）
   submit.py        # 提交编排器（含引用自动扫描）
   mirror.py        # ArXiv 搬运编排器
   config/          # 设置
 
-tests/             # 157 tests, 0 failures
+tests/             # 211 tests, 0 failures
 ```
 
 ---
