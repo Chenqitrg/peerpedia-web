@@ -12,6 +12,7 @@ from peerpedia_core.storage.db import (
     create_identity as db_create_identity,
     get_identities_for_user,
 )
+from peerpedia_core.workflow.citations import get_citation_info, inject_citation_links
 from peerpedia.submit import submit_article
 
 from pydantic import BaseModel as PydanticBaseModel, Field
@@ -260,7 +261,8 @@ async def api_compile_article(article_id: str, fmt: str = "html"):
             )
         elif result.html_content:
             from fastapi.responses import HTMLResponse
-            return HTMLResponse(content=result.html_content)
+            linked_html = inject_citation_links(result.html_content)
+            return HTMLResponse(content=linked_html)
         elif result.output_path:
             # Read output as text
             output = Path(result.output_path)
@@ -533,6 +535,20 @@ async def api_get_user_reputation(user_id: str):
         algo = ReputationV1()
         vec = algo.compute(user_id, session=session)
         return vec.model_dump()
+    finally:
+        session.close()
+
+
+# ── Citations ────────────────────────────────────────────────────────────────────
+
+
+@router.get("/articles/{article_id}/citations")
+async def api_get_citations(article_id: str):
+    """Get citation graph info (cites + cited_by) for an article."""
+    session = _get_db_session()
+    try:
+        info = get_citation_info(session, article_id)
+        return info
     finally:
         session.close()
 
