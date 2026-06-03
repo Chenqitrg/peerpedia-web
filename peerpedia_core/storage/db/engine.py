@@ -81,7 +81,16 @@ def init_db(engine: Engine) -> None:
     Base.metadata.create_all(engine)
 
 
+_factory_cache: dict = {}
+
+
 def get_session(engine: Engine) -> Session:
-    """Create a new session bound to the given engine."""
-    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
-    return SessionLocal()
+    """Create a new session bound to the given engine.
+
+    sessionmaker is cached per engine so the factory class is not
+    recreated on every call.
+    """
+    key = engine.url
+    if key not in _factory_cache:
+        _factory_cache[key] = sessionmaker(bind=engine, expire_on_commit=False)
+    return _factory_cache[key]()
