@@ -35,15 +35,21 @@ def commit_article(
     message: str,
     author_name: str,
     author_email: str,
+    *,
+    allow_empty: bool = False,
 ) -> str:
-    """Stage all changes and commit. Returns the commit hash."""
+    """Stage all changes and commit. Returns the commit hash.
+
+    Set allow_empty=True to create a commit even if nothing changed
+    (used for merge records, fork tracking, etc.).
+    """
     import git
 
     repo = git.Repo(repo_path)
     repo.git.add(A=True)
 
-    # Only commit if there are changes
-    if not repo.is_dirty(untracked_files=True):
+    # Only commit if there are changes (unless forced)
+    if not allow_empty and not repo.is_dirty(untracked_files=True):
         return repo.head.commit.hexsha  # type: ignore[union-attr]
 
     commit = repo.index.commit(

@@ -148,7 +148,8 @@ async def api_fork_article(article_id: str, forker_id: str = Form(...)):
             raise HTTPException(status_code=500, detail="No source files found in fork")
 
         commit_article(new_repo, f"Fork from: {article.title}",
-                       author_name=forker_id, author_email=f"{forker_id}@peerpedia.local")
+                       author_name=forker_id, author_email=f"{forker_id}@peerpedia.local",
+                       allow_empty=True)
 
         from peerpedia_core.storage.db import create_article
         fork = create_article(
@@ -279,6 +280,7 @@ async def api_review_merge_proposal(
                     f"Merge: {proposal.description or 'Merge from fork'} by {proposal.proposer_id}",
                     author_name=reviewer_id,
                     author_email=f"{reviewer_id}@peerpedia.local",
+                    allow_empty=True,
                 )
 
             # Bump version
@@ -712,10 +714,15 @@ async def api_get_commit_history_html(article_id: str):
 
         commits = get_commit_history(repo)
 
-        if not commits:
+        # Also include contribution records (merge, fork, etc.)
+        from peerpedia_core.storage.db import get_contribution_records
+        records = get_contribution_records(session, article_id)
+
+        if not commits and not records:
             return HTMLResponse('<p style="color:#888;">暂无提交记录。</p>')
 
         html = '<div class="commit-list-html">'
+        # Git commits
         for i, c in enumerate(commits):
             short_hash = c["hash"][:8]
             msg = c["message"][:80]
@@ -723,12 +730,17 @@ async def api_get_commit_history_html(article_id: str):
             ts = c["timestamp"][:10] if c["timestamp"] else ""
             active = "active" if i == 0 else ""
             files_count = len(c.get("stats", {}).get("files", []))
+            event_icon = ""
+            if "Merge:" in msg:
+                event_icon = "🔀 "
+            elif "Fork" in msg:
+                event_icon = "🍴 "
             html += (
                 f'<div class="commit-item {active}" data-hash="{c["hash"]}"'
                 f' onclick="loadDiff(\'{article_id}\', \'{c["hash"]}\')"'
                 f' style="padding:8px;border-bottom:1px solid #eee;cursor:pointer;'
                 f'font-size:0.85em;border-radius:4px;transition:background 0.15s;">'
-                f'<code style="color:#2563eb;font-size:0.8em;">{short_hash}</code> '
+                f'<code style="color:#2563eb;font-size:0.8em;">{event_icon}{short_hash}</code> '
                 f'<strong>{author}</strong>'
                 f'<div style="color:#666;font-size:0.85em;margin-top:2px;">{msg}</div>'
                 f'<span style="color:#888;font-size:0.75em;">{ts}'
@@ -736,6 +748,26 @@ async def api_get_commit_history_html(article_id: str):
             if files_count:
                 html += f' · {files_count} file(s)'
             html += '</span></div>'
+
+        # Contribution records (non-git events: merge proposals, etc.)
+        for r in records:
+            msg = (r.commit_message or "")[:80]
+            if not msg:
+                continue
+            uid = r.user_id or "unknown"
+            ts = r.timestamp.isoformat()[:10] if r.timestamp else ""
+            icon = "🔀 " if "merge" in msg.lower() else "📝 "
+            html += (
+                f'<div class="commit-item"'
+                f' style="padding:8px;border-bottom:1px solid #eee;'
+                f'font-size:0.85em;border-radius:4px;opacity:0.8;">'
+                f'<code style="color:#16a34a;font-size:0.8em;">{icon}</code> '
+                f'<strong>{uid}</strong>'
+                f'<div style="color:#666;font-size:0.85em;margin-top:2px;">{msg}</div>'
+                f'<span style="color:#888;font-size:0.75em;">{ts}</span>'
+                f'</div>'
+            )
+
         html += '</div>'
         return HTMLResponse(html)
     finally:
