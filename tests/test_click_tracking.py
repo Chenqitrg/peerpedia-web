@@ -17,6 +17,7 @@ from peerpedia_core.storage.db import (
 from peerpedia_core.workflow.citations import (
     record_click,
     compute_transition_probabilities,
+    inject_citation_links,
 )
 
 
@@ -249,3 +250,30 @@ class TestTransitionProbabilities:
         result = compute_transition_probabilities(session, articles["A"])
         assert result["total_clicks"] == 1
         session.close()
+
+
+class TestInjectCitationLinks:
+
+    def test_injects_data_target_id(self):
+        """inject_citation_links adds data-target-id attribute."""
+        aid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+        html = f"peerpedia:{aid}"
+        result = inject_citation_links(html)
+        assert f'data-target-id="{aid}"' in result
+        assert 'class="citation-link"' in result
+
+    def test_injects_href(self):
+        """Citation link has correct href."""
+        aid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+        html = f"peerpedia:{aid}"
+        result = inject_citation_links(html)
+        assert f'href="/article/{aid}"' in result
+
+    def test_multiple_citations(self):
+        """Multiple citations all get data-target-id."""
+        a1 = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+        a2 = "11111111-2222-3333-4444-555555555555"
+        html = f"peerpedia:{a1} and peerpedia:{a2}"
+        result = inject_citation_links(html)
+        assert f'data-target-id="{a1}"' in result
+        assert f'data-target-id="{a2}"' in result

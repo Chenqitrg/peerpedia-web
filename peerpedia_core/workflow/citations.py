@@ -43,8 +43,10 @@ def inject_citation_links(html: str) -> str:
     """Replace peerpedia:<id> references with clickable HTML links."""
     def replacement(match):
         aid = match.group(1)
-        return f'<a href="/article/{aid}" class="citation-link">' \
-               '引用文章</a>'
+        return (
+            f'<a href="/article/{aid}" class="citation-link" '
+            f'data-target-id="{aid}">引用文章</a>'
+        )
 
     return re.sub(
         r'peerpedia:([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})',
