@@ -8,6 +8,7 @@ from pathlib import Path
 from peerpedia.config.settings import settings
 from peerpedia_core.storage.db import (
     get_engine, get_session, init_db, list_articles, get_article,
+    Article,
 )
 
 router = APIRouter()
@@ -56,21 +57,7 @@ async def view_article(request: Request, article_id: str):
 
         article_dict = article.to_dict()
 
-        # Try to load compiled HTML content for display
-        content_html = ""
-        if article_dict["git_repo_path"]:
-            repo = Path(article_dict["git_repo_path"])
-            if article_dict["format"] == "markdown":
-                html_candidates = list(repo.glob("*.html"))
-                if html_candidates:
-                    content_html = html_candidates[0].read_text()
-            else:
-                # For Typst, show source as plain text
-                source_files = list(repo.glob("*.typ"))
-                if source_files:
-                    content_html = f"<pre>{source_files[0].read_text()}</pre>"
-
-        article_dict["content"] = content_html
+        article_dict["content"] = None  # Compiled on demand via HTMX
 
         return templates.TemplateResponse(
             "article.html",
@@ -134,6 +121,98 @@ async def review_queue(request: Request):
                 "request": request,
                 "title": "Review Queue",
                 "articles": [a.to_dict() for a in articles],
+            },
+        )
+    finally:
+        session.close()
+
+
+@router.get("/user/{user_id}", response_class=HTMLResponse)
+async def user_profile(request: Request, user_id: str):
+    """User profile page — personal arXiv and activity footprint."""
+    session = _get_db_session()
+    try:
+        # Articles authored by this user
+        authored = (
+            session.query(Article)
+            .filter(Article.founding_authors.contains(user_id))
+            .order_by(Article.created_at.desc())
+            .all()
+        )
+
+        # Articles mirrored by this user
+        mirrored = (
+            session.query(Article)
+            .filter(Article.mirror_by == user_id)
+            .order_by(Article.created_at.desc())
+            .all()
+        )
+
+        # Reviews by this user
+        from peerpedia_core.storage.db import Review
+        reviews = (
+            session.query(Review)
+            .filter(Review.reviewer_id == user_id)
+            .order_by(Review.created_at.desc())
+            .all()
+        )
+
+        # Build activity timeline
+        activities = []
+        for a in authored:
+            activities.append({
+                "type": "submit",
+                "label": "提交了文章",
+                "title": a.title,
+                "article_id": a.id,
+                "time": a.created_at.isoformat() if a.created_at else "",
+            })
+        for m in mirrored:
+            activities.append({
+                "type": "mirror",
+                "label": f"搬运了 arXiv:{m.source_arxiv_id or '?'}",
+                "title": m.title,
+                "article_id": m.id,
+                "time": m.created_at.isoformat() if m.created_at else "",
+            })
+        for r in reviews:
+            activities.append({
+                "type": "review",
+                "label": "审稿了",
+                "title": r.article_id,
+                "article_id": r.article_id,
+                "decision": r.decision,
+                "points": r.points_earned,
+                "time": r.created_at.isoformat() if r.created_at else "",
+            })
+
+        # Sort by time descending
+        activities.sort(key=lambda x: x["time"], reverse=True)
+
+        return templates.TemplateResponse(
+            "user.html",
+            {
+                "request": request,
+                "title": f"用户: {user_id}",
+                "user_id": user_id,
+                "authored": [a.to_dict() for a in authored],
+                "mirrored": [m.to_dict() for m in mirrored],
+                "reviews": [
+                    {
+                        "article_id": r.article_id,
+                        "decision": r.decision,
+                        "points_earned": r.points_earned,
+                        "scientific_correctness": r.scientific_correctness,
+                        "clarity": r.clarity,
+                        "created_at": r.created_at.isoformat() if r.created_at else "",
+                    }
+                    for r in reviews
+                ],
+                "activities": activities[:30],
+                "total_articles": len(authored),
+                "total_mirrors": len(mirrored),
+                "total_reviews": len(reviews),
+                "total_points": sum(r.points_earned for r in reviews),
             },
         )
     finally:

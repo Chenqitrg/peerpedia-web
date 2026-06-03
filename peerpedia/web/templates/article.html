@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ title }} — PeerPedia</title>
     <link rel="stylesheet" href="/static/style.css">
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
 </head>
 <body>
     <header>
@@ -29,9 +30,11 @@
                 <h2>摘要</h2>
                 <p>{{ article.abstract }}</p>
             </div>
-            <div class="article-content">
-                <!-- Rendered Typst/Markdown content -->
-                {{ article.content | safe }}
+            <div class="article-content" id="article-content"
+                 hx-get="/api/v1/articles/{{ article.id }}/compile?fmt=html"
+                 hx-trigger="load"
+                 hx-swap="innerHTML">
+                <p>编译中...</p>
             </div>
             <aside class="reference-graph">
                 <h3>📚 References</h3>

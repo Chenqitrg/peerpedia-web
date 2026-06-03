@@ -189,6 +189,66 @@ async def api_decide_article(article_id: str):
     }
 
 
+@router.get("/articles/{article_id}/compile")
+async def api_compile_article(article_id: str, fmt: str = "html"):
+    """Compile an article on demand.
+
+    Args:
+        fmt: 'html' (default) or 'pdf'
+    """
+    from pathlib import Path
+    from peerpedia_core.storage.compiler import TypstBackend, MarkdownBackend
+
+    session = _get_db_session()
+    try:
+        article = get_article(session, article_id)
+        if article is None:
+            raise HTTPException(status_code=404, detail="Article not found")
+
+        repo = Path(article.git_repo_path) if article.git_repo_path else None
+        if repo is None or not repo.exists():
+            raise HTTPException(status_code=404, detail="Article source not found")
+
+        # Find source file
+        source_files = []
+        if article.format == "typst":
+            source_files = list(repo.glob("*.typ"))
+            backend = TypstBackend()
+        else:
+            source_files = list(repo.glob("*.md"))
+            backend = MarkdownBackend()
+
+        if not source_files:
+            raise HTTPException(status_code=404, detail="Source file not found")
+
+        source_file = source_files[0]
+
+        # Compile
+        result = backend.compile(source_file, repo)
+
+        if not result.success:
+            raise HTTPException(status_code=500, detail=f"Compilation failed: {result.error}")
+
+        if fmt == "pdf" and result.output_path:
+            from fastapi.responses import FileResponse
+            return FileResponse(
+                result.output_path,
+                media_type="application/pdf",
+                filename=f"{article.title}.pdf",
+            )
+        elif result.html_content:
+            from fastapi.responses import HTMLResponse
+            return HTMLResponse(content=result.html_content)
+        elif result.output_path:
+            # Read output as text
+            output = Path(result.output_path)
+            return {"content": output.read_text(), "format": article.format}
+        else:
+            raise HTTPException(status_code=500, detail="No output produced")
+    finally:
+        session.close()
+
+
 @router.get("/health")
 async def health_check():
     """Health check endpoint."""

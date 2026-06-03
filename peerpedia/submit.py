@@ -10,10 +10,9 @@ the full article submission flow:
     5. Initialize git repo for the article
     6. Copy source + assets into repo
     7. Git commit
-    8. Compile (Typst -> PDF, Markdown -> HTML)
-    9. Store metadata in SQLite
-    10. Compute CID
-    11. Return SubmissionResult
+    8. Store metadata in SQLite
+    9. Compute CID
+    10. Return SubmissionResult
 """
 
 from __future__ import annotations
@@ -25,8 +24,6 @@ from pathlib import Path
 from typing import Optional
 
 from peerpedia_core.storage.compiler import (
-    TypstBackend,
-    MarkdownBackend,
     detect_format,
     extract_frontmatter,
 )
@@ -132,15 +129,7 @@ def submit_article(
     except Exception as e:
         return SubmissionResult(success=False, error=f"Git commit failed: {e}")
 
-    # 8. Compile
-    if fmt == "typst":
-        backend = TypstBackend()
-    else:
-        backend = MarkdownBackend()
-
-    compile_result = backend.compile(dest_file, repo_path)
-
-    # 9. Store metadata in SQLite
+    # 8. Store metadata in SQLite
     session = None
     try:
         engine = get_engine(database_url)
@@ -188,6 +177,6 @@ def submit_article(
         format=fmt,
         git_repo_path=str(repo_path),
         git_commit_hash=commit_hash,
-        compile_output=compile_result.output_path,
+        compile_output=None,
         cid=cid,
     )
