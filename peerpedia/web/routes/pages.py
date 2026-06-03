@@ -310,27 +310,16 @@ async def user_profile(request: Request, user_id: str):
         except Exception:
             reputation = {}
 
-        # Follow state — always compute counts, even without viewer
-        is_self = False
-        is_following_user = False
-        following_count = 0
-        follower_count = 0
-        if viewer:
-            from peerpedia_core.storage.db import (
-                get_follower_count,
-                get_following_count,
-                is_following,
-            )
-            if viewer == user_id:
-                is_self = True
-            else:
-                is_following_user = is_following(session, viewer, user_id)
-            following_count = get_following_count(session, user_id)
-            follower_count = get_follower_count(session, user_id)
-        else:
-            from peerpedia_core.storage.db import get_follower_count, get_following_count
-            following_count = get_following_count(session, user_id)
-            follower_count = get_follower_count(session, user_id)
+        # Follow state
+        from peerpedia_core.storage.db import (
+            get_follower_count,
+            get_following_count,
+            is_following,
+        )
+        is_self = bool(viewer) and viewer == user_id
+        is_following_user = not is_self and bool(viewer) and is_following(session, viewer, user_id)
+        following_count = get_following_count(session, user_id)
+        follower_count = get_follower_count(session, user_id)
 
         return templates.TemplateResponse(
             request=request,
