@@ -7,7 +7,7 @@ so callers control transaction boundaries.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import func
@@ -15,9 +15,11 @@ from sqlalchemy.orm import Session
 
 from peerpedia_core.storage.db.models import (
     Article,
+    ClickEvent,
     ContributionRecord,
     EditProposal,
     Identity,
+    NodeInfo,
     Review,
     User,
 )
@@ -394,10 +396,8 @@ def create_click_event(
     to_article_id: str,
     node_id: str,
     user_id: Optional[str] = None,
-) -> "ClickEvent":
+) -> ClickEvent:
     """Record a citation click event."""
-    from peerpedia_core.storage.db.models import ClickEvent
-
     event = ClickEvent(
         id=str(uuid.uuid4()),
         from_article_id=from_article_id,
@@ -414,10 +414,8 @@ def get_click_events_for_article(
     article_id: str,
     *,
     limit: int = 1000,
-) -> list["ClickEvent"]:
+) -> list[ClickEvent]:
     """Get click events originating from an article, most recent first."""
-    from peerpedia_core.storage.db.models import ClickEvent
-
     return (
         session.query(ClickEvent)
         .filter(ClickEvent.from_article_id == article_id)
@@ -435,8 +433,6 @@ def get_local_click_counts(
 
     Returns dict mapping to_article_id -> click count.
     """
-    from peerpedia_core.storage.db.models import ClickEvent
-
     rows = (
         session.query(
             ClickEvent.to_article_id,
@@ -460,16 +456,15 @@ def upsert_node(
     version: str = "0.2.0",
     articles_count: int = 0,
     is_self: bool = False,
-) -> "NodeInfo":
+) -> NodeInfo:
     """Insert or update a LAN node record on heartbeat."""
-    from peerpedia_core.storage.db.models import NodeInfo
-
     node = session.query(NodeInfo).filter(NodeInfo.node_id == node_id).first()
     if node:
         node.host = host
         node.port = port
         node.version = version
         node.articles_count = articles_count
+        node.is_self = 1 if is_self else 0
         node.last_seen = datetime.now(timezone.utc)
     else:
         node = NodeInfo(
@@ -488,11 +483,8 @@ def get_online_nodes(
     session: Session,
     *,
     timeout_seconds: float = 30.0,
-) -> list["NodeInfo"]:
+) -> list[NodeInfo]:
     """Get nodes that have been seen within the timeout window."""
-    from peerpedia_core.storage.db.models import NodeInfo
-    from datetime import timedelta
-
     cutoff = datetime.now(timezone.utc) - timedelta(seconds=timeout_seconds)
     return (
         session.query(NodeInfo)
@@ -508,9 +500,6 @@ def cleanup_stale_nodes(
     max_age_seconds: float = 3600.0,
 ) -> int:
     """Remove nodes not seen for over an hour. Returns count of removed nodes."""
-    from peerpedia_core.storage.db.models import NodeInfo
-    from datetime import timedelta
-
     cutoff = datetime.now(timezone.utc) - timedelta(seconds=max_age_seconds)
     result = (
         session.query(NodeInfo)

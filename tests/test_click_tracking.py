@@ -129,3 +129,18 @@ class TestClickEventCRUD:
         counts = get_local_click_counts(session, articles["A"])
         assert counts == {}
         session.close()
+
+    def test_to_dict(self, engine, articles):
+        """ClickEvent.to_dict() returns correct fields."""
+        session = get_session(engine)
+        event = create_click_event(
+            session, from_article_id=articles["A"], to_article_id=articles["B"], node_id="n1", user_id="alice"
+        )
+        session.commit()
+        d = event.to_dict()
+        assert d["from_article_id"] == articles["A"]
+        assert d["to_article_id"] == articles["B"]
+        assert d["node_id"] == "n1"
+        assert d["user_id"] == "alice"
+        assert "timestamp" in d
+        session.close()

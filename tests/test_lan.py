@@ -90,6 +90,35 @@ class TestNodeInfoCRUD:
         assert online[0].node_id == "fresh"
         session.close()
 
+    def test_get_online_nodes_empty(self, engine):
+        """No nodes returns empty list."""
+        session = get_session(engine)
+        online = get_online_nodes(session)
+        assert online == []
+        session.close()
+
+    def test_cleanup_stale_nodes_nothing_stale(self, engine):
+        """No stale nodes returns 0."""
+        session = get_session(engine)
+        upsert_node(session, node_id="fresh", host="192.168.1.10", port=8080)
+        session.commit()
+        removed = cleanup_stale_nodes(session, max_age_seconds=3600.0)
+        session.commit()
+        assert removed == 0
+        session.close()
+
+    def test_to_dict(self, engine):
+        """NodeInfo.to_dict() returns correct fields."""
+        session = get_session(engine)
+        node = upsert_node(session, node_id="n1", host="10.0.0.1", port=8080, articles_count=3)
+        session.commit()
+        d = node.to_dict()
+        assert d["node_id"] == "n1"
+        assert d["host"] == "10.0.0.1"
+        assert d["articles_count"] == 3
+        assert "last_seen" in d
+        session.close()
+
     def test_cleanup_stale_nodes(self, engine):
         """Nodes not seen for >1h are cleaned up, self node preserved."""
         session = get_session(engine)

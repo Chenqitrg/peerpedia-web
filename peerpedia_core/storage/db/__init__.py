@@ -101,8 +101,9 @@ __all__ = [
     # crud — identity
     "create_identity",
     "get_identities_for_user",
-    # models — new
+    # models — click
     "ClickEvent",
+    # models — node
     "NodeInfo",
     # crud — click
     "create_click_event",
