@@ -172,7 +172,19 @@
             theme: 'eclipse',
             lineNumbers: true,
             lineWrapping: true,
-            extraKeys: { 'Enter': 'newlineAndIndentContinueMarkdownList' },
+            extraKeys: {
+                'Enter': function(cm) {
+                    var cursor = cm.getCursor();
+                    var line = cm.getLine(cursor.line);
+                    // $$ display math: auto-close on Enter
+                    if (/^\s*\$\$/.test(line) && !/\$\$\s*$/.test(line.slice(0, cursor.ch))) {
+                        var indent = line.match(/^\s*/)[0];
+                        cm.replaceSelection('\n\n' + indent + '$$');
+                    } else {
+                        cm.execCommand('newlineAndIndentContinueMarkdownList');
+                    }
+                }
+            },
             tabSize: 2,
             indentUnit: 2,
         });
