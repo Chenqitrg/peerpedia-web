@@ -1,7 +1,7 @@
 # 知诸网 (PeerPedia) — 设计蓝图
 
-> 日期: 2026-06-03
-> 状态: Phase 3 M6 完成 — 沉淀池 + 五维评分 + Fork/Merge + 搜索（361 tests）
+> 日期: 2026-06-04
+> 状态: Phase 3 全部完成 — 在线编辑器(CodeMirror + Typst SVG) + 沉淀池 + 五维评分 + Fork/Merge + 搜索 + 评论版本化 + 缓存控制（371 tests）
 > 英文名: **PeerPedia**（peer review + encyclopedia）
 > 中文名: **知诸网**
 >   - 知 = 求知，诸 = 诸位/诸多，网 = 网络
@@ -1025,6 +1025,15 @@ Phase 2: 跨学科扩张
 | 62 | seed 命令 | `peerpedia seed --force` 一键重建 4 用户 + 5 篇 demo 文章 |
 | 63 | Git Diff 视图 | diff2html 渲染，行级评论，版本历史 tab |
 | 64 | 合并积分占位 | 当前简单公式：fork 作者 200 + reviewer 100。未来 f(diff, complexity, ...) |
+| 65 | 在线编辑器 | CodeMirror + Markdown/KaTeX 实时预览 + Typst SVG 服务端编译。local assets 无 CDN 依赖 |
+| 66 | 编辑器融合 | /submit 重定向到 /edit，编辑器加上传按钮。新文章 → 沉淀池，更新文章 → 保持原状态 |
+| 67 | Typst 编译预览 | `typst compile --format svg` 即时编译，文章页多页 SVG 滑块翻页 |
+| 68 | 版本历史展示 | 提交列表含语义版本号 (v0.1/v0.2) + 🟢当前标记 + +X/−Y 行数统计 |
+| 69 | 作者自我更新 | founding_author 可编辑自己的文章，git commit 版本历史，版本号递增 |
+| 70 | 评论版本化 | Review 新增 review_version 字段，每人每版本可评一次。旧版本评论冻结只读 |
+| 71 | 已发表实名 | 文章 published 后评论显示实名，沉淀池期间保持匿名 |
+| 72 | 缓存控制 | 所有静态资源 URL 带 ?v= 时间戳，避免浏览器缓存旧文件 |
+| 73 | restart.sh | 一键脚本：kill 端口 → 清缓存 → seed demo → 启动服务器 |
 
 ---
 
@@ -1043,7 +1052,8 @@ Phase 2: 跨学科扩张
 | Phase 3 M4 | LAN 集群（UDP 节点发现 + catalog.md 同步） | ✅ | 196 tests |
 | Phase 3 M5 | 引用跳转 + 点击跃迁概率 | ✅ | **196 tests** |
 | Phase 3 M5+ | 用户关注（Follow + 动态 Feed） | ✅ | 211 tests |
-| Phase 3 M6 | 沉淀池 + 五维评分 + Fork/Merge + 搜索 + Git Diff | ✅ | **361 tests** |
+| Phase 3 M6 | 沉淀池 + 五维评分 + Fork/Merge + 搜索 + Git Diff | ✅ | 361 tests |
+| Phase 3 M7 | 在线编辑器 + Typst SVG + 编辑融合 + 版本历史 + 评论版本化 | ✅ | **371 tests** |
 | Phase 4 | IPFS 集成 | ⏸ 远期 | — |
 | Phase 5 | 种子社区测试 | ⏸ 远期 | — |
 | Phase 6 | AI 辅助 | ⏸ 远期 | — |

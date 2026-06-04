@@ -44,8 +44,9 @@ peerpedia serve --lan
 
 | Category | Feature | Status |
 |---|---|---|
-| **Online Editor** | CodeMirror with live Markdown/KaTeX preview, $$ auto-close, 5D stars | ✅ |
-| **Submit** | Typst + Markdown/KaTeX with 5-dimension self-assessment | ✅ |
+| **Online Editor** | CodeMirror + Markdown/KaTeX + Typst SVG live preview, $$ auto-close, 5D stars, upload | ✅ |
+| **Submit** | Typst + Markdown/KaTeX with 5-dimension self-assessment, unified with editor | ✅ |
+| **Version History** | Git commit list with semantic version labels, 🟢 current badge, +X/−Y line counts | ✅ |
 | **Sedimentation Pool** | Anonymous ratings + discussion, auto-publish by sink score | ✅ |
 | **5D Scoring** | Originality/Rigor/Completeness/Pedagogy/Impact (self + community) | ✅ |
 | **Fork & Merge** | Fork articles, propose merge back, author review, version bump | ✅ |
@@ -54,6 +55,7 @@ peerpedia serve --lan
 | **Collaboration** | Reviewer → co-author, post-publication edit proposals | ✅ |
 | **Search** | Real-time search by title/abstract/keywords (HTMX) | ✅ |
 | **Git Diff** | Version history tab with diff2html side-by-side view | ✅ |
+| **Review Versioning** | One review per person per version, old reviews frozen, published → real names | ✅ |
 | **Mirror** | ArXiv article import with dangling founder accounts | ✅ |
 | **LAN** | UDP broadcast node discovery + catalog.md article pool sync | ✅ |
 | **Follow** | Follow authors, activity feed (HTMX-driven) | ✅ |
@@ -81,7 +83,7 @@ peerpedia lan sync [-n <node>]                    # Sync article catalog
 | Module | Endpoints |
 |---|---|
 | `api_articles.py` | GET/POST `/articles`, GET `/articles/{id}`, POST `/articles/{id}/reviews`, POST `/articles/{id}/fork`, POST `/articles/{id}/merge-proposal`, GET `/articles/{id}/forks` |
-| `api_compile.py` | GET `/articles/{id}/compile` |
+| `api_compile.py` | GET `/articles/{id}/compile`, GET `/articles/{id}/source`, POST `/compile-preview` |
 | `api_contributions.py` | GET `/articles/{id}/contributions`, GET `/articles/{id}/commits`, GET `/articles/{id}/diff/*`, GET `/articles/{id}/blame` |
 | `api_comments.py` | GET/POST `/articles/{id}/comments`, POST `/articles/{id}/comments/{id}/resolve` |
 | `api_citations.py` | GET `/articles/{id}/citations`, POST `/citations/click`, GET `/citations/transitions` |
@@ -95,7 +97,7 @@ peerpedia lan sync [-n <node>]                    # Sync article catalog
 
 ```bash
 # Run tests
-pytest                    # 342 tests passed, 26 test files
+pytest                    # 371 tests passed, 31 test files
 
 # Run with coverage
 pytest --cov=peerpedia_core --cov=peerpedia

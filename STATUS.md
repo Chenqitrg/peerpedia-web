@@ -1,8 +1,8 @@
 # PeerPedia — Project Status & Restart Guide
 
 > 最后更新: 2026-06-04
-> 当前状态: Phase 3 全部完成 + 在线编辑器(CodeMirror) + 沉淀池 + 五维评分 + Fork/Merge + 代码压缩重构
-> 测试: 358 passed, 27 test files
+> 当前状态: Phase 3 全部完成 + 在线编辑器(CodeMirror + Typst SVG) + 编辑器融合 + 版本历史 + 评论版本化
+> 测试: 371 passed, 31 test files
 > 中文名: 知诸网 — 谐音「诸多」「蜘蛛网」🕸️
 
 ---
@@ -217,12 +217,22 @@ tests/                   # 19 tests, 0 failures
 |------|------|------|
 | CodeMirror 编辑器 | Markdown 语法高亮 + 行号 + 自动缩进 | ✅ |
 | 实时 Markdown 预览 | marked.js + KaTeX 数学公式渲染 | ✅ |
+| Typst SVG 实时编译 | `typst compile --format svg` 服务端编译，500ms 防抖 | ✅ |
 | $$ 公式自动补全 | 键入 `$$` 回车自动插入闭合标记，光标停在中间 | ✅ |
 | 五维自评必填 | 星星评分（沉淀池同款），未评不能提交 | ✅ |
-| 左右等宽分栏 | 编辑器 50% + 预览 50%，不随内容乱窜 | ✅ |
-| 本地资源托管 | 无 CDN 依赖，CodeMirror/marked 本地加载 | ✅ |
-| 回归测试 | 18 个测试覆盖所有已知 bug | ✅ |
+| 左右等宽分栏 | 编辑器 50% + 预览 50%，SVG 自适应容器 | ✅ |
+| 本地资源托管 | 无 CDN 依赖，CodeMirror/marked/KaTeX 本地加载 | ✅ |
+| 编辑器融合 | /submit 重定向到 /edit，上传按钮 + FileReader 导入文件 | ✅ |
+| 按钮文字自适应 | 新文章 → "🚀 提交沉淀池"，编辑 → "🔄 更新" | ✅ |
 | 导航栏入口 | ✏️ 写作 链接在所有页面可见 | ✅ |
+| 文章页 Typst SVG | 多页 SVG + 滑块翻页，编译端点支持 fmt=svg | ✅ |
+| 下载按钮 | 📥 源文件 + 📥 PDF/HTML，文章标题旁 | ✅ |
+| 版本历史展示 | v0.1/v0.2 语义版本号 + 🟢当前标记 + +X/−Y 行数 | ✅ |
+| 作者自我更新 | founding_author 可编辑文章，git commit + 版本递增 | ✅ |
+| 评论版本化 | review_version 字段，每人每版本可评一次，旧版本冻结 | ✅ |
+| 已发表实名 | published 状态评论显示实名，沉淀池期间匿名 | ✅ |
+| 缓存控制 | 静态资源 ?v= 时间戳，restart.sh 一键重启 | ✅ |
+| 回归测试 | 31 个编辑器测试覆盖所有已知 bug | ✅ |
 
 ### 已知缺口
 
