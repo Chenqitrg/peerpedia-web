@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useAsyncState } from '@vueuse/core'
 import { useUserStore } from '../stores/useUserStore'
 import { fetchFeed } from '../api/feed'
@@ -45,6 +45,11 @@ function goToPage(page: number) {
 
 onMounted(() => {
   if (isLoggedIn.value) loadFeed()
+})
+
+// Re-fetch feed when user logs in (modal doesn't remount the page)
+watch(isLoggedIn, (loggedIn) => {
+  if (loggedIn) loadFeed()
 })
 </script>
 
