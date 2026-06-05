@@ -49,8 +49,14 @@ function goToHistory() {
   router.push(`/articles/${props.article.id}/history`)
 }
 
-function goToFork() {
-  router.push(`/edit/${props.article.id}?fork=true`)
+async function goToFork() {
+  const { forkArticle } = await import('../api/articles')
+  try {
+    const result = await forkArticle(props.article.id)
+    router.push(`/edit/${result.id}`)
+  } catch {
+    // silent — error handled by the API interceptor
+  }
 }
 </script>
 
