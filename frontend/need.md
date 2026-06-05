@@ -202,13 +202,16 @@ frontend/ (Vue 3 + Vite, port 5173)  →  HTTP JSON  →  backend/ (FastAPI, por
 **下方**（双选项卡切换）：
 - **正文选项卡**：文章编译预览，横向撑满屏幕。编译后的 Typst SVG / Markdown HTML 渲染。
 - **评论选项卡**：
-  - 登录用户（非作者）可提交/修改五维评审（FiveDimForm + StarRating）
-  - 作者自评置顶，左侧 accent 色边框，标签 "Author (self-review)"，始终实名
-  - 池内评审显示匿名名，出池后匿名不变（防止交叉对比泄露身份）
-  - 文章作者可在每条评审下回复（thread reply），输入框 + Send 按钮
-  - 已评审过则预填评分并显示 "Update Review"
-  - 未登录用户看到 "Sign in to submit a review" 提示
-  - 页面顶部窄栏的评论入口（带评论数）点击后切换到此选项卡
+  - 登录用户（非作者）未评审过：显示五维星星 + 评论文本框 + 提交按钮 ✅
+  - 已评审过：显示五维分数数字（O:4 R:3 C:5），自己的评审 hover 分数可展开为可编辑星星，移开恢复数字 ✅
+  - 自己的评审始终置顶（accent 色左边框 + "(you)" 标签）✅
+  - 所有评审都带 Thread 下拉抽屉（Chevron 展开/折叠），iMessage 风格聊天气泡 ✅
+  - Thread 回复权限：仅文章作者 + 该评审的评审人可回复；旁观者看到 "仅作者和评审人可参与" 提示 ✅
+  - 自己评审无 Thread 时：显示输入框可发起对话 ✅
+  - 作者自评置顶，左侧 accent 色边框，标签 "Author (self-review)"，始终实名 ✅
+  - 池内评审显示匿名名，出池后匿名不变（防止交叉对比泄露身份）✅
+  - 未登录用户看到 "Sign in to submit a review" 提示 ✅
+  - 页面顶部窄栏的评论入口（带评论数）点击后切换到此选项卡 ✅
 
 **API 需求：**
 - `GET /articles/{id}`（详情 + 分数 + 编译输出）
