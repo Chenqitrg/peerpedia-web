@@ -39,3 +39,9 @@ frontend/dist/
 
 # Database
 *.db
+*.db-shm
+*.db-wal
+
+# Build caches
+.vite/
+backend/.vite/

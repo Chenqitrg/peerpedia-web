@@ -1,4 +1,8 @@
 """FastAPI application entry point."""
+import asyncio
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -15,7 +19,55 @@ from peerpedia_api.routes.compile import router as compile_router
 from peerpedia_api.routes.citations import router as citations_router
 from peerpedia_api.routes.merge import router as merge_router
 
-app = FastAPI(title="PeerPedia API", version="0.1.0")
+logger = logging.getLogger(__name__)
+
+_engine = None
+
+
+def _get_session():
+    """Create a DB session for background tasks (mirrors deps.get_db without DI)."""
+    global _engine
+    from peerpedia_core.storage.db.engine import get_engine, get_session
+    if _engine is None:
+        db_path = os.environ.get("PEERPEDIA_DB", "sqlite:///peerpedia.db")
+        _engine = get_engine(db_path)
+    return get_session(_engine)
+
+
+async def _auto_publish_loop():
+    """Background loop that periodically publishes ready articles."""
+    while True:
+        try:
+            await asyncio.sleep(60)
+            from peerpedia_core.workflow.sedimentation import publish_ready_articles
+
+            session = _get_session()
+            try:
+                count = publish_ready_articles(session)
+                if count > 0:
+                    logger.info("Auto-published %d article(s)", count)
+            finally:
+                session.close()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Auto-publish loop error")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Start background tasks on startup, cancel on shutdown."""
+    task = asyncio.create_task(_auto_publish_loop())
+    logger.info("Auto-publish background task started")
+    yield
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        logger.info("Auto-publish background task stopped")
+
+
+app = FastAPI(title="PeerPedia API", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
