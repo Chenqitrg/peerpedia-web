@@ -45,6 +45,7 @@ frontend/ (Vue 3 + Vite, port 5173) → HTTP JSON → backend/ (FastAPI, port 80
 - **EditorPage fixes**: functional splitter drag (20%-80%), separate Source/PDF download buttons always visible
 - **Seed data**: 8 demo users with usernames, password `666666` (memo in TEST_USERS.txt)
 - **need.md refreshed**: all status markers consistent with actual implementation
+- **Review UI redesign**: sharp StarRating stars (gold, HeroIcon path), hover-to-edit scores on own review, Thread dropdowns on all reviews (iMessage style), reply gate (author + reviewer only), review form with comment input, empty thread state
 
 ## Remaining
 
