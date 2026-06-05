@@ -28,7 +28,6 @@ class ThreadMessageOut(BaseModel):
 class ReviewCreate(BaseModel):
     article_id: str
     commit_hash: str
-    reviewer_id: str
     scope: ReviewScope
     scores: dict  # FiveDimScores as dict, validated below
     contributions: Optional[dict[str, dict]] = None  # author_id → 5-dim ratios
