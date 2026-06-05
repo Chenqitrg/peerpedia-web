@@ -10,7 +10,7 @@ import type { ArticleDetail, ReviewOut, ThreadMessage } from '../api/types'
 import StarRating from '../components/StarRating.vue'
 import ThreadReplyInput from '../components/ThreadReplyInput.vue'
 import { SCORE_DIMS } from '../api/constants'
-import katex from 'katex'
+import { renderMathInHtml } from '../utils/math'
 import {
   Bookmark,
   BookmarkCheck,
@@ -153,24 +153,6 @@ watch(() => route.params.id, async (newId) => {
     loading.value = false
   }
 })
-
-function renderMathInHtml(html: string): string {
-  // Replace katex-display spans with KaTeX rendered output
-  let result = html
-  // Display math: <span class="katex-display">$$...$$</span>
-  result = result.replace(/<span class="katex-display">\$\$(.+?)\$\$<\/span>/gs, (_, tex) => {
-    try {
-      return katex.renderToString(tex.trim(), { displayMode: true, throwOnError: false })
-    } catch { return _ }
-  })
-  // Inline math: <span class="katex-inline">$...$</span>
-  result = result.replace(/<span class="katex-inline">\$(.+?)\$<\/span>/gs, (_, tex) => {
-    try {
-      return katex.renderToString(tex.trim(), { displayMode: false, throwOnError: false })
-    } catch { return _ }
-  })
-  return result
-}
 
 async function loadCompiledContent() {
   if (!article.value) return
