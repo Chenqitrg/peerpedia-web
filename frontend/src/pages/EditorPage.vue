@@ -16,7 +16,7 @@ import {
   SlidersHorizontal,
   FileText,
 } from 'lucide-vue-next'
-import katex from 'katex'
+import { renderMathInHtml } from '../utils/math'
 
 const route = useRoute()
 const router = useRouter()
@@ -133,17 +133,6 @@ function saveDraft() {
   localStorage.setItem(DRAFT_KEY.value, JSON.stringify(draft))
   savedMsg.value = true
   setTimeout(() => { savedMsg.value = false }, 2000)
-}
-
-function renderMathInHtml(html: string): string {
-  let result = html
-  result = result.replace(/<span class="katex-display">\$\$(.+?)\$\$<\/span>/gs, (_, tex) => {
-    try { return katex.renderToString(tex.trim(), { displayMode: true, throwOnError: false }) } catch { return _ }
-  })
-  result = result.replace(/<span class="katex-inline">\$(.+?)\$<\/span>/gs, (_, tex) => {
-    try { return katex.renderToString(tex.trim(), { displayMode: false, throwOnError: false }) } catch { return _ }
-  })
-  return result
 }
 
 async function handleCompile() {
