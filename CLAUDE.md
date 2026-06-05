@@ -1,3 +1,11 @@
+## Need to be careful
+
+- Always check you are in the correct directory.
+- When there is new feature, always use /test-driven-development
+- Whenever corrected a bug, always add a recursive test
+- Always ask more questions before executing
+- Some features may seem to be redundant, but may be a plan. Always make sure if you try to simplify it
+
 ## Session discipline
 
 **After every code change**, clear all caches before verifying:
@@ -11,6 +19,8 @@ rm -f .coverage
 ```
 
 Then restart server and verify.
+
+
 
 ## Skill routing
 

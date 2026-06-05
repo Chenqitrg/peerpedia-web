@@ -20,7 +20,8 @@ def get_db():
     """Yield a database session. Engine is cached across requests."""
     global _engine
     if _engine is None:
-        _engine = get_engine("sqlite:///peerpedia.db")
+        db_path = os.environ.get("PEERPEDIA_DB", "sqlite:///peerpedia.db")
+        _engine = get_engine(db_path)
     session = get_session(_engine)
     try:
         yield session
