@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, watch, computed, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getArticle, getArticleSource, getHistory, forkArticle } from '../api/articles'
-import { getReviews as fetchReviews } from '../api/reviews'
+import { getReviews as fetchReviews, createReview, postReviewMessage } from '../api/reviews'
 import { compilePreview } from '../api/compile'
 import { useUserStore } from '../stores/useUserStore'
 import { useStatusMap } from '../composables/useStatusMap'
 import type { ArticleDetail, ReviewOut } from '../api/types'
+import FiveDimForm from '../components/FiveDimForm.vue'
 import katex from 'katex'
 import {
   Bookmark,
@@ -22,6 +23,7 @@ import {
   FileDown,
   FileText,
   Star,
+  Send,
 } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -43,12 +45,44 @@ const isBookmarked = computed(() => article.value?.is_bookmarked ?? false)
 
 const { statusLabel, statusClass } = useStatusMap(() => article.value?.status ?? '')
 
+// ── Review submission form ─────────────────────────────────────────────
+
+const reviewScores = reactive({ originality: 3, rigor: 3, completeness: 3, pedagogy: 3, impact: 3 })
+const submittingReview = ref(false)
+const reviewFormError = ref('')
+const reviewFormSuccess = ref('')
+
+// User's existing review (for pre-filling if already reviewed)
+const myExistingReview = computed(() => {
+  if (!userStore.viewer) return null
+  return reviews.value.find(r => r.reviewer_id === userStore.viewer!.id) ?? null
+})
+
+const canUserReview = computed(() => {
+  return userStore.viewer && !isOwnArticle.value
+})
+
+// ── Reply state ─────────────────────────────────────────────────────────
+
+const replyTexts = reactive<Record<string, string>>({})
+const sendingReplies = reactive<Record<string, boolean>>({})
+
+// ── Sorted reviews (self-reviews first) ─────────────────────────────────
+
+const sortedReviews = computed(() => {
+  return [...reviews.value].sort((a, b) => {
+    if (a.is_self_review && !b.is_self_review) return -1
+    if (!a.is_self_review && b.is_self_review) return 1
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  })
+})
+
+// ── Lifecycle ───────────────────────────────────────────────────────────
+
 onMounted(async () => {
   try {
     article.value = await getArticle(id)
-    // Compile article content for body tab
     await loadCompiledContent()
-    // Load reviews for comments tab
     loadReviews()
   } catch (e) {
     console.error('Failed to load article:', e)
@@ -57,7 +91,6 @@ onMounted(async () => {
   }
 })
 
-// Reload when navigating to a different article
 watch(() => route.params.id, async (newId) => {
   if (!newId) return
   loading.value = true
@@ -125,6 +158,44 @@ async function loadReviews() {
 function toggleBookmark() {
   if (article.value) {
     article.value.is_bookmarked = !article.value.is_bookmarked
+  }
+}
+
+async function handleSubmitReview() {
+  if (!userStore.viewer) return
+  submittingReview.value = true
+  reviewFormError.value = ''
+  reviewFormSuccess.value = ''
+  try {
+    const history = await getHistory(id)
+    const latestHash = history.commits?.[0]?.hash || 'unknown'
+    await createReview(id, {
+      article_id: id,
+      commit_hash: latestHash,
+      scope: article.value?.status === 'published' ? 'published' : 'pool',
+      scores: { ...reviewScores },
+    })
+    reviewFormSuccess.value = 'Review submitted'
+    await loadReviews()
+  } catch (e: any) {
+    reviewFormError.value = e.userMessage || 'Failed to submit review'
+  } finally {
+    submittingReview.value = false
+  }
+}
+
+async function handleReply(reviewId: string) {
+  const text = replyTexts[reviewId]?.trim()
+  if (!text) return
+  sendingReplies[reviewId] = true
+  try {
+    await postReviewMessage(id, reviewId, { content: text })
+    replyTexts[reviewId] = ''
+    await loadReviews()
+  } catch {
+    // silently fail for reply
+  } finally {
+    sendingReplies[reviewId] = false
   }
 }
 
@@ -329,41 +400,101 @@ function handleSinkExtension() {
 
       <div v-else class="card p-6">
         <div v-if="reviewsLoading" class="text-ink-muted text-sm">Loading comments...</div>
-        <div v-else-if="reviews.length === 0" class="text-ink-muted text-sm">
-          No reviews yet.
-        </div>
-        <div v-else class="space-y-4">
-          <div
-            v-for="review in reviews"
-            :key="review.id"
-            class="border border-divider rounded-lg p-4"
-          >
-            <div class="flex items-center justify-between mb-2">
-              <span class="text-sm font-semibold text-ink">
-                {{ review.reviewer_name || review.reviewer_id?.substring(0, 8) }}
-              </span>
-              <span class="text-xs text-ink-muted">
-                {{ new Date(review.created_at).toLocaleDateString() }}
-              </span>
-            </div>
-            <!-- Scores -->
-            <div class="flex items-center gap-3 mb-3 text-xs font-mono">
-              <span class="text-accent">O:{{ review.scores.originality }}</span>
-              <span class="text-ink-muted">R:{{ review.scores.rigor }}</span>
-              <span class="text-ink-muted">C:{{ review.scores.completeness }}</span>
-              <span class="text-ink-muted">P:{{ review.scores.pedagogy }}</span>
-              <span class="text-ink-muted">I:{{ review.scores.impact }}</span>
-              <span v-if="review.is_self_review" class="text-xs text-ink-muted/60 ml-auto">self-review</span>
-            </div>
-            <!-- Thread messages -->
-            <div v-if="review.thread && review.thread.length" class="space-y-2 border-t border-divider pt-3">
-              <div
-                v-for="msg in review.thread"
-                :key="msg.created_at"
-                class="text-sm text-ink-muted pl-3 border-l-2 border-divider"
-              >
-                <span class="text-xs text-ink-muted/60">{{ msg.author_id?.substring(0, 8) }}</span>
-                <p class="mt-0.5">{{ msg.content }}</p>
+
+        <div v-else>
+          <!-- Review submission form (logged-in non-authors only) -->
+          <div v-if="canUserReview" class="border border-divider rounded-lg p-4 mb-6">
+            <h4 class="text-sm font-semibold text-ink mb-3">
+              {{ myExistingReview ? 'Update Your Review' : 'Submit Your Review' }}
+            </h4>
+            <FiveDimForm v-model="reviewScores" />
+            <p v-if="reviewFormError" class="text-xs text-[#d73a49] mt-3">{{ reviewFormError }}</p>
+            <p v-if="reviewFormSuccess" class="text-xs text-green-400 mt-3">{{ reviewFormSuccess }}</p>
+            <button
+              class="mt-3 px-4 py-1.5 text-xs font-semibold bg-accent text-[#0d1117] rounded-lg
+                     hover:brightness-110 transition-all duration-200 disabled:opacity-50"
+              :disabled="submittingReview"
+              @click="handleSubmitReview"
+            >
+              {{ submittingReview ? 'Submitting...' : (myExistingReview ? 'Update Review' : 'Submit Review') }}
+            </button>
+          </div>
+
+          <!-- Sign in prompt -->
+          <div v-if="!userStore.viewer" class="text-xs text-ink-muted/60 mb-4">
+            <button class="text-accent hover:underline" @click="userStore.showAuthModal = true">
+              Sign in
+            </button>
+            to submit a review.
+          </div>
+
+          <!-- No reviews -->
+          <div v-if="sortedReviews.length === 0" class="text-ink-muted text-sm">
+            No reviews yet.
+          </div>
+
+          <!-- Review list -->
+          <div v-else class="space-y-4">
+            <div
+              v-for="review in sortedReviews"
+              :key="review.id"
+              class="border rounded-lg p-4"
+              :class="review.is_self_review
+                ? 'border-accent/40 border-l-2 border-l-accent'
+                : 'border-divider'"
+            >
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-sm font-semibold text-ink">
+                  {{ review.is_self_review ? 'Author' : review.reviewer_name || review.reviewer_id?.substring(0, 8) }}
+                  <span v-if="review.is_self_review" class="text-xs text-ink-muted/60 font-normal ml-1">(self-review)</span>
+                </span>
+                <span class="text-xs text-ink-muted">
+                  {{ new Date(review.created_at).toLocaleDateString() }}
+                </span>
+              </div>
+              <!-- Scores -->
+              <div class="flex items-center gap-3 mb-3 text-xs font-mono">
+                <span class="text-accent">O:{{ review.scores.originality }}</span>
+                <span class="text-ink-muted">R:{{ review.scores.rigor }}</span>
+                <span class="text-ink-muted">C:{{ review.scores.completeness }}</span>
+                <span class="text-ink-muted">P:{{ review.scores.pedagogy }}</span>
+                <span class="text-ink-muted">I:{{ review.scores.impact }}</span>
+              </div>
+              <!-- Thread messages -->
+              <div v-if="review.thread && review.thread.length" class="space-y-2 border-t border-divider pt-3">
+                <div
+                  v-for="msg in review.thread"
+                  :key="msg.created_at"
+                  class="text-sm text-ink-muted pl-3 border-l-2 border-divider"
+                >
+                  <span class="text-xs text-ink-muted/60">
+                    {{ (msg as any).author_name || msg.author_id?.substring(0, 8) }}
+                  </span>
+                  <p class="mt-0.5">{{ msg.content }}</p>
+                </div>
+              </div>
+              <!-- Reply input (article author only) -->
+              <div v-if="isOwnArticle" class="border-t border-divider pt-3 mt-3">
+                <div class="flex items-center gap-2">
+                  <input
+                    v-model="replyTexts[review.id]"
+                    type="text"
+                    :placeholder="sendingReplies[review.id] ? 'Sending...' : 'Reply...'"
+                    class="flex-1 bg-[#0d1117] border border-divider rounded px-3 py-1.5 text-xs
+                           text-ink placeholder:text-ink-muted/50
+                           focus:outline-none focus:ring-1 focus:ring-accent"
+                    @keyup.enter="handleReply(review.id)"
+                  />
+                  <button
+                    class="flex items-center justify-center w-7 h-7 rounded
+                           text-ink-muted hover:text-accent hover:bg-accent/10
+                           transition-colors duration-200"
+                    :disabled="!replyTexts[review.id]?.trim() || sendingReplies[review.id]"
+                    @click="handleReply(review.id)"
+                  >
+                    <Send class="w-3.5 h-3.5" stroke-width="2" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>

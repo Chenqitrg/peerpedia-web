@@ -30,20 +30,20 @@ function setRating(value: number) {
 <style scoped>
 .star-btn {
   @apply cursor-pointer p-0.5 rounded transition-all duration-150
-         focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary-500;
+         focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent;
   background: none;
   border: none;
 }
 .star-filled {
-  @apply text-star;
+  color: #7b8c9e; /* accent */
 }
 .star-filled:hover {
-  @apply brightness-90;
+  filter: brightness(1.2);
 }
 .star-empty {
-  @apply text-star-empty;
+  color: rgba(176, 184, 196, 0.3); /* ink-muted/30 */
 }
 .star-empty:hover {
-  @apply text-star;
+  color: #7b8c9e; /* accent */
 }
 </style>
