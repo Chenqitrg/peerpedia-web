@@ -1,114 +1,260 @@
-# 知诸网 (PeerPedia)
+# PeerPedia
 
-**去中心化学术出版系统 — 取代 arXiv 和学术期刊。**
+**Decentralized academic publishing — where articles sink or swim by merit alone.**
 
-> 谐音「蜘蛛网」🕸️：P2P 节点互联。取"孜孜以求，诸子百家"之意。
+PeerPedia is an open-source platform that combines Git-backed version control with blind peer review and community-driven scoring. Think: GitHub meets arXiv, with a built-in reputation system.
 
-```
-Author writes in Typst → Peer review → Publish → Cite & collaborate
-                           ↑
-              Reviewer can join as co-author
-              Post-publication open editing
-              Git-native contribution timeline
-              Citation DAG with click-to-jump
-              Multi-dimensional reputation radar
-```
+---
+
+## Why PeerPedia?
+
+Academic publishing is broken. Journals charge thousands for access. Reviewers work for free. Authors wait months for decisions. And the incentives reward prestige over quality.
+
+PeerPedia replaces the journal with a **sedimentation pool**: every article enters an anonymous review period. Community members rate it on five dimensions. High-quality work surfaces faster; low-quality work sinks. No editors. No paywalls. Just merit.
+
+| Problem | PeerPedia Solution |
+|---------|-------------------|
+| Paywalled knowledge | All articles free, CC BY-SA 4.0 |
+| Opaque peer review | Transparent 5D scoring (O/R/C/P/I) |
+| No version history | Git-native: every edit is a commit |
+| Centralized gatekeeping | Community-governed sedimentation pool |
+| Weak author incentives | Reputation system rewards quality reviewing |
+| Siloed platforms | Fork, merge, cite — like GitHub for science |
+
+---
 
 ## Architecture
 
 ```
-peerpedia_core/     ← Protocol (messages, signing, reputation, storage, citations)
-peerpedia/          ← Reference client (CLI + Web)
+frontend/ (Vue 3 + TypeScript + Tailwind)  →  REST JSON  →  backend/ (FastAPI + Python)
+                                                              ↓
+                                                         core/ (peerpedia_core)
+                                                         · Git-backed storage
+                                                         · Scoring engine
+                                                         · Reputation system
 ```
+
+### Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Vue 3, TypeScript, Vite, Tailwind CSS, Pinia |
+| Backend | Python 3, FastAPI, SQLAlchemy, SQLite |
+| Storage | Git repositories (one per article) |
+| Auth | JWT (bcrypt passwords, 24h expiry) |
+| Compilation | Typst (→ SVG/PDF), Python Markdown (→ HTML) |
+| Math | KaTeX (display + inline) |
+
+---
 
 ## Quick Start
 
+### Prerequisites
+- Python 3.12+
+- Node.js 18+
+- [Typst](https://github.com/typst/typst) CLI (for PDF compilation)
+
+### Backend
+
 ```bash
-# Install
+cd backend
+python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
-# Register a user
-peerpedia user register zhangsan --name "张三" --email "zhang@example.com"
+# Seed demo data (8 users, password: 666666)
+python ../seed.py
 
-# Submit an article (auto-scans peerpedia references)
-peerpedia submit article.typ --author zhangsan
-
-# Start the web interface
-peerpedia serve
-
-# Start LAN mode (multi-user on same network)
-peerpedia serve --lan
+# Run server
+uvicorn peerpedia_api.main:app --port 8080 --reload
 ```
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev    # → http://localhost:5173
+```
+
+### Demo Users
+
+| Name | Username | Password |
+|------|----------|----------|
+| Albert Einstein | `einstein` | `666666` |
+| Marie Curie | `curie` | `666666` |
+| Alan Turing | `turing` | `666666` |
+| Ada Lovelace | `lovelace` | `666666` |
+| Richard Feynman | `feynman` | `666666` |
+| Emmy Noether | `noether` | `666666` |
+| Claude Shannon | `shannon` | `666666` |
+| Rosalind Franklin | `franklin` | `666666` |
+
+---
+
+## Core Concepts
+
+### Articles as Git Repositories
+
+Every article is an independent Git repository. Writing, editing, forking, and merging all map to Git operations. This means:
+- Complete version history, forever
+- Side-by-side diffs between any two versions
+- Fork → modify → merge proposal workflow (just like GitHub PRs)
+- Immutable audit trail for every change
+
+### Five-Dimensional Scoring
+
+All reviews use five dimensions:
+
+| Dimension | What it measures |
+|-----------|-----------------|
+| **O**riginality | How novel is the contribution? |
+| **R**igor | Are the methods and arguments sound? |
+| **C**ompleteness | Is the work thorough and self-contained? |
+| **P**edagogy | Is it well-written and accessible? |
+| **I**mpact | How significant is this for the field? |
+
+### Sedimentation Pool
+
+New articles enter a **sedimentation pool** for a fixed period (default 7 days). During this time:
+- Community members submit anonymous reviews
+- Higher scores **shorten** the time; lower scores **extend** it (up to 180 days)
+- Authors can rebut each review via thread replies
+- When the timer expires, the article is **published** (or sinks if score is too low)
+
+The pool is visible only to your follow network (followers + following), not the entire public.
+
+### Blind Review with Identity Protection
+
+- **Pool reviews**: Anonymous (reviewer's `anonymous_name` is shown). These stay anonymous **forever** — even after the article is published — to prevent cross-referencing attacks that could deanonymize reviewers.
+- **Published reviews**: Real names.
+- **Self-reviews**: Always show the author's real name. The author's identity is already public.
+
+### Reputation System (planned)
+
+Authors and reviewers earn reputation across four dimensions:
+- **Professionalism** — quality of submitted work
+- **Objectivity** — fairness of reviews given
+- **Collaboration** — constructive engagement in discussions
+- **Pedagogy** — clarity of writing and explanations
+
+Higher reputation → greater voting weight in the sedimentation pool.
+
+---
 
 ## Features
 
-| Category | Feature | Status |
-|---|---|---|
-| **Online Editor** | CodeMirror + Markdown/KaTeX + Typst SVG live preview, $$ auto-close, 5D stars, upload | ✅ |
-| **Submit** | Typst + Markdown/KaTeX with 5-dimension self-assessment, unified with editor | ✅ |
-| **Version History** | Git commit list with semantic version labels, 🟢 current badge, +X/−Y line counts | ✅ |
-| **Sedimentation Pool** | Anonymous ratings + discussion, auto-publish by sink score | ✅ |
-| **5D Scoring** | Originality/Rigor/Completeness/Pedagogy/Impact (self + community) | ✅ |
-| **Fork & Merge** | Fork articles, propose merge back, author review, version bump | ✅ |
-| **Reputation** | 4D radar chart (academic/review/collaboration/education) + identity boost | ✅ |
-| **Citations** | Reference scanning, NetworkX citation graph, click-to-jump sidebar | ✅ |
-| **Collaboration** | Reviewer → co-author, post-publication edit proposals | ✅ |
-| **Search** | Real-time search by title/abstract/keywords (HTMX) | ✅ |
-| **Git Diff** | Version history tab with diff2html side-by-side view | ✅ |
-| **Review Versioning** | One review per person per version, old reviews frozen, published → real names | ✅ |
-| **Mirror** | ArXiv article import with dangling founder accounts | ✅ |
-| **LAN** | UDP broadcast node discovery + catalog.md article pool sync | ✅ |
-| **Follow** | Follow authors, activity feed (HTMX-driven) | ✅ |
+### Implemented
 
-## Available Commands
+- Markdown + Typst editing with live preview
+- Git-backed version history with diff viewer (diff2html, side-by-side)
+- 5D scoring (self-review at submission + community review)
+- Sedimentation pool with configurable timers
+- Article forking + merge proposals
+- Citation graph (references + citations, click-to-navigate)
+- JWT authentication (register, login, session restore)
+- User profiles with reputation radar chart
+- Bookmarks, follow/unfollow, activity feed
+- Full-text search
+- Source + PDF download (Typst → PDF, Markdown → HTML)
+- Thread-based review discussions (author rebuttal)
+- Self-review identity protection (real name, not anonymous)
 
-```bash
-peerpedia init                                    # Initialize ~/.peerpedia/
-peerpedia seed --force                            # Rebuild demo data (4 users + 5 articles)
-peerpedia serve [--lan] [--port 8080]             # Start web interface
-peerpedia submit article.typ --author zhangsan    # Submit article
-peerpedia review <id> -d accept -c "great work"   # Submit peer review
-peerpedia decide <id>                             # Decide on article
-peerpedia mirror 2301.00001 -u zhangsan           # Mirror from arXiv
-peerpedia collaborate <id> -r reviewer_name       # Accept collaboration
-peerpedia propose-edit <id> -t minor -d "fix typo" # Propose post-publication edit
-peerpedia merge-proposal <pid> <aid>              # Merge approved proposal
-peerpedia user register <id> --name 张三 --email .. # Register user
-peerpedia lan status                              # LAN node status
-peerpedia lan sync [-n <node>]                    # Sync article catalog
+### Roadmap
+
+| Priority | Feature | Status |
+|----------|---------|--------|
+| 🔴 | Commit message required on submit/edit | Planned |
+| 🔴 | Pool review freeze after article publishes | Planned |
+| 🔴 | History timestamps with second precision | Planned |
+| 🟡 | Reputation-weighted scoring | Planned |
+| 🟡 | AI-assisted review (bias detection, quality checks) | Planned |
+| 🟡 | LaTeX support | Planned |
+| 🟢 | P2P distributed storage (IPFS or similar) | Research |
+| 🟢 | Federated identity (ORCID, institutional login) | Research |
+| 🟢 | Production deployment guide (Docker, CI/CD) | Research |
+
+---
+
+## Project Structure
+
+```
+peerpedia/
+├── frontend/                  # Vue 3 SPA
+│   └── src/
+│       ├── api/               # Axios API modules (13 files)
+│       ├── components/        # Reusable Vue components
+│       ├── composables/       # Shared logic (useBookmarkToggle, etc.)
+│       ├── pages/             # Route pages (10 pages)
+│       ├── router/            # Vue Router + auth guards
+│       └── stores/            # Pinia state management
+├── backend/                   # FastAPI server
+│   └── peerpedia_api/
+│       ├── routes/            # REST endpoints (11 route modules)
+│       ├── schemas/           # Pydantic models
+│       └── tests/             # Integration tests
+├── core/                      # Business logic library
+│   └── peerpedia_core/
+│       ├── storage/           # Git backend + SQLAlchemy ORM
+│       ├── workflow/          # Scoring, reputation, sedimentation
+│       └── config/            # Parameters and settings
+├── design/                    # Design documents
+│   ├── brainstorm.md          # Full brainstorming history
+│   └── outline.md             # Feature outline
+├── frontend/need.md           # Requirements specification (Chinese)
+└── seed.py                    # Demo data seeder
 ```
 
-## API Endpoints (30+ routes, 10 route modules)
+---
 
-| Module | Endpoints |
-|---|---|
-| `api_articles.py` | GET/POST `/articles`, GET `/articles/{id}`, POST `/articles/{id}/reviews`, POST `/articles/{id}/fork`, POST `/articles/{id}/merge-proposal`, GET `/articles/{id}/forks` |
-| `api_compile.py` | GET `/articles/{id}/compile`, GET `/articles/{id}/source`, POST `/compile-preview` |
-| `api_contributions.py` | GET `/articles/{id}/contributions`, GET `/articles/{id}/commits`, GET `/articles/{id}/diff/*`, GET `/articles/{id}/blame` |
-| `api_comments.py` | GET/POST `/articles/{id}/comments`, POST `/articles/{id}/comments/{id}/resolve` |
-| `api_citations.py` | GET `/articles/{id}/citations`, POST `/citations/click`, GET `/citations/transitions` |
-| `api_users.py` | GET/POST `/users`, GET `/users/{id}`, POST `/users/{id}/identities`, GET `/users/{id}/reputation` |
-| `api_collab.py` | POST `/articles/{id}/collaborate`, POST `/articles/{id}/proposals`, POST `/proposals/{id}/review`, POST `/proposals/{id}/merge` |
-| `api_lan.py` | GET `/lan/catalog`, GET `/lan/nodes`, GET `/lan/status` |
-| `api_search.py` | GET `/search` |
-| `api.py` | Facade router (`/api/v1` prefix), health check |
-
-## Development
+## Testing
 
 ```bash
-# Run tests
-pytest                    # 371 tests passed, 31 test files
+# Backend (195 tests)
+cd backend
+python -m pytest core/tests/ backend/tests/ -q
 
-# Run with coverage
-pytest --cov=peerpedia_core --cov=peerpedia
+# Frontend (116 tests)
+cd frontend
+npm test -- --run
 ```
 
-## Design
+---
 
-See [design/brainstorm.md](design/brainstorm.md) for the full vision, decisions, and roadmap.
-See [STATUS.md](STATUS.md) for current state and restart guide.
+## Contributing
+
+PeerPedia is in active early development. We welcome contributions!
+
+**Good first issues:**
+- UI polish (dark theme consistency across components)
+- Test coverage for edge cases
+- Documentation improvements
+- Typst/Markdown compilation enhancements
+
+**Before contributing:**
+1. Read `design/outline.md` for the feature philosophy
+2. Read `frontend/need.md` for the API contract and requirements
+3. Check `CLAUDE.md` for development conventions
+
+All contributions should include tests (TDD preferred).
+
+---
+
+## Vision
+
+> A world where academic knowledge flows freely, quality is determined by community consensus rather than editorial boards, and every researcher — regardless of institution or nationality — has equal opportunity to contribute and be recognized.
+
+PeerPedia is not just a platform. It's an experiment in whether decentralized governance can produce better academic outcomes than the centralized journal system we've relied on for 300 years.
+
+If that sounds interesting, [join us](#contributing).
+
+---
 
 ## License
 
 MIT — Protocol is free, reference implementation is MIT.
+
 Content published via PeerPedia is CC BY-SA 4.0 by default.
+
+---
+
+*"To a better academia."*
