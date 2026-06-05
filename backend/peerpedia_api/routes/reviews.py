@@ -12,6 +12,7 @@ from peerpedia_core.storage.db.crud_review import (
 )
 from peerpedia_core.storage.db.crud_article import get_article
 from peerpedia_core.storage.db.crud_user import get_user
+from peerpedia_core.storage.db.models import User
 from peerpedia_core.storage.git_backend import DEFAULT_ARTICLES_DIR, get_commit_history
 from peerpedia_core.workflow.scoring import compute_article_score_for_commit
 
@@ -20,15 +21,21 @@ router = APIRouter(prefix="/articles/{article_id}/reviews", tags=["reviews"])
 
 def _build_review_out(r, db: Session, article_authors: list[str]) -> ReviewOut:
     u = get_user(db, r.reviewer_id)
+    is_self = r.reviewer_id in article_authors
     reviewer_name = "unknown"
     if u is not None:
-        reviewer_name = u.name if r.scope == "published" else (u.anonymous_name or u.name)
+        if is_self:
+            reviewer_name = u.name                     # 自评始终实名
+        elif r.scope == "published":
+            reviewer_name = u.name                     # 池外实名
+        else:
+            reviewer_name = u.anonymous_name or u.name # 池内匿名，出池不变
     return ReviewOut(
         id=r.id, article_id=r.article_id, commit_hash=r.commit_hash,
         reviewer_id=r.reviewer_id, scope=r.scope, scores=r.scores,
         contributions=r.contributions,
         thread=r.thread, reviewer_name=reviewer_name,
-        is_self_review=r.reviewer_id in article_authors,
+        is_self_review=is_self,
         created_at=r.created_at, updated_at=r.updated_at,
     )
 
@@ -43,17 +50,19 @@ def list_reviews(article_id: str, db: Session = Depends(deps.get_db)):
 
 
 @router.post("", status_code=201, response_model=ReviewOut)
-def submit_review(article_id: str, body: ReviewCreate, db: Session = Depends(deps.get_db)):
+def submit_review(article_id: str, body: ReviewCreate,
+                  current_user: User = Depends(deps.require_user),
+                  db: Session = Depends(deps.get_db)):
     article = get_article(db, article_id)
     if article is None:
         raise HTTPException(status_code=404, detail="Article not found")
-    existing = get_review_by_user_scope(db, article_id, body.reviewer_id,
+    existing = get_review_by_user_scope(db, article_id, current_user.id,
                                         body.scope.value, commit_hash=body.commit_hash)
     if existing:
         r = update_review_scores(db, existing.id, body.scores)
     else:
         r = create_review(db, article_id=article_id, commit_hash=body.commit_hash,
-                           reviewer_id=body.reviewer_id, scope=body.scope.value,
+                           reviewer_id=current_user.id, scope=body.scope.value,
                            scores=body.scores)
     # Compute per-commit score and cache latest commit's score on the article
     rp = DEFAULT_ARTICLES_DIR / article_id
@@ -74,12 +83,13 @@ def submit_review(article_id: str, body: ReviewCreate, db: Session = Depends(dep
 
 @router.post("/{review_id}/messages", status_code=201, response_model=dict)
 def post_thread_message(article_id: str, review_id: str, body: ThreadMessageCreate,
-                         author_id: str, db: Session = Depends(deps.get_db)):
-    """Post a message in a review thread. `author_id` query param identifies sender."""
+                         current_user: User = Depends(deps.require_user),
+                         db: Session = Depends(deps.get_db)):
+    """Post a message in a review thread. Sender is extracted from JWT."""
     r = get_review(db, review_id)
     if r is None or r.article_id != article_id:
         raise HTTPException(status_code=404, detail="Review not found")
     from peerpedia_core.types.messages import ThreadMessage
-    msg = ThreadMessage(author_id=author_id, content=body.content)
+    msg = ThreadMessage(author_id=current_user.id, content=body.content)
     add_thread_message(db, review_id, msg.to_dict())
     return {"status": "ok", "message": msg.to_dict()}

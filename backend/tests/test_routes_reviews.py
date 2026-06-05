@@ -41,43 +41,54 @@ def seeded(db_engine):
 
 
 class TestReviewSubmit:
-    def test_create_review(self, client, seeded):
+    def test_create_review(self, client, seeded, auth_header):
         body = {
             "article_id": seeded["article_id"],
             "commit_hash": "abc123",
-            "reviewer_id": seeded["reviewer_id"],
             "scope": "pool",
             "scores": {"originality": 4, "rigor": 3, "completeness": 4, "pedagogy": 3, "impact": 3},
         }
-        resp = client.post(f"/api/v1/articles/{seeded['article_id']}/reviews", json=body)
+        resp = client.post(f"/api/v1/articles/{seeded['article_id']}/reviews", json=body,
+                           headers=auth_header(seeded["reviewer_id"]))
         assert resp.status_code == 201
         data = resp.json()
         assert data["reviewer_id"] == seeded["reviewer_id"]
         assert data["scope"] == "pool"
 
-    def test_update_existing_review(self, client, seeded):
+    def test_update_existing_review(self, client, seeded, auth_header):
         body = {
             "article_id": seeded["article_id"],
             "commit_hash": "abc123",
-            "reviewer_id": seeded["reviewer_id"],
             "scope": "pool",
             "scores": {"originality": 2, "rigor": 2, "completeness": 2, "pedagogy": 2, "impact": 2},
         }
+        headers = auth_header(seeded["reviewer_id"])
         # first submit
-        client.post(f"/api/v1/articles/{seeded['article_id']}/reviews", json=body)
+        client.post(f"/api/v1/articles/{seeded['article_id']}/reviews", json=body, headers=headers)
         # update scores
         body["scores"]["originality"] = 5
-        resp = client.post(f"/api/v1/articles/{seeded['article_id']}/reviews", json=body)
+        resp = client.post(f"/api/v1/articles/{seeded['article_id']}/reviews", json=body, headers=headers)
         assert resp.status_code == 201
         assert resp.json()["scores"]["originality"] == 5
 
-    def test_review_on_nonexistent_article(self, client):
+    def test_review_on_nonexistent_article(self, client, db_engine, auth_header):
+        # Create a real user so auth passes, then test 404 for missing article
+        from peerpedia_core.storage.db.engine import get_session
+        s = get_session(db_engine)
+        from peerpedia_core.storage.db.models import User
+        u = User(username="u1", password_hash="", name="tester", anonymous_name="anon_t")
+        s.add(u)
+        s.commit()
+        uid = u.id
+        s.close()
+
         body = {
-            "article_id": "nonexistent", "commit_hash": "h", "reviewer_id": "u1",
+            "article_id": "nonexistent", "commit_hash": "h",
             "scope": "pool",
             "scores": {"originality": 1, "rigor": 1, "completeness": 1, "pedagogy": 1, "impact": 1},
         }
-        resp = client.post("/api/v1/articles/nonexistent/reviews", json=body)
+        resp = client.post("/api/v1/articles/nonexistent/reviews", json=body,
+                           headers=auth_header(uid))
         assert resp.status_code == 404
 
     def test_review_populates_article_score(self, client, db_engine):
@@ -107,7 +118,7 @@ class TestReviewSubmit:
         assert article["score"] is not None
         assert "originality" in article["score"]
 
-    def test_different_commits_get_independent_reviews(self, client, db_engine):
+    def test_different_commits_get_independent_reviews(self, client, db_engine, auth_header):
         """Same reviewer can submit reviews for different commits."""
         from peerpedia_core.storage.db.engine import get_session
         s = get_session(db_engine)
@@ -146,12 +157,12 @@ class TestReviewSubmit:
         body = {
             "article_id": article_id,
             "commit_hash": commit_1,
-            "reviewer_id": rv_id,
             "scope": "pool",
             "scores": {"originality": 5, "rigor": 5, "completeness": 5,
                        "pedagogy": 5, "impact": 5},
         }
-        r1 = client.post(f"/api/v1/articles/{article_id}/reviews", json=body)
+        r1 = client.post(f"/api/v1/articles/{article_id}/reviews", json=body,
+                         headers=auth_header(rv_id))
         assert r1.status_code == 201
 
         # Now edit the article to create a new commit
@@ -171,18 +182,18 @@ class TestReviewSubmit:
         body2 = {
             "article_id": article_id,
             "commit_hash": commit_2,
-            "reviewer_id": rv_id,
             "scope": "pool",
             "scores": {"originality": 2, "rigor": 2, "completeness": 2,
                        "pedagogy": 2, "impact": 2},
         }
-        r2 = client.post(f"/api/v1/articles/{article_id}/reviews", json=body2)
+        r2 = client.post(f"/api/v1/articles/{article_id}/reviews", json=body2,
+                         headers=auth_header(rv_id))
         assert r2.status_code == 201
         assert r2.json()["commit_hash"] == commit_2
         # The two reviews should have different IDs (different reviews)
         assert r1.json()["id"] != r2.json()["id"]
 
-    def test_review_preserves_score_when_latest_commit_has_no_reviews(self, client, db_engine):
+    def test_review_preserves_score_when_latest_commit_has_no_reviews(self, client, db_engine, auth_header):
         """Submitting review should not clear score when latest commit lacks reviews."""
         from peerpedia_core.storage.db.engine import get_session
         s = get_session(db_engine)
@@ -217,12 +228,12 @@ class TestReviewSubmit:
         body = {
             "article_id": article_id,
             "commit_hash": commit_b,
-            "reviewer_id": rv_id,
             "scope": "pool",
             "scores": {"originality": 5, "rigor": 4, "completeness": 5,
                        "pedagogy": 4, "impact": 4},
         }
-        r = client.post(f"/api/v1/articles/{article_id}/reviews", json=body)
+        r = client.post(f"/api/v1/articles/{article_id}/reviews", json=body,
+                         headers=auth_header(rv_id))
         assert r.status_code == 201
 
         # Article score should now be computed, not None
@@ -233,14 +244,15 @@ class TestReviewSubmit:
 
 
 class TestReviewList:
-    def test_list_reviews(self, client, seeded):
+    def test_list_reviews(self, client, seeded, auth_header):
         # submit a review first
         body = {
-            "article_id": seeded["article_id"], "commit_hash": "h", "reviewer_id": seeded["reviewer_id"],
+            "article_id": seeded["article_id"], "commit_hash": "h",
             "scope": "pool",
             "scores": {"originality": 4, "rigor": 3, "completeness": 4, "pedagogy": 3, "impact": 3},
         }
-        client.post(f"/api/v1/articles/{seeded['article_id']}/reviews", json=body)
+        client.post(f"/api/v1/articles/{seeded['article_id']}/reviews", json=body,
+                    headers=auth_header(seeded["reviewer_id"]))
 
         resp = client.get(f"/api/v1/articles/{seeded['article_id']}/reviews")
         assert resp.status_code == 200
@@ -248,20 +260,43 @@ class TestReviewList:
         assert len(data) == 1
         assert data[0]["reviewer_name"] == "星云观察者"  # pool → anonymous name
 
+    def test_self_review_shows_real_name_not_anonymous(self, client, seeded, auth_header):
+        """作者自评应显示实名，避免泄露匿名身份（is_self_review=True）。"""
+        # Author submits a self-review (auth as author)
+        body = {
+            "article_id": seeded["article_id"], "commit_hash": "h",
+            "scope": "pool",
+            "scores": {"originality": 4, "rigor": 3, "completeness": 4, "pedagogy": 3, "impact": 3},
+        }
+        client.post(f"/api/v1/articles/{seeded['article_id']}/reviews", json=body,
+                    headers=auth_header(seeded["author_id"]))
+
+        resp = client.get(f"/api/v1/articles/{seeded['article_id']}/reviews")
+        assert resp.status_code == 200
+        data = resp.json()
+        # Find the self-review
+        self_review = [r for r in data if r["is_self_review"]]
+        assert len(self_review) == 1
+        assert self_review[0]["reviewer_name"] == "作者"           # 实名，非匿名
+        assert self_review[0]["reviewer_name"] != "anon_author"    # 不是匿名名
+
 
 class TestThreadMessage:
-    def test_post_message(self, client, seeded):
-        # first create a review
+    def test_post_message(self, client, seeded, auth_header):
+        # first create a review (as reviewer)
         body = {
-            "article_id": seeded["article_id"], "commit_hash": "h", "reviewer_id": seeded["reviewer_id"],
+            "article_id": seeded["article_id"], "commit_hash": "h",
             "scope": "pool",
             "scores": {"originality": 3, "rigor": 3, "completeness": 3, "pedagogy": 3, "impact": 3},
         }
-        r = client.post(f"/api/v1/articles/{seeded['article_id']}/reviews", json=body).json()
+        r = client.post(f"/api/v1/articles/{seeded['article_id']}/reviews", json=body,
+                        headers=auth_header(seeded["reviewer_id"])).json()
 
+        # post a thread message (as author)
         resp = client.post(
-            f"/api/v1/articles/{seeded['article_id']}/reviews/{r['id']}/messages?author_id={seeded['author_id']}",
+            f"/api/v1/articles/{seeded['article_id']}/reviews/{r['id']}/messages",
             json={"content": "谢谢指出，已修改。"},
+            headers=auth_header(seeded["author_id"]),
         )
         assert resp.status_code == 201
         assert resp.json()["status"] == "ok"
