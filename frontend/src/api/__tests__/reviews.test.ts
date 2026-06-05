@@ -35,10 +35,8 @@ describe('reviews API', () => {
   it('postReviewMessage calls POST /articles/{id}/reviews/{rid}/messages', async () => {
     const { postReviewMessage } = await import('../reviews')
     mockClient.post.mockResolvedValue({ data: { id: 'msg1', content: 'Nice work!' } })
-    const result = await postReviewMessage('abc', 'r1', 'u1', { content: 'Nice work!' })
-    expect(mockClient.post).toHaveBeenCalledWith('/articles/abc/reviews/r1/messages', { content: 'Nice work!' }, {
-      params: { author_id: 'u1' },
-    })
+    const result = await postReviewMessage('abc', 'r1', { content: 'Nice work!' })
+    expect(mockClient.post).toHaveBeenCalledWith('/articles/abc/reviews/r1/messages', { content: 'Nice work!' })
     expect(result.content).toBe('Nice work!')
   })
 })

@@ -19,7 +19,7 @@ function updateDimension(dim: typeof dimensions[number], value: number) {
     <div
       v-for="dim in dimensions"
       :key="dim"
-      class="dimension-row flex items-center justify-between gap-4 py-2 px-3 rounded-lg hover:bg-surface-100 transition-colors duration-150"
+      class="dimension-row flex items-center justify-between gap-4 py-2 px-3 rounded-lg hover:bg-[#21262d] transition-colors duration-150"
     >
       <span class="dimension-label text-sm font-semibold text-ink min-w-[110px]">
         {{ dim.charAt(0).toUpperCase() + dim.slice(1) }}
@@ -29,7 +29,7 @@ function updateDimension(dim: typeof dimensions[number], value: number) {
         :modelValue="modelValue[dim]"
         @update:modelValue="(v: number) => updateDimension(dim, v)"
       />
-      <span class="text-sm font-bold text-primary-600 w-6 text-right">
+      <span class="text-sm font-bold text-accent w-6 text-right">
         {{ modelValue[dim] || 0 }}
       </span>
     </div>

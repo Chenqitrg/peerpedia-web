@@ -10,9 +10,7 @@ export async function createReview(articleId: string, body: Record<string, unkno
   return res.data
 }
 
-export async function postReviewMessage(articleId: string, reviewId: string, authorId: string, body: { content: string }) {
-  const res = await apiClient.post(`/articles/${articleId}/reviews/${reviewId}/messages`, body, {
-    params: { author_id: authorId },
-  })
+export async function postReviewMessage(articleId: string, reviewId: string, body: { content: string }) {
+  const res = await apiClient.post(`/articles/${articleId}/reviews/${reviewId}/messages`, body)
   return res.data
 }
