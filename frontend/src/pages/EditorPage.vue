@@ -4,8 +4,8 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useArticleStore } from '../stores/useArticleStore'
 import { useUserStore } from '../stores/useUserStore'
-import { compilePreview, compileDownload } from '../api/compile'
 import { useDraftPersistence } from '../composables/useDraftPersistence'
+import { parseMarkdown } from '../utils/markdown'
 import {
   Bookmark,
   BookmarkCheck,
@@ -18,7 +18,7 @@ import {
   SlidersHorizontal,
   FileText,
 } from 'lucide-vue-next'
-import { renderMathInHtml } from '../utils/math'
+
 
 const route = useRoute()
 const router = useRouter()
@@ -188,22 +188,22 @@ async function handleCompile() {
   previewHtml.value = ''
   errorMsg.value = ''
   try {
-    const data = await compilePreview({
-      content: content.value,
-      format: format.value,
-    })
-    const raw = data.output || ''
-    previewHtml.value = format.value === 'markdown' ? renderMathInHtml(raw) : raw
+    if (format.value === 'markdown') {
+      previewHtml.value = parseMarkdown(content.value)
+    } else {
+      // Typst: requires Tauri sidecar (Slice 2) for local compilation.
+      // Web: on-going — no browser-native Typst→HTML path yet.
+      previewHtml.value = '<p class="text-ink-muted text-sm">Typst preview available in Tauri desktop (Slice 2). Write in Markdown for live preview.</p>'
+    }
   } catch (e: any) {
-    errorMsg.value = e.response?.data?.detail || 'Compile failed'
+    errorMsg.value = e.message || 'Compile failed'
   } finally {
     compiling.value = false
   }
 }
 
 async function handleSaveDraft() {
-  // Save to localStorage for recovery
-  saveDraft()
+  await saveDraft()
   if (!userStore.viewer) return
   if (!editId.value) return  // can't save unsaved article to backend
   if (!commitMsg.value.trim()) {
@@ -314,19 +314,22 @@ async function handleCompileDownload() {
     errorMsg.value = 'Nothing to download — editor is empty'
     return
   }
-  try {
-    const res = await compileDownload(content.value, format.value)
-    const blob = new Blob([res.data], { type: res.headers['content-type'] as string })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = format.value === 'typst' ? 'article.pdf' : 'article.html'
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  } catch (e: any) {
-    errorMsg.value = 'Compile download failed'
+  if (format.value === 'markdown') {
+    // Render markdown to HTML and open in a new window for browser print → PDF.
+    const html = parseMarkdown(content.value)
+    const printWindow = window.open('', '_blank')
+    if (printWindow) {
+      printWindow.document.write(`<!DOCTYPE html><html><head><title>${title.value || 'Article'}</title>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+        <style>body{max-width:800px;margin:2rem auto;font-family:serif;line-height:1.6;color:#1a1a1a;}
+        pre{background:#f5f5f5;padding:1rem;border-radius:4px;overflow-x:auto;}</style></head>
+        <body>${html}</body></html>`)
+      printWindow.document.close()
+      setTimeout(() => printWindow.print(), 500)
+    }
+  } else {
+    // Typst PDF: requires Tauri sidecar (Slice 2). Web: on-going.
+    errorMsg.value = 'Typst PDF export available in Tauri desktop (Slice 2). Markdown articles can print to PDF via browser.'
   }
 }
 </script>
