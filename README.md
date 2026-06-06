@@ -30,17 +30,17 @@ That's what PeerPedia is trying to build.
 
 ---
 
-## The Roadmap: Crawl, Walk, Run
+## The Roadmap: 农村包围城市，武装夺取政权
 
-We're not going to replace Elsevier tomorrow. The political route is:
+We're not going to replace Elsevier tomorrow. The strategy — borrowing from Mao — is **surround the cities from the countryside, seize power through armed struggle.** The "cities" are elite journals, prestige institutions, and the publisher monopoly. The "countryside" is individual scholars, small labs, and the global majority of researchers who are locked out of the prestige economy.
 
-**Phase 1 — A better notebook.** Interconnected note-taking with Git history. Fork ideas. Merge improvements. Cite anything. Build a user base by being genuinely useful to individual scholars, not institutions.
+**Phase 1 — A better notebook.** Interconnected note-taking with Git history. Fork ideas. Merge improvements. Cite anything. Build a user base by being genuinely useful to individual scholars, not institutions. *Build the base in the countryside.*
 
-**Phase 2 — Score arXiv.** The millions of preprints on arXiv have no quality signal. A community-driven scoring layer — one that anyone can query, audit, or build on — gives readers a filter that doesn't belong to any publisher.
+**Phase 2 — Score arXiv.** The millions of preprints on arXiv have no quality signal. A community-driven scoring layer — one that anyone can query, audit, or build on — gives readers a filter that doesn't belong to any publisher. *Surround the cities. Start building parallel infrastructure that makes the old system visibly inadequate.*
 
-**Phase 3 — Replace peer review.** Once reputation and scoring infrastructure exists, and people trust it, the journal's last function becomes obsolete. Peer review is no longer a service. It's a protocol.
+**Phase 3 — Replace peer review.** Once reputation and scoring infrastructure exists, and people trust it, the journal's last function becomes obsolete. Peer review is no longer a service. It's a protocol. *Seize the means of filtering.*
 
-Every phase is useful on its own. Each one builds the network for the next.
+Every phase is useful on its own. Each one builds the network for the next. You don't beat publishers by attacking them. You make them irrelevant by building something better underneath.
 
 ---
 
