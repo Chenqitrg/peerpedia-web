@@ -1,7 +1,9 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { login as apiLogin, register as apiRegister, getMe } from '../api/auth'
+import { useTauri } from '../composables/useTauri'
 import type { UserProfile } from '../api/types'
+import type { Account, AccountSummary } from '../composables/useTauri'
 
 export const useUserStore = defineStore('user', () => {
   const storedToken = localStorage.getItem('token')
@@ -12,7 +14,67 @@ export const useUserStore = defineStore('user', () => {
   const showAuthModal = ref(false)
   const intendedRoute = ref<string | null>(null)
 
-  // ── Actions ──────────────────────────────────────────────────────────
+  // ── Local account layer (Tauri only) ─────────────────────────────────
+
+  const localAccount = ref<Account | null>(null)
+  const localAccounts = ref<AccountSummary[]>([])
+  const isTauriMode = ref(false)
+
+  const tauri = useTauri()
+
+  // Detect Tauri mode on store initialization.
+  isTauriMode.value = tauri.isTauri.value
+
+  async function loadLocalAccounts() {
+    if (!isTauriMode.value) return
+    const result = await tauri.listAccounts()
+    if (result && Array.isArray(result)) {
+      localAccounts.value = result
+    }
+  }
+
+  async function loginLocal(username: string, password: string) {
+    const result = await tauri.login({ username, password })
+    if (!result) throw new Error('Tauri unavailable')
+    if ('error' in result) throw new Error(result.error)
+    localAccount.value = result as Account
+    // Create a minimal viewer profile from the local account.
+    viewer.value = {
+      id: (result as Account).id,
+      username: (result as Account).username,
+      name: (result as Account).username,
+      anonymous_name: '',
+      affiliation: '',
+      expertise: [],
+      reputation: {},
+      followers_count: 0,
+      following_count: 0,
+      article_count: 0,
+      created_at: new Date().toISOString(),
+    }
+  }
+
+  async function registerLocal(username: string, password: string, email: string, name: string) {
+    const result = await tauri.createAccount({ username, password, email, name })
+    if (!result) throw new Error('Tauri unavailable')
+    if ('error' in result) throw new Error(result.error)
+    localAccount.value = result as Account
+    viewer.value = {
+      id: (result as Account).id,
+      username: (result as Account).username,
+      name: (result as Account).username,
+      anonymous_name: '',
+      affiliation: '',
+      expertise: [],
+      reputation: {},
+      followers_count: 0,
+      following_count: 0,
+      article_count: 0,
+      created_at: new Date().toISOString(),
+    }
+  }
+
+  // ── Actions (original web auth — unchanged) ─────────────────────────
 
   function _persist(user: UserProfile, t: string) {
     viewer.value = user
@@ -24,16 +86,24 @@ export const useUserStore = defineStore('user', () => {
   function clear() {
     viewer.value = null
     token.value = null
+    localAccount.value = null
     localStorage.removeItem('viewer')
     localStorage.removeItem('token')
   }
 
   async function login(username: string, password: string) {
+    // In Tauri mode, prefer local login if the account exists locally.
+    if (isTauriMode.value) {
+      return loginLocal(username, password)
+    }
     const { user, token: t } = await apiLogin({ username, password })
     _persist(user, t)
   }
 
   async function register(username: string, password: string, email: string, name: string) {
+    if (isTauriMode.value) {
+      return registerLocal(username, password, email, name)
+    }
     const { user, token: t } = await apiRegister({ username, password, email, name })
     _persist(user, t)
   }
@@ -44,6 +114,11 @@ export const useUserStore = defineStore('user', () => {
   }
 
   async function restoreSession() {
+    // In Tauri mode, try local account list.
+    if (isTauriMode.value) {
+      await loadLocalAccounts()
+      return
+    }
     const t = token.value
     if (!t) return
     try {
@@ -62,8 +137,14 @@ export const useUserStore = defineStore('user', () => {
     token,
     showAuthModal,
     intendedRoute,
+    localAccount,
+    localAccounts,
+    isTauriMode,
     login,
     register,
+    loginLocal,
+    registerLocal,
+    loadLocalAccounts,
     logout,
     restoreSession,
     clear,

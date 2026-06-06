@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useUserStore } from '../stores/useUserStore'
+import { useTauri } from '../composables/useTauri'
 import {
   Bookmark,
   Waypoints,
@@ -14,12 +15,20 @@ import {
 
 const router = useRouter()
 const userStore = useUserStore()
+const tauri = useTauri()
 const { t, locale } = useI18n()
 const searchQuery = ref('')
 const mobileOpen = ref(false)
 const avatarPopover = ref(false)
 
 const isLoggedIn = computed(() => !!userStore.viewer)
+
+// Connection status: Tauri=local, Web=online/offline
+const connectionStatus = computed(() => {
+  if (tauri.isTauri.value) return 'local'
+  if (userStore.viewer) return 'online'
+  return 'offline'
+})
 
 function toggleLocale() {
   locale.value = locale.value === 'zh-CN' ? 'en-US' : 'zh-CN'
@@ -158,6 +167,17 @@ function handleLogout() {
         >
           {{ t('nav.pool') }}
         </router-link>
+
+        <!-- Connection status dot -->
+        <span
+          class="inline-block w-2 h-2 rounded-full flex-shrink-0"
+          :class="{
+            'bg-green-500': connectionStatus === 'online',
+            'bg-gray-500': connectionStatus === 'offline',
+            'bg-gray-400': connectionStatus === 'local',
+          }"
+          :title="connectionStatus === 'local' ? 'Local mode' : connectionStatus === 'online' ? 'Connected' : 'Offline'"
+        />
 
         <!-- Avatar + popover -->
         <div class="relative ml-1">

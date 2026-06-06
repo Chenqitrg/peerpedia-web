@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useArticleStore } from '../stores/useArticleStore'
 import { useUserStore } from '../stores/useUserStore'
 import { compilePreview, compileDownload } from '../api/compile'
+import { useDraftPersistence } from '../composables/useDraftPersistence'
 import {
   Bookmark,
   BookmarkCheck,
@@ -84,6 +85,10 @@ const totalContribution = computed(() =>
   Object.values(contributions.value).reduce((sum, v) => sum + v, 0)
 )
 
+// Draft persistence — Tauri IPC when available, REST + localStorage fallback.
+const draftPersistence = useDraftPersistence()
+const currentDraftId = ref<string | undefined>(editId.value as string | undefined)
+
 onMounted(() => {
   if (isEdit.value) {
     loadExistingArticle()
@@ -108,14 +113,25 @@ async function loadExistingArticle() {
   }
 }
 
-function restoreDraft() {
+async function restoreDraft() {
+  // Try Tauri persistence first.
+  const accountId = userStore.viewer?.id || 'local'
+  const result = await draftPersistence.load(currentDraftId.value || DRAFT_KEY.value)
+
+  if (result && result.content !== undefined) {
+    title.value = result.title || ''
+    content.value = result.content || ''
+    format.value = (result.format as 'markdown' | 'typst') || 'markdown'
+  }
+
+  // Also try localStorage as backup.
   const saved = localStorage.getItem(DRAFT_KEY.value)
   if (saved) {
     try {
       const parsed = JSON.parse(saved)
-      title.value = parsed.title || ''
-      content.value = parsed.content || ''
-      format.value = parsed.format || 'markdown'
+      if (!title.value) title.value = parsed.title || ''
+      if (!content.value) content.value = parsed.content || ''
+      if (!format.value || format.value === 'markdown') format.value = parsed.format || 'markdown'
       scores.value = parsed.scores || { originality: 3, rigor: 3, completeness: 3, pedagogy: 3, impact: 3 }
       keywords.value = parsed.keywords || ''
       categories.value = parsed.categories || ''
@@ -126,7 +142,22 @@ function restoreDraft() {
   }
 }
 
-function saveDraft() {
+async function saveDraft() {
+  const accountId = userStore.viewer?.id || 'local'
+
+  // Persist via Tauri or REST (handled by useDraftPersistence).
+  const result = await draftPersistence.save(
+    accountId,
+    title.value,
+    content.value,
+    format.value,
+    currentDraftId.value,
+  )
+  if (result && result.id) {
+    currentDraftId.value = result.id
+  }
+
+  // Also save to localStorage as offline backup (works in both modes).
   const draft = {
     title: title.value,
     content: content.value,

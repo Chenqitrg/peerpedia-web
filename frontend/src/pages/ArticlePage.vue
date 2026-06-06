@@ -6,6 +6,7 @@ import { getArticle, getArticleSource, getHistory, forkArticle, extendSink, crea
 import { getReviews as fetchReviews, createReview, postReviewMessage } from '../api/reviews'
 import { compilePreview } from '../api/compile'
 import { useUserStore } from '../stores/useUserStore'
+import { useTauri } from '../composables/useTauri'
 import { getStatusInfo, useStatusLabel } from '../composables/useStatusMap'
 import type { ArticleDetail, ReviewOut, ThreadMessage } from '../api/types'
 import StarRating from '../components/StarRating.vue'
@@ -47,6 +48,11 @@ const id = route.params.id as string
 
 const isOwnArticle = computed(() => article.value?.is_own_article ?? false)
 const isBookmarked = computed(() => article.value?.is_bookmarked ?? false)
+
+// Cached article detection (Tauri offline mode).
+const tauri = useTauri()
+const isFromCache = ref(false)
+const cachedAt = ref<string | null>(null)
 
 const statusLabel = useStatusLabel(() => article.value?.status ?? '')
 const statusClass = computed(() => getStatusInfo(article.value?.status ?? '').class)
@@ -351,6 +357,10 @@ async function handleMerge() {
             <span v-if="article.forked_from" class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-mono text-neutral bg-neutral/10 rounded">
               <GitFork class="w-3 h-3" stroke-width="2" />
               {{ t('card.forkBadge') }}
+            </span>
+            <span v-if="isFromCache && cachedAt" class="inline-flex items-center gap-1 px-2 py-0.5 text-xs text-ink-muted bg-[#21262d] rounded" :title="'This article was cached and may be outdated'">
+              <Clock class="w-3 h-3" stroke-width="2" />
+              Cached {{ cachedAt }}
             </span>
           </div>
           <button
