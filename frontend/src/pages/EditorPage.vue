@@ -230,8 +230,9 @@ async function handleSaveDraft() {
 }
 
 function handlePublish() {
-  if (userStore.viewer) {
-    contributions.value = { [userStore.viewer.id]: 100 }
+  if (userStore.viewer && !(userStore.viewer.id in contributions.value)) {
+    // Only initialize contributions if not already set — preserves user adjustments
+    contributions.value = { ...contributions.value, [userStore.viewer.id]: 100 }
   }
   showSelfReview.value = true
 }
@@ -332,6 +333,8 @@ async function handleCompileDownload() {
     errorMsg.value = 'Typst PDF export available in Tauri desktop (Slice 2). Markdown articles can print to PDF via browser.'
   }
 }
+
+defineExpose({ contributions, handlePublish, showSelfReview, totalContribution })
 </script>
 
 <template>
