@@ -38,7 +38,7 @@ pub struct CachedArticle {
 // ── Drafts ──────────────────────────────────────────────────────────────
 
 /// Save a draft. If `id` is empty or new, a new draft is created. Otherwise the
-/// existing draft is updated.
+/// existing draft is updated — but only if it belongs to the same account.
 pub fn save_draft(
     conn: &Connection,
     id: Option<&str>,
@@ -52,6 +52,22 @@ pub fn save_draft(
         .map(|s| s.to_string())
         .unwrap_or_else(|| Uuid::new_v4().to_string());
 
+    // Verify ownership if updating an existing draft.
+    if let Some(_id) = id.filter(|s| !s.is_empty()) {
+        let owner: Result<String, _> = conn.query_row(
+            "SELECT account_id FROM drafts WHERE id = ?1",
+            [&draft_id],
+            |row| row.get(0),
+        );
+        if let Ok(owner) = owner {
+            if owner != account_id {
+                return Err(AppError::AuthFailed(
+                    "Draft belongs to another account".into(),
+                ));
+            }
+        }
+    }
+
     conn.execute(
         "INSERT INTO drafts (id, account_id, title, content, format, updated_at)
          VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))
@@ -59,7 +75,8 @@ pub fn save_draft(
            title = excluded.title,
            content = excluded.content,
            format = excluded.format,
-           updated_at = datetime('now')",
+           updated_at = datetime('now')
+         WHERE account_id = excluded.account_id",
         rusqlite::params![draft_id, account_id, title, content, format],
     )?;
 
@@ -206,6 +223,34 @@ mod tests {
         assert_eq!(draft.content, "# Hello");
         assert_eq!(draft.format, "markdown");
         assert_eq!(draft.account_id, "acc1");
+    }
+
+    #[test]
+    fn test_cross_account_update_rejected() {
+        let conn = setup();
+        conn.execute(
+            "INSERT INTO local_accounts (id, username, password_hash) VALUES ('acc2', 'other', 'hash')",
+            [],
+        )
+        .unwrap();
+
+        let draft = save_draft(&conn, None, "acc1", "Acc1 Draft", "secret", "markdown").unwrap();
+        // Account 2 tries to overwrite Account 1's draft.
+        let result = save_draft(
+            &conn,
+            Some(&draft.id),
+            "acc2",
+            "Overwritten",
+            "hacked",
+            "markdown",
+        );
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), AppError::AuthFailed(_)));
+
+        // Verify original draft unchanged.
+        let original = get_draft(&conn, &draft.id).unwrap();
+        assert_eq!(original.title, "Acc1 Draft");
+        assert_eq!(original.content, "secret");
     }
 
     #[test]

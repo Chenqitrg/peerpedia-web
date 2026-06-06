@@ -1,22 +1,12 @@
-// PeerPedia Tauri Desktop — entry point
+// PeerPedia Tauri Desktop — binary entry point.
 // Registers IPC commands and initializes the local SQLite database.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod commands;
-mod db;
-mod error;
-mod local_auth;
-mod local_store;
-
-use db::init_db;
+use peerpedia::commands;
+use peerpedia::db::init_db;
+use peerpedia::AppState;
 use std::sync::Mutex;
-use rusqlite::Connection;
-
-/// Shared database connection, protected by a Mutex for thread safety.
-pub struct AppState {
-    pub db: Mutex<Connection>,
-}
 
 fn main() {
     let conn = init_db().expect("Failed to initialize database");
