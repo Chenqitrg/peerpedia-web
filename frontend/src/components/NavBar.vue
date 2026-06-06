@@ -189,8 +189,8 @@ function handleLogout() {
           {{ t('nav.pool') }}
         </router-link>
 
-        <!-- Avatar + popover -->
-        <div class="relative ml-1">
+        <!-- Avatar + popover (ref on container includes both button and dropdown) -->
+        <div ref="avatarRef" class="relative ml-1">
           <button
             class="flex items-center gap-1 px-1.5 py-1 rounded-lg
                    text-ink-muted hover:text-ink hover:bg-[#21262d]
@@ -204,7 +204,6 @@ function handleLogout() {
           <!-- Popover -->
           <div
             v-if="avatarPopover"
-            ref="avatarRef"
             class="absolute right-0 top-full mt-2 w-48 bg-card border border-divider rounded-xl shadow-xl py-1 animate-fade-in"
           >
             <div class="px-4 py-2 text-sm text-ink border-b border-divider">
