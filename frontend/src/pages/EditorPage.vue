@@ -81,13 +81,16 @@ function onMouseUp() {
 }
 
 const DRAFT_KEY = computed(() => `editor-draft-${editId.value || 'new'}`)
+const DRAFT_ID_KEY = computed(() => `editor-draft-id-${editId.value || 'new'}`)
 const totalContribution = computed(() =>
   Object.values(contributions.value).reduce((sum, v) => sum + v, 0)
 )
 
 // Draft persistence — Tauri IPC when available, REST + localStorage fallback.
 const draftPersistence = useDraftPersistence()
-const currentDraftId = ref<string | undefined>(editId.value as string | undefined)
+const currentDraftId = ref<string | undefined>(
+  editId.value as string | undefined || localStorage.getItem(DRAFT_ID_KEY.value) || undefined
+)
 
 onMounted(() => {
   if (isEdit.value) {
@@ -114,9 +117,14 @@ async function loadExistingArticle() {
 }
 
 async function restoreDraft() {
-  // Try Tauri persistence first.
+  // Restore the Tauri draft ID from localStorage (persisted across refreshes).
+  const savedId = localStorage.getItem(DRAFT_ID_KEY.value)
+  if (savedId) currentDraftId.value = savedId
+
+  // Try Tauri persistence first with the real draft ID.
   const accountId = userStore.viewer?.id || 'local'
-  const result = await draftPersistence.load(currentDraftId.value || DRAFT_KEY.value)
+  const lookupId = currentDraftId.value || DRAFT_KEY.value
+  const result = await draftPersistence.load(lookupId)
 
   if (result && result.content !== undefined) {
     title.value = result.title || ''
@@ -155,6 +163,8 @@ async function saveDraft() {
   )
   if (result && result.id) {
     currentDraftId.value = result.id
+    // Persist the Tauri draft ID so it survives page refresh.
+    localStorage.setItem(DRAFT_ID_KEY.value, result.id)
   }
 
   // Also save to localStorage as offline backup (works in both modes).
