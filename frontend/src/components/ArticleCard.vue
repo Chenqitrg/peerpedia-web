@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { useStatusMap } from '../composables/useStatusMap'
+import { getStatusInfo, useStatusLabel } from '../composables/useStatusMap'
 import type { ArticleSummary } from '../api/types'
+import { forkArticle } from '../api/articles'
+import ScoreBadges from './ScoreBadges.vue'
 import {
   FileText,
   Users,
@@ -23,6 +26,7 @@ const emit = defineEmits<{
 }>()
 
 const router = useRouter()
+const { t } = useI18n()
 
 const progressPercent = computed(() => {
   const a = props.article
@@ -31,7 +35,8 @@ const progressPercent = computed(() => {
   return Math.round((elapsed / a.sink_duration_days) * 100)
 })
 
-const { statusLabel, statusClass } = useStatusMap(() => props.article.status)
+const statusLabel = useStatusLabel(() => props.article.status)
+const statusClass = computed(() => getStatusInfo(props.article.status).class)
 
 const authorNames = computed(() => {
   return props.article.authors?.map((a: any) => a.name) ?? []
@@ -50,7 +55,6 @@ function goToHistory() {
 }
 
 async function goToFork() {
-  const { forkArticle } = await import('../api/articles')
   try {
     const result = await forkArticle(props.article.id)
     router.push(`/edit/${result.id}`)
@@ -72,7 +76,7 @@ async function goToFork() {
         class="no-underline hover:no-underline flex-1 min-w-0"
       >
         <h3 class="text-lg font-heading font-semibold text-ink leading-tight line-clamp-2 hover:underline decoration-accent/30 underline-offset-2">
-          {{ article.title || 'Untitled' }}
+          {{ article.title || t('card.untitled') }}
         </h3>
       </router-link>
     </div>
@@ -100,7 +104,7 @@ async function goToFork() {
           class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-mono text-neutral bg-neutral/10 rounded"
         >
           <GitFork class="w-3 h-3" stroke-width="2" />
-          fork
+          {{ t('card.forkBadge') }}
         </span>
         <!-- Version badge -->
         <span
@@ -114,7 +118,7 @@ async function goToFork() {
 
     <!-- Content preview -->
     <p class="text-sm text-ink-muted/80 leading-relaxed mb-3 line-clamp-2">
-      {{ article.content_preview || 'No preview available.' }}
+      {{ article.content_preview || t('card.noPreview') }}
     </p>
 
     <!-- Sink progress bar (only for sedimentation) -->
@@ -130,7 +134,7 @@ async function goToFork() {
           />
         </div>
         <span class="text-xs text-ink-muted whitespace-nowrap font-mono">
-          {{ article.days_remaining }}d remaining
+          {{ article.days_remaining }}{{ t('card.dRemaining') }}
         </span>
       </div>
     </div>
@@ -139,14 +143,7 @@ async function goToFork() {
     <div class="flex items-center justify-between gap-4 pt-3 border-t border-divider">
       <!-- Scores -->
       <div class="flex items-center gap-2 text-xs font-mono text-ink-muted">
-        <template v-if="article.score">
-          <span class="text-accent font-semibold">O:{{ article.score.originality }}</span>
-          <span>R:{{ article.score.rigor }}</span>
-          <span>C:{{ article.score.completeness }}</span>
-          <span>P:{{ article.score.pedagogy }}</span>
-          <span>I:{{ article.score.impact }}</span>
-        </template>
-        <span v-if="!article.score" class="text-ink-muted">No scores yet</span>
+        <ScoreBadges :score="article.score" :highlight-first="true" />
       </div>
 
       <!-- Right side -->
@@ -178,8 +175,8 @@ async function goToFork() {
           class="flex items-center justify-center w-7 h-7 rounded
                  text-ink-muted hover:text-accent hover:bg-accent/10
                  transition-colors duration-200"
-          aria-label="History"
-          title="History"
+          :aria-label="t('card.history')"
+          :title="t('card.history')"
         >
           <History class="w-3.5 h-3.5" stroke-width="2" />
         </router-link>
@@ -189,8 +186,8 @@ async function goToFork() {
           class="flex items-center justify-center w-7 h-7 rounded
                  text-ink-muted hover:text-accent hover:bg-accent/10
                  transition-colors duration-200"
-          aria-label="Edit"
-          title="Edit article"
+          :aria-label="t('card.edit')"
+          :title="t('card.edit')"
           @click="goToEdit"
         >
           <Edit class="w-3.5 h-3.5" stroke-width="2" />
@@ -200,8 +197,8 @@ async function goToFork() {
           class="flex items-center justify-center w-7 h-7 rounded
                  text-ink-muted hover:text-accent hover:bg-accent/10
                  transition-colors duration-200"
-          aria-label="Fork"
-          title="Fork article"
+          :aria-label="t('card.fork')"
+          :title="t('card.fork')"
           @click="goToFork"
         >
           <GitFork class="w-3.5 h-3.5" stroke-width="2" />

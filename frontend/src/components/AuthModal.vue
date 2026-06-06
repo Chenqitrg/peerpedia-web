@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useUserStore } from '../stores/useUserStore'
 import { X } from 'lucide-vue-next'
 
 const userStore = useUserStore()
+const { t } = useI18n()
 
 const tab = ref<'login' | 'register'>('login')
 const username = ref('')
@@ -12,34 +14,6 @@ const email = ref('')
 const displayName = ref('')
 const error = ref('')
 const loading = ref(false)
-
-function extractError(e: any, fallback: string): string {
-  // No response at all — network error / server down
-  if (!e.response) {
-    if (e.code === 'ERR_NETWORK' || e.message?.includes('Network Error')) {
-      return 'Cannot reach server. Is the backend running on port 8080?'
-    }
-    return e.message || fallback
-  }
-
-  const status = e.response.status
-  const detail = e.response.data?.detail
-
-  // FastAPI 422 validation error: detail is an array of {loc, msg}
-  if (status === 422 && Array.isArray(detail)) {
-    const msgs = detail.map((d: any) => {
-      const field = d.loc?.slice(1).join('.') || 'unknown'
-      return `${field}: ${d.msg}`
-    })
-    return msgs.join('; ')
-  }
-
-  // Standard error with string detail
-  if (typeof detail === 'string') return detail
-
-  // Fallback with status code
-  return `${fallback} (HTTP ${status})`
-}
 
 function switchTab(t: 'login' | 'register') {
   tab.value = t
@@ -57,7 +31,7 @@ async function handleLogin() {
     await userStore.login(username.value, password.value)
     close()
   } catch (e: any) {
-    error.value = extractError(e, 'Login failed')
+    error.value = (e as any).userMessage || 'Login failed'
   } finally {
     loading.value = false
   }
@@ -86,7 +60,7 @@ async function handleRegister() {
     await userStore.register(username.value, password.value, email.value, displayName.value)
     close()
   } catch (e: any) {
-    error.value = extractError(e, 'Registration failed')
+    error.value = (e as any).userMessage || 'Registration failed'
   } finally {
     loading.value = false
   }
@@ -147,14 +121,14 @@ function onOverlayClick(e: MouseEvent) {
           <input
             v-model="username"
             type="text"
-            placeholder="Username"
+            :placeholder="t('auth.username')"
             required
             class="w-full bg-[#0d1117] border border-divider rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-muted/50 focus:outline-none focus:ring-1 focus:ring-accent"
           />
           <input
             v-model="password"
             type="password"
-            placeholder="Password"
+            :placeholder="t('auth.password')"
             required
             class="w-full bg-[#0d1117] border border-divider rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-muted/50 focus:outline-none focus:ring-1 focus:ring-accent"
           />
@@ -164,7 +138,7 @@ function onOverlayClick(e: MouseEvent) {
             :disabled="loading"
             class="w-full py-2 text-sm font-semibold bg-accent text-[#0d1117] rounded-lg hover:brightness-110 transition-all duration-200 disabled:opacity-50"
           >
-            {{ loading ? '...' : 'Log In' }}
+            {{ loading ? '...' : t('auth.signIn') }}
           </button>
         </form>
 
@@ -173,28 +147,28 @@ function onOverlayClick(e: MouseEvent) {
           <input
             v-model="username"
             type="text"
-            placeholder="Username"
+            :placeholder="t('auth.username')"
             required
             class="w-full bg-[#0d1117] border border-divider rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-muted/50 focus:outline-none focus:ring-1 focus:ring-accent"
           />
           <input
             v-model="email"
             type="email"
-            placeholder="Email"
+            :placeholder="t('auth.email')"
             required
             class="w-full bg-[#0d1117] border border-divider rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-muted/50 focus:outline-none focus:ring-1 focus:ring-accent"
           />
           <input
             v-model="displayName"
             type="text"
-            placeholder="Display Name"
+            :placeholder="t('auth.name')"
             required
             class="w-full bg-[#0d1117] border border-divider rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-muted/50 focus:outline-none focus:ring-1 focus:ring-accent"
           />
           <input
             v-model="password"
             type="password"
-            placeholder="Password (min 6 characters)"
+            :placeholder="t('auth.password')"
             required
             class="w-full bg-[#0d1117] border border-divider rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-muted/50 focus:outline-none focus:ring-1 focus:ring-accent"
           />

@@ -1,27 +1,23 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
-import { useAsyncState } from '@vueuse/core'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { getCitations } from '../api/articles'
+import { useAsyncResource } from '../composables/useAsyncResource'
+import SkeletonCard from '../components/SkeletonCard.vue'
+import ErrorState from '../components/ErrorState.vue'
 import type { CitationGraph } from '../api/types'
 import { ArrowLeft, ExternalLink, BookOpen } from 'lucide-vue-next'
 
 const route = useRoute()
+const { t } = useI18n()
 const router = useRouter()
 const id = route.params.id as string
 
-const { state: citationGraph, isLoading: loading, error: rawError, execute: loadCitations } = useAsyncState(
+const { data: citationGraph, loading, error, execute: loadCitations } = useAsyncResource(
   () => getCitations(id),
   null as CitationGraph | null,
-  { immediate: false }
+  { immediate: true },
 )
-
-const error = computed(() => {
-  const e = rawError.value as any
-  return e?.userMessage || e?.response?.data?.detail || ''
-})
-
-onMounted(() => loadCitations())
 
 function goBack() {
   router.push(`/articles/${id}`)
@@ -45,17 +41,9 @@ function goBack() {
       </div>
     </div>
 
-    <div v-if="loading" class="space-y-3 animate-pulse">
-      <div v-for="i in 3" :key="i" class="card p-4">
-        <div class="skeleton h-5 w-2/3 mb-2" />
-        <div class="skeleton h-3 w-1/3" />
-      </div>
-    </div>
+    <SkeletonCard v-if="loading" :count="3" />
 
-    <div v-else-if="error" class="card p-8 text-center">
-      <p class="text-ink-muted">{{ error }}</p>
-      <button class="btn-outline mt-4" @click="() => loadCitations()">Retry</button>
-    </div>
+    <ErrorState v-else-if="error" :message="error" @retry="loadCitations()" />
 
     <template v-else-if="citationGraph">
       <section class="mb-8">
@@ -78,8 +66,8 @@ function goBack() {
               </h3>
             </router-link>
             <div class="flex items-center gap-3 mt-1.5 text-xs text-ink-muted">
-              <span>Forward: {{ (cite.forward_prob * 100).toFixed(0) }}%</span>
-              <span>Backward: {{ (cite.backward_prob * 100).toFixed(0) }}%</span>
+              <span>{{ t('citation.forward') }}: {{ (cite.forward_prob * 100).toFixed(0) }}%</span>
+              <span>{{ t('citation.backward') }}: {{ (cite.backward_prob * 100).toFixed(0) }}%</span>
             </div>
           </div>
         </div>
@@ -105,8 +93,8 @@ function goBack() {
               </h3>
             </router-link>
             <div class="flex items-center gap-3 mt-1.5 text-xs text-ink-muted">
-              <span>Forward: {{ (cite.forward_prob * 100).toFixed(0) }}%</span>
-              <span>Backward: {{ (cite.backward_prob * 100).toFixed(0) }}%</span>
+              <span>{{ t('citation.forward') }}: {{ (cite.forward_prob * 100).toFixed(0) }}%</span>
+              <span>{{ t('citation.backward') }}: {{ (cite.backward_prob * 100).toFixed(0) }}%</span>
             </div>
           </div>
         </div>

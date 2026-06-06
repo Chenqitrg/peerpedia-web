@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useAsyncState } from '@vueuse/core'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { getUsers } from '../api/users'
 import { useUserStore } from '../stores/useUserStore'
 import { followUser, unfollowUser } from '../api/users'
+import { useAsyncResource } from '../composables/useAsyncResource'
+import ErrorState from '../components/ErrorState.vue'
 import type { UserSummary } from '../api/types'
 import { Users, UserPlus, UserCheck } from 'lucide-vue-next'
 
@@ -12,22 +13,15 @@ const router = useRouter()
 const userStore = useUserStore()
 const following = ref<Set<string>>(new Set())
 
-const { state: users, isLoading: loading, error: rawError, execute } = useAsyncState(
+const { data: users, loading, error, execute } = useAsyncResource(
   async () => {
     const list = await getUsers()
     list.sort((a: UserSummary, b: UserSummary) => b.article_count - a.article_count)
     return list
   },
   [] as UserSummary[],
-  { immediate: false }
+  { immediate: true },
 )
-
-const error = computed(() => {
-  const e = rawError.value as any
-  return e?.userMessage || ''
-})
-
-onMounted(() => execute())
 
 async function toggleFollow(u: UserSummary) {
   if (!userStore.viewer) return
@@ -64,10 +58,7 @@ function goToUser(id: string) {
     </div>
 
     <!-- Error -->
-    <div v-else-if="error" class="card p-8 text-center">
-      <p class="text-ink-muted">{{ error }}</p>
-      <button class="btn-outline mt-4" @click="execute()">Retry</button>
-    </div>
+    <ErrorState v-else-if="error" :message="error" @retry="execute()" />
 
     <!-- User list -->
     <div v-else class="space-y-2">

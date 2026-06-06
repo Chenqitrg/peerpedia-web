@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useUserStore } from '../stores/useUserStore'
 import {
   Bookmark,
@@ -13,11 +14,17 @@ import {
 
 const router = useRouter()
 const userStore = useUserStore()
+const { t, locale } = useI18n()
 const searchQuery = ref('')
 const mobileOpen = ref(false)
 const avatarPopover = ref(false)
 
 const isLoggedIn = computed(() => !!userStore.viewer)
+
+function toggleLocale() {
+  locale.value = locale.value === 'zh-CN' ? 'en-US' : 'zh-CN'
+  localStorage.setItem('locale', locale.value)
+}
 
 function toggle() {
   mobileOpen.value = !mobileOpen.value
@@ -70,7 +77,7 @@ function handleLogout() {
         @click="close"
       >
         <BookOpen class="w-4 h-4 text-accent" stroke-width="2" />
-        <span class="hidden sm:inline">PeerPedia</span>
+        <span class="hidden sm:inline">{{ t('nav.brand') }}</span>
       </router-link>
 
       <!-- Search (desktop) — only when logged in -->
@@ -84,7 +91,7 @@ function handleLogout() {
           <input
             v-model="searchQuery"
             type="text"
-            placeholder="Search articles..."
+            :placeholder="t('nav.searchPlaceholder')"
             class="w-full pl-9 pr-3 py-1.5 text-xs
                    bg-[#0d1117] border border-divider rounded-lg
                    text-ink placeholder:text-ink-muted
@@ -96,12 +103,24 @@ function handleLogout() {
 
       <!-- Actions — logged in -->
       <div v-if="isLoggedIn" class="flex items-center gap-1">
+        <!-- Language toggle -->
+        <button
+          class="flex items-center justify-center w-8 h-8 rounded-lg
+                 text-xs font-semibold
+                 text-ink-muted hover:text-ink hover:bg-[#21262d]
+                 transition-colors duration-200"
+          :aria-label="locale === 'zh-CN' ? 'Switch to English' : '切换到中文'"
+          @click="toggleLocale"
+        >
+          {{ locale === 'zh-CN' ? 'EN' : '中' }}
+        </button>
+
         <router-link
           to="/bookmarks"
           class="flex items-center justify-center w-8 h-8 rounded-lg
                  text-ink-muted hover:text-ink hover:bg-[#21262d]
                  transition-colors duration-200"
-          aria-label="Bookmarks"
+          :aria-label="t('nav.bookmarks')"
           @click="close"
         >
           <Bookmark class="w-4 h-4" stroke-width="2" />
@@ -112,7 +131,7 @@ function handleLogout() {
           class="flex items-center justify-center w-8 h-8 rounded-lg
                  text-ink-muted hover:text-ink hover:bg-[#21262d]
                  transition-colors duration-200"
-          aria-label="New Article"
+          :aria-label="t('nav.newArticle')"
           @click="close"
         >
           <FilePlus class="w-4 h-4" stroke-width="2" />
@@ -126,7 +145,7 @@ function handleLogout() {
                  transition-colors duration-200 no-underline"
           @click="close"
         >
-          Schools
+          {{ t('nav.schools') }}
         </router-link>
 
         <router-link
@@ -137,7 +156,7 @@ function handleLogout() {
                  hover:bg-accent/10 transition-colors duration-200 no-underline"
           @click="close"
         >
-          Pool
+          {{ t('nav.pool') }}
         </router-link>
 
         <!-- Avatar + popover -->
@@ -164,13 +183,13 @@ function handleLogout() {
               class="w-full text-left px-4 py-2 text-sm text-ink-muted hover:text-ink hover:bg-[#21262d] transition-colors"
               @click="goToProfile"
             >
-              Profile
+              {{ t('nav.profile') }}
             </button>
             <button
               class="w-full text-left px-4 py-2 text-sm text-ink-muted hover:text-ink hover:bg-[#21262d] transition-colors"
               @click="handleLogout"
             >
-              Log Out
+              {{ t('nav.logout') }}
             </button>
           </div>
         </div>
@@ -181,7 +200,7 @@ function handleLogout() {
                  text-ink-muted hover:text-ink hover:bg-[#21262d]
                  transition-colors duration-200 ml-1"
           :aria-expanded="mobileOpen"
-          aria-label="Toggle navigation menu"
+          :aria-label="t('nav.toggleMenu')"
           @click="toggle"
         >
           <svg v-if="!mobileOpen" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -201,7 +220,7 @@ function handleLogout() {
                  hover:brightness-110 transition-all duration-200"
           @click="openAuth"
         >
-          Sign In
+          {{ t('nav.signIn') }}
         </button>
       </div>
     </div>
@@ -217,7 +236,7 @@ function handleLogout() {
           <input
             v-model="searchQuery"
             type="text"
-            placeholder="Search articles..."
+            :placeholder="t('nav.searchPlaceholder')"
             class="w-full pl-9 pr-3 py-2 text-sm
                    bg-[#0d1117] border border-divider rounded-lg
                    text-ink placeholder:text-ink-muted
@@ -226,14 +245,14 @@ function handleLogout() {
         </div>
       </form>
       <template v-if="isLoggedIn">
-        <router-link to="/" class="nav-link-mobile" @click="close">Home</router-link>
-        <router-link to="/schools" class="nav-link-mobile" @click="close">Schools</router-link>
-        <router-link to="/pool" class="nav-link-mobile" @click="close">Pool</router-link>
-        <router-link to="/bookmarks" class="nav-link-mobile" @click="close">Bookmarks</router-link>
-        <router-link to="/edit" class="nav-link-mobile" @click="close">New Article</router-link>
-        <button class="nav-link-mobile text-left" @click="handleLogout">Log Out</button>
+        <router-link to="/" class="nav-link-mobile" @click="close">{{ t('nav.home') }}</router-link>
+        <router-link to="/schools" class="nav-link-mobile" @click="close">{{ t('nav.schools') }}</router-link>
+        <router-link to="/pool" class="nav-link-mobile" @click="close">{{ t('nav.pool') }}</router-link>
+        <router-link to="/bookmarks" class="nav-link-mobile" @click="close">{{ t('nav.bookmarks') }}</router-link>
+        <router-link to="/edit" class="nav-link-mobile" @click="close">{{ t('nav.newArticle') }}</router-link>
+        <button class="nav-link-mobile text-left" @click="handleLogout">{{ t('nav.logout') }}</button>
       </template>
-      <button v-else class="nav-link-mobile text-left" @click="openAuth">Sign In</button>
+      <button v-else class="nav-link-mobile text-left" @click="openAuth">{{ t('nav.signIn') }}</button>
     </div>
   </nav>
 </template>
