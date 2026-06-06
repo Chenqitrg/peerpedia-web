@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useArticleStore } from '../stores/useArticleStore'
 import { useUserStore } from '../stores/useUserStore'
-import { apiClient } from '../api/client'
+import { compilePreview, compileDownload } from '../api/compile'
 import {
   Bookmark,
   BookmarkCheck,
@@ -22,6 +23,7 @@ const route = useRoute()
 const router = useRouter()
 const articleStore = useArticleStore()
 const userStore = useUserStore()
+const { t } = useI18n()
 
 import { getArticleSource } from '../api/articles'
 
@@ -141,11 +143,11 @@ async function handleCompile() {
   previewHtml.value = ''
   errorMsg.value = ''
   try {
-    const res = await apiClient.post('/compile-preview', {
+    const data = await compilePreview({
       content: content.value,
       format: format.value,
     })
-    const raw = res.data.output || res.data.content || ''
+    const raw = data.output || ''
     previewHtml.value = format.value === 'markdown' ? renderMathInHtml(raw) : raw
   } catch (e: any) {
     errorMsg.value = e.response?.data?.detail || 'Compile failed'
@@ -264,10 +266,7 @@ async function handleCompileDownload() {
     return
   }
   try {
-    const res = await apiClient.post('/compile-download', {
-      content: content.value,
-      format: format.value,
-    }, { responseType: 'blob' })
+    const res = await compileDownload(content.value, format.value)
     const blob = new Blob([res.data], { type: res.headers['content-type'] as string })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -312,8 +311,8 @@ async function handleCompileDownload() {
             class="flex items-center justify-center w-8 h-8 rounded-lg
                    text-ink-muted hover:text-ink hover:bg-[#21262d]
                    transition-colors duration-200"
-            aria-label="Save draft"
-            title="Save draft"
+            :aria-label="t('editor.saveDraft')"
+            :title="t('editor.saveDraft')"
             :disabled="submitting"
             @click="handleSaveDraft"
           >
@@ -369,8 +368,8 @@ async function handleCompileDownload() {
           class="flex items-center justify-center w-8 h-8 rounded-lg
                  text-ink-muted hover:text-accent hover:bg-accent/10
                  transition-colors duration-200"
-          aria-label="Compile"
-          title="Compile"
+          :aria-label="t('editor.compile')"
+          :title="t('editor.compile')"
           :disabled="compiling || !content.trim()"
           @click="handleCompile"
         >
@@ -382,8 +381,8 @@ async function handleCompileDownload() {
           class="flex items-center justify-center w-8 h-8 rounded-lg
                  text-ink-muted hover:text-ink hover:bg-[#21262d]
                  transition-colors duration-200"
-          aria-label="Download source"
-          title="Download source"
+          :aria-label="t('editor.typst')"
+          :title="t('editor.typst')"
           @click="handleDownload('source')"
         >
           <FileDown class="w-4 h-4" stroke-width="2" />
@@ -394,8 +393,8 @@ async function handleCompileDownload() {
           class="flex items-center justify-center w-8 h-8 rounded-lg
                  text-ink-muted hover:text-ink hover:bg-[#21262d]
                  transition-colors duration-200"
-          aria-label="Download PDF"
-          title="Download PDF"
+          :aria-label="t('editor.download')"
+          :title="t('editor.download')"
           @click="handleDownload('pdf')"
         >
           <FileText class="w-4 h-4" stroke-width="2" />
@@ -412,7 +411,7 @@ async function handleCompileDownload() {
           @click="handlePublish"
         >
           <Send class="w-3.5 h-3.5" stroke-width="2" />
-          {{ isEdit ? 'Submit' : 'Publish' }}
+          {{ isEdit ? t('editor.submitPool') : t('editor.publish') }}
         </button>
       </div>
     </div>
@@ -472,7 +471,7 @@ async function handleCompileDownload() {
             v-else
             class="flex items-center justify-center h-full text-ink-muted/40 text-xs"
           >
-            Click <Play class="w-3 h-3 inline mx-1" stroke-width="2" /> to compile preview
+            {{ t('editor.preview') }} <Play class="w-3 h-3 inline mx-1" stroke-width="2" /> 
           </div>
         </div>
       </div>

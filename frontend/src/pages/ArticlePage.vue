@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed, reactive } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { getArticle, getArticleSource, getHistory, forkArticle, extendSink } from '../api/articles'
 import { getReviews as fetchReviews, createReview, postReviewMessage } from '../api/reviews'
 import { compilePreview } from '../api/compile'
 import { useUserStore } from '../stores/useUserStore'
-import { useStatusMap } from '../composables/useStatusMap'
+import { getStatusInfo, useStatusLabel } from '../composables/useStatusMap'
 import type { ArticleDetail, ReviewOut, ThreadMessage } from '../api/types'
 import StarRating from '../components/StarRating.vue'
+import ScoreBadges from '../components/ScoreBadges.vue'
 import ThreadReplyInput from '../components/ThreadReplyInput.vue'
 import { SCORE_DIMS } from '../api/constants'
 import { renderMathInHtml } from '../utils/math'
@@ -30,6 +32,7 @@ import {
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
+const { t } = useI18n()
 
 const article = ref<ArticleDetail | null>(null)
 const reviews = ref<ReviewOut[]>([])
@@ -45,7 +48,8 @@ const id = route.params.id as string
 const isOwnArticle = computed(() => article.value?.is_own_article ?? false)
 const isBookmarked = computed(() => article.value?.is_bookmarked ?? false)
 
-const { statusLabel, statusClass } = useStatusMap(() => article.value?.status ?? '')
+const statusLabel = useStatusLabel(() => article.value?.status ?? '')
+const statusClass = computed(() => getStatusInfo(article.value?.status ?? '').class)
 
 // ── Review submission form ─────────────────────────────────────────────
 
@@ -223,10 +227,10 @@ async function handleSubmitReview() {
       try {
         await postReviewMessage(id, result.id, { content: comment })
       } catch {
-        reviewFormError.value = 'Review submitted but comment failed to send. You can reply in the thread.'
+        reviewFormError.value = t('article.reviewFailedComment')
       }
     }
-    if (!reviewFormError.value) reviewFormSuccess.value = 'Review submitted'
+    if (!reviewFormError.value) reviewFormSuccess.value = t('article.reviewSubmitted')
     await loadReviews()
   } catch (e: any) {
     reviewFormError.value = e.userMessage || 'Failed to submit review'
@@ -383,7 +387,7 @@ async function handleSinkExtension() {
               @click="goToHistory"
             >
               <History class="w-3 h-3" stroke-width="2" />
-              History
+              {{ t('article.history') }}
             </button>
 
             <button
@@ -392,7 +396,7 @@ async function handleSinkExtension() {
               @click="goToEdit"
             >
               <Edit class="w-3 h-3" stroke-width="2" />
-              Edit
+              {{ t('card.edit') }}
             </button>
 
             <button
@@ -400,7 +404,7 @@ async function handleSinkExtension() {
               @click="handleFork"
             >
               <GitFork class="w-3 h-3" stroke-width="2" />
-              Fork
+              {{ t('article.fork') }}
             </button>
 
             <a
@@ -409,7 +413,7 @@ async function handleSinkExtension() {
               class="flex items-center gap-1 px-2.5 py-1 text-xs text-ink-muted hover:text-ink hover:bg-[#21262d] rounded-md transition-colors no-underline"
             >
               <FileDown class="w-3 h-3" stroke-width="2" />
-              Source
+              {{ t('article.source') }}
             </a>
 
             <a
@@ -435,11 +439,7 @@ async function handleSinkExtension() {
         <!-- Scores row -->
         <div v-if="article.score" class="flex items-center gap-3 mt-3 pt-3 border-t border-divider">
           <span class="text-xs text-ink-muted font-semibold">Scores</span>
-          <span class="text-xs font-mono text-accent font-semibold">O:{{ article.score.originality }}</span>
-          <span class="text-xs font-mono text-ink-muted">R:{{ article.score.rigor }}</span>
-          <span class="text-xs font-mono text-ink-muted">C:{{ article.score.completeness }}</span>
-          <span class="text-xs font-mono text-ink-muted">P:{{ article.score.pedagogy }}</span>
-          <span class="text-xs font-mono text-ink-muted">I:{{ article.score.impact }}</span>
+          <ScoreBadges :score="article.score" :highlight-first="true" class="text-xs font-mono" />
         </div>
       </div>
 
@@ -453,7 +453,7 @@ async function handleSinkExtension() {
           @click="activeTab = 'body'"
         >
           <Eye class="w-3.5 h-3.5 inline mr-1.5" stroke-width="2" />
-          Body
+          {{ t('article.body') }}
         </button>
         <button
           class="px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-[1px]"
@@ -463,7 +463,7 @@ async function handleSinkExtension() {
           @click="activeTab = 'comments'"
         >
           <MessageSquare class="w-3.5 h-3.5 inline mr-1.5" stroke-width="2" />
-          Comments ({{ article.review_count }})
+          {{ t('article.comments') }} ({{ article.review_count }})
         </button>
       </div>
 
@@ -500,7 +500,7 @@ async function handleSinkExtension() {
             <textarea
               v-model="reviewComment"
               rows="2"
-              placeholder="Write a comment (optional)..."
+              :placeholder="t('article.commentPlaceholder')"
               class="w-full bg-[#0d1117] border border-divider rounded-lg px-3 py-2 text-xs
                      text-ink placeholder:text-ink-muted/50 resize-none
                      focus:outline-none focus:ring-1 focus:ring-accent mb-3"

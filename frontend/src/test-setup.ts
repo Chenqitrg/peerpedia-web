@@ -1,4 +1,7 @@
 import { vi } from 'vitest'
+import { config } from '@vue/test-utils'
+import { createI18n } from 'vue-i18n'
+import enUS from './locales/en-US.json'
 
 const localStorageMock = (() => {
   let store: Record<string, string> = {}
@@ -17,3 +20,13 @@ Object.defineProperty(globalThis, 'localStorage', {
   writable: true,
   configurable: true,
 })
+
+// Register vue-i18n globally for all tests
+const i18n = createI18n({
+  legacy: false,
+  locale: 'en-US',
+  fallbackLocale: 'en-US',
+  messages: { 'en-US': enUS },
+})
+
+config.global.plugins = [...(config.global.plugins || []), i18n]

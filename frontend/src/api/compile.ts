@@ -5,3 +5,7 @@ export async function compilePreview(payload: CompilePreviewPayload): Promise<Co
   const res = await apiClient.post('/compile-preview', payload)
   return res.data
 }
+
+export async function compileDownload(content: string, format: 'markdown' | 'typst') {
+  return apiClient.post('/compile-download', { content, format }, { responseType: 'blob' })
+}
