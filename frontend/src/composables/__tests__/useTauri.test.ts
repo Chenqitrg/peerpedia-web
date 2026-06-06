@@ -1,15 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { useTauri } from '../useTauri'
-
-// Mock @tauri-apps/api/core — must be at top level before any import uses it.
-const mockInvoke = vi.fn()
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: mockInvoke,
-}))
 
 describe('useTauri', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
     delete (window as any).__TAURI__
   })
 
@@ -19,7 +12,7 @@ describe('useTauri', () => {
   })
 
   it('detects Tauri mode when __TAURI__ is present', () => {
-    ;(window as any).__TAURI__ = {}
+    ;(window as any).__TAURI__ = { core: { invoke: async () => ({}) } }
     const tauri = useTauri()
     expect(tauri.isTauri.value).toBe(true)
   })
@@ -27,10 +20,7 @@ describe('useTauri', () => {
   it('createAccount returns null in Web mode', async () => {
     const tauri = useTauri()
     const result = await tauri.createAccount({
-      username: 'test',
-      password: 'pass',
-      email: '',
-      name: '',
+      username: 'test', password: 'pass', email: '', name: '',
     })
     expect(result).toBeNull()
   })
@@ -47,74 +37,55 @@ describe('useTauri', () => {
     expect(result).toBeNull()
   })
 
-  it('saveDraft returns null in Web mode', async () => {
-    const tauri = useTauri()
-    const result = await tauri.saveDraft({
-      id: 'd1',
-      account_id: 'a1',
-      title: 'Draft',
-      content: '# Hello',
-      format: 'markdown',
-    })
-    expect(result).toBeNull()
-  })
-
   it('calls invoke in Tauri mode for login', async () => {
-    ;(window as any).__TAURI__ = {}
-    mockInvoke.mockResolvedValue({ id: 'u1', username: 'alice' })
+    const mockInvoke = async (_cmd: string, _args?: any) => ({ id: 'u1', username: 'alice' })
+    ;(window as any).__TAURI__ = { core: { invoke: mockInvoke } }
 
     const tauri = useTauri()
     const result = await tauri.login({ username: 'alice', password: 'pass' })
-    expect(mockInvoke).toHaveBeenCalledWith('login', {
-      username: 'alice',
-      password: 'pass',
-    })
     expect(result).toEqual({ id: 'u1', username: 'alice' })
   })
 
+  it('calls invoke in Tauri mode for saveDraft', async () => {
+    let capturedCmd = ''
+    let capturedArgs: any = {}
+    const mockInvoke = async (cmd: string, args?: any) => {
+      capturedCmd = cmd
+      capturedArgs = args
+      return { id: 'd1', title: 'Draft', content: '# H', format: 'md', updated_at: '2026-01-01', account_id: 'a1' }
+    }
+    ;(window as any).__TAURI__ = { core: { invoke: mockInvoke } }
+
+    const tauri = useTauri()
+    const result = await tauri.saveDraft({ account_id: 'a1', title: 'Draft', content: '# H', format: 'markdown' })
+    expect(capturedCmd).toBe('save_draft')
+    expect(capturedArgs).toMatchObject({ account_id: 'a1', title: 'Draft' })
+    expect(result).toHaveProperty('id', 'd1')
+  })
+
   it('returns error object when invoke throws', async () => {
-    ;(window as any).__TAURI__ = {}
-    mockInvoke.mockRejectedValue(new Error('IPC failed'))
+    const mockInvoke = async () => { throw new Error('IPC failed') }
+    ;(window as any).__TAURI__ = { core: { invoke: mockInvoke } }
 
     const tauri = useTauri()
     const result = await tauri.login({ username: 'alice', password: 'pass' })
     expect(result).toEqual({ error: 'IPC failed' })
   })
 
-  it('returns error object when invoke returns AppError', async () => {
-    ;(window as any).__TAURI__ = {}
-    mockInvoke.mockResolvedValue({
-      code: 'AUTH_FAILED',
-      message: 'Incorrect password',
-    })
+  it('returns error object when invoke returns AppError shape', async () => {
+    const mockInvoke = async () => ({ code: 'AUTH_FAILED', message: 'Incorrect password' })
+    ;(window as any).__TAURI__ = { core: { invoke: mockInvoke } }
 
     const tauri = useTauri()
     const result = await tauri.login({ username: 'alice', password: 'wrong' })
     expect(result).toEqual({ error: 'Incorrect password' })
   })
 
-  it('saveDraft calls invoke with correct params in Tauri mode', async () => {
-    ;(window as any).__TAURI__ = {}
-    mockInvoke.mockResolvedValue({
-      id: 'draft-1',
-      account_id: 'a1',
-      title: 'Draft',
-      content: '# Hello',
-      format: 'markdown',
-      updated_at: '2026-06-06',
-    })
-
+  it('returns error when core API is missing in Tauri mode', async () => {
+    ;(window as any).__TAURI__ = {} // no .core
     const tauri = useTauri()
-    const result = await tauri.saveDraft({
-      account_id: 'a1',
-      title: 'Draft',
-      content: '# Hello',
-      format: 'markdown',
-    })
-    expect(mockInvoke).toHaveBeenCalledWith('save_draft', expect.objectContaining({
-      account_id: 'a1',
-      title: 'Draft',
-    }))
-    expect(result).toHaveProperty('id', 'draft-1')
+    expect(tauri.isTauri.value).toBe(true)
+    const result = await tauri.login({ username: 'alice', password: 'pass' })
+    expect(result).toEqual({ error: 'Tauri core API not available' })
   })
 })

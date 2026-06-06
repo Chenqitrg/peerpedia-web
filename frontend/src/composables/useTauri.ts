@@ -1,19 +1,12 @@
 // Platform abstraction: Tauri IPC vs Web no-op.
 //
-// In Tauri mode: calls invoke() for each IPC command.
+// In Tauri mode: calls window.__TAURI__.core.invoke() for each IPC command.
 // In Web mode:   all methods return null (caller falls back to REST).
 //
 // Error handling: invoke errors and AppError returns are caught and converted
 // to { error: string } so the caller always gets a uniform shape.
 
 import { computed } from 'vue'
-
-interface TauriResult {
-  error?: string
-  [key: string]: unknown
-}
-
-type MaybeTauriResult<T> = T | { error: string } | null
 
 // ── Parameter types (mirrors Rust IPC command params) ─────────────────
 
@@ -91,17 +84,31 @@ export interface CachedArticle {
   cached_at: string
 }
 
+// ── Tauri API access ─────────────────────────────────────────────────
+
+// Use window.__TAURI__.core.invoke directly to avoid static import
+// analysis issues with @tauri-apps/api in test environments.
+function getInvoke(): ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null {
+  const tauriWindow = window as unknown as { __TAURI__?: { core?: { invoke?: (cmd: string, args?: Record<string, unknown>) => Promise<unknown> } } }
+  return tauriWindow.__TAURI__?.core?.invoke ?? null
+}
+
 // ── Composable ────────────────────────────────────────────────────────
 
 export function useTauri() {
-  const isTauri = computed(() => typeof window !== 'undefined' && '__TAURI__' in window)
+  const isTauri = computed(() => {
+    if (typeof window === 'undefined') return false
+    return '__TAURI__' in window
+  })
 
   async function _invoke<T>(command: string, args?: Record<string, unknown>): Promise<T | { error: string } | null> {
     if (!isTauri.value) return null
 
+    const invokeFn = getInvoke()
+    if (!invokeFn) return { error: 'Tauri core API not available' }
+
     try {
-      const { invoke } = await import('@tauri-apps/api/core')
-      const result = await invoke<T>(command, args)
+      const result = await invokeFn(command, args)
 
       // Check if Rust returned an AppError (serialized as { code, message }).
       if (result && typeof result === 'object' && 'code' in result && 'message' in result) {
@@ -109,7 +116,7 @@ export function useTauri() {
         return { error: err.message }
       }
 
-      return result
+      return result as T
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : String(e)
       return { error: message }
