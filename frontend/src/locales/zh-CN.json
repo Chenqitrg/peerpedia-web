@@ -1,0 +1,132 @@
+{
+  "nav": {
+    "brand": "知诸网",
+    "home": "首页",
+    "schools": "学派",
+    "pool": "沉淀池",
+    "bookmarks": "收藏",
+    "newArticle": "写文章",
+    "searchPlaceholder": "搜索文章...",
+    "profile": "个人主页",
+    "logout": "退出登录",
+    "signIn": "登录",
+    "createAccount": "注册",
+    "toggleMenu": "切换导航菜单"
+  },
+  "home": {
+    "tagline": "走向更好的学术",
+    "feed": "动态",
+    "feedSubtitle": "你身边的最新文章",
+    "empty": "你的动态中还没有文章",
+    "emptyHint": "关注其他用户或创建文章来开始",
+    "createArticle": "创建文章"
+  },
+  "pool": {
+    "title": "沉淀池",
+    "subtitle": "你身边等待评审的文章",
+    "empty": "沉淀池为空",
+    "emptyHint": "所有文章都审过了，过会儿再来"
+  },
+  "bookmarks": {
+    "title": "收藏",
+    "subtitle": "你保存的文章",
+    "authError": "请登录以查看收藏",
+    "empty": "还没有收藏",
+    "emptyHint": "收藏文章以便稍后阅读"
+  },
+  "search": {
+    "title": "搜索",
+    "subtitle": "跨文章、评审和作者搜索",
+    "searching": "搜索中...",
+    "results": "个结果",
+    "noResults": "未找到结果",
+    "placeholder": "输入搜索词查找文章"
+  },
+  "common": {
+    "retry": "重试",
+    "backToHome": "返回首页",
+    "loading": "加载中...",
+    "error": "出错了",
+    "articles": "篇文章",
+    "followers": "关注者",
+    "following": "关注中",
+    "noArticles": "还没有文章",
+    "editProfile": "编辑资料",
+    "comingSoon": "即将推出",
+    "reputation": "信誉"
+  },
+  "card": {
+    "addBookmark": "添加收藏",
+    "removeBookmark": "取消收藏",
+    "history": "历史",
+    "edit": "编辑",
+    "fork": "复刻",
+    "forkBadge": "复刻",
+    "dRemaining": "天剩余",
+    "untitled": "无标题",
+    "noPreview": "暂无预览"
+  },
+  "editor": {
+    "newTitle": "写文章",
+    "editTitle": "编辑文章",
+    "saveDraft": "保存草稿",
+    "submitPool": "提交至沉淀池",
+    "publish": "发布",
+    "compile": "编译",
+    "compileFailed": "编译失败",
+    "saveFailed": "保存失败",
+    "titlePlaceholder": "文章标题",
+    "abstractPlaceholder": "摘要（可选）",
+    "keywordsPlaceholder": "关键词，逗号分隔",
+    "categoriesPlaceholder": "分类，逗号分隔",
+    "preview": "预览",
+    "markdown": "Markdown",
+    "typst": "Typst",
+    "download": "下载 PDF"
+  },
+  "auth": {
+    "signIn": "登录",
+    "createAccount": "注册账号",
+    "username": "用户名",
+    "password": "密码",
+    "email": "邮箱",
+    "name": "显示名称",
+    "switchToRegister": "没有账号？注册",
+    "switchToLogin": "已有账号？登录"
+  },
+  "user": {
+    "anonymousName": "匿名名称",
+    "notFound": "用户未找到"
+  },
+  "status": {
+    "published": "已发布",
+    "sedimentation": "沉淀中",
+    "draft": "草稿"
+  },
+  "article": {
+    "body": "正文",
+    "comments": "评论",
+    "history": "历史",
+    "fork": "复刻",
+    "source": "源代码",
+    "commentPlaceholder": "写评论（可选）...",
+    "reviewSubmitted": "评审已提交",
+    "reviewFailedComment": "评审已提交，但评论发送失败。你可以在讨论中回复。",
+    "extend": "延长时间"
+  },
+  "history": {
+    "parent": "父提交",
+    "parents": "父提交",
+    "rollback": "回滚",
+    "rollingBack": "回滚中...",
+    "rollbackAria": "回滚到此版本",
+    "selectSecondCommit": "选择第二个提交以查看差异",
+    "diff": "差异",
+    "noDiff": "无差异内容",
+    "loadingDiff": "加载差异中..."
+  },
+  "citation": {
+    "forward": "前向引用",
+    "backward": "后向引用"
+  }
+}

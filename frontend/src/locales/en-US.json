@@ -1,0 +1,132 @@
+{
+  "nav": {
+    "brand": "PeerPedia",
+    "home": "Home",
+    "schools": "Schools",
+    "pool": "Pool",
+    "bookmarks": "Bookmarks",
+    "newArticle": "New Article",
+    "searchPlaceholder": "Search articles...",
+    "profile": "Profile",
+    "logout": "Log Out",
+    "signIn": "Sign In",
+    "createAccount": "Create Account",
+    "toggleMenu": "Toggle navigation menu"
+  },
+  "home": {
+    "tagline": "To a better academia",
+    "feed": "Feed",
+    "feedSubtitle": "Latest articles from your network",
+    "empty": "No articles in your feed yet.",
+    "emptyHint": "Follow other users or create your own article to get started.",
+    "createArticle": "Create an Article"
+  },
+  "pool": {
+    "title": "Review Pool",
+    "subtitle": "Articles from your network awaiting review",
+    "empty": "Pool is empty.",
+    "emptyHint": "All articles have been reviewed. Check back later."
+  },
+  "bookmarks": {
+    "title": "Bookmarks",
+    "subtitle": "Your saved articles",
+    "authError": "Please log in to view bookmarks",
+    "empty": "No bookmarks yet.",
+    "emptyHint": "Bookmark articles to save them for later."
+  },
+  "search": {
+    "title": "Search",
+    "subtitle": "Search across articles, reviews, and authors.",
+    "searching": "Searching...",
+    "results": "result(s)",
+    "noResults": "No results found",
+    "placeholder": "Enter a search term to find articles."
+  },
+  "common": {
+    "retry": "Retry",
+    "backToHome": "Back to Home",
+    "loading": "Loading...",
+    "error": "Something went wrong",
+    "articles": "articles",
+    "followers": "followers",
+    "following": "following",
+    "noArticles": "No articles yet.",
+    "editProfile": "Edit Profile",
+    "comingSoon": "Coming soon",
+    "reputation": "Reputation"
+  },
+  "card": {
+    "addBookmark": "Add bookmark",
+    "removeBookmark": "Remove bookmark",
+    "history": "History",
+    "edit": "Edit",
+    "fork": "Fork",
+    "forkBadge": "fork",
+    "dRemaining": "d remaining",
+    "untitled": "Untitled",
+    "noPreview": "No preview available."
+  },
+  "editor": {
+    "newTitle": "New Article",
+    "editTitle": "Edit Article",
+    "saveDraft": "Save draft",
+    "submitPool": "Submit to Pool",
+    "publish": "Publish",
+    "compile": "Compile",
+    "compileFailed": "Compile failed",
+    "saveFailed": "Save failed",
+    "titlePlaceholder": "Article title",
+    "abstractPlaceholder": "Abstract (optional)",
+    "keywordsPlaceholder": "Keywords, comma-separated",
+    "categoriesPlaceholder": "Categories, comma-separated",
+    "preview": "Preview",
+    "markdown": "Markdown",
+    "typst": "Typst",
+    "download": "Download PDF"
+  },
+  "auth": {
+    "signIn": "Sign In",
+    "createAccount": "Create Account",
+    "username": "Username",
+    "password": "Password",
+    "email": "Email",
+    "name": "Display Name",
+    "switchToRegister": "Don't have an account? Sign up",
+    "switchToLogin": "Already have an account? Sign in"
+  },
+  "user": {
+    "anonymousName": "Anonymous name",
+    "notFound": "User not found."
+  },
+  "status": {
+    "published": "Published",
+    "sedimentation": "In Pool",
+    "draft": "Draft"
+  },
+  "article": {
+    "body": "Body",
+    "comments": "Comments",
+    "history": "History",
+    "fork": "Fork",
+    "source": "Source",
+    "commentPlaceholder": "Write a comment (optional)...",
+    "reviewSubmitted": "Review submitted",
+    "reviewFailedComment": "Review submitted but comment failed to send. You can reply in the thread.",
+    "extend": "Extend"
+  },
+  "history": {
+    "parent": "parent",
+    "parents": "parents",
+    "rollback": "Rollback",
+    "rollingBack": "Rolling back...",
+    "rollbackAria": "Rollback to this version",
+    "selectSecondCommit": "Select a second commit to view the diff",
+    "diff": "Diff",
+    "noDiff": "No diff available.",
+    "loadingDiff": "Loading diff..."
+  },
+  "citation": {
+    "forward": "Forward",
+    "backward": "Backward"
+  }
+}

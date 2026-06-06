@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
-import { useAsyncState } from '@vueuse/core'
+import { ref, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { getUser, getFollowers, getFollowing } from '../api/users'
 import { getArticles } from '../api/articles'
 import { useUserStore } from '../stores/useUserStore'
 import { useBookmarkToggle } from '../composables/useBookmarkToggle'
+import { useAsyncResource } from '../composables/useAsyncResource'
 import ArticleCard from '../components/ArticleCard.vue'
 import type { UserProfile, ArticleSummary } from '../api/types'
 import {
@@ -21,6 +22,7 @@ import {
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
+const { t } = useI18n()
 
 const id = computed(() => route.params.id as string)
 
@@ -29,18 +31,13 @@ const showFollowing = ref(false)
 const followers = ref<any[]>([])
 const following = ref<any[]>([])
 
-const { state: user, isLoading: loading, error: rawError, execute: loadUser } = useAsyncState(
-  () => getUser(id.value),
-  null as UserProfile | null,
-  { immediate: false }
-)
-
 const articles = ref<ArticleSummary[]>([])
 
-const error = computed(() => {
-  const e = rawError.value as any
-  return e?.userMessage || ''
-})
+const { data: user, loading, error, execute: loadUser } = useAsyncResource(
+  () => getUser(id.value),
+  null as UserProfile | null,
+  { immediate: true },
+)
 
 const { toggle: handleToggleBookmark } = useBookmarkToggle(articles)
 
@@ -53,10 +50,10 @@ async function loadArticles() {
   } catch { /* ignore */ }
 }
 
-onMounted(async () => {
-  await loadUser()
-  await loadArticles()
-})
+// Load articles after user fetch completes (sequential)
+watch(user, (u) => {
+  if (u) loadArticles()
+}, { immediate: true })
 
 watch(() => route.params.id, () => {
   showFollowers.value = false
@@ -134,7 +131,7 @@ async function loadFollowing() {
 
             <!-- Anonymous name (only visible to self) -->
             <p v-if="isSelf" class="text-xs text-ink-muted mb-2">
-              Anonymous name: <span class="font-mono text-ink">{{ user.anonymous_name }}</span>
+              {{ t('user.anonymousName') }}: <span class="font-mono text-ink">{{ user.anonymous_name }}</span>
             </p>
 
             <!-- Affiliation & Contact -->
@@ -161,7 +158,7 @@ async function loadFollowing() {
               >
                 <Users class="w-3.5 h-3.5" stroke-width="2" />
                 <span class="font-semibold">{{ user.followers_count }}</span>
-                <span>followers</span>
+                <span>{{ t('common.followers') }}</span>
               </button>
               <button
                 class="flex items-center gap-1.5 text-ink-muted hover:text-ink transition-colors"
@@ -169,7 +166,7 @@ async function loadFollowing() {
               >
                 <Users class="w-3.5 h-3.5" stroke-width="2" />
                 <span class="font-semibold">{{ user.following_count }}</span>
-                <span>following</span>
+                <span>{{ t('common.following') }}</span>
               </button>
             </div>
           </div>
@@ -179,10 +176,10 @@ async function loadFollowing() {
             v-if="isSelf"
             class="btn-outline btn-sm shrink-0 opacity-50 cursor-not-allowed"
             disabled
-            title="Coming soon"
+            title="{{ t('common.comingSoon') }}"
           >
             <Edit class="w-3.5 h-3.5" stroke-width="2" />
-            Edit Profile
+            {{ t('common.editProfile') }}
           </button>
         </div>
 
@@ -229,7 +226,7 @@ async function loadFollowing() {
         <div v-if="user.reputation" class="mt-4 pt-4 border-t border-divider">
           <div class="flex items-center gap-1 text-xs text-ink-muted mb-3">
             <Star class="w-3 h-3" stroke-width="2" />
-            <span class="font-semibold">Reputation</span>
+            <span class="font-semibold">{{ t('common.reputation') }}</span>
           </div>
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div
@@ -251,7 +248,7 @@ async function loadFollowing() {
         </h2>
 
         <div v-if="articles.length === 0" class="card p-8 text-center">
-          <p class="text-ink-muted text-sm">No articles yet.</p>
+          <p class="text-ink-muted text-sm">{{ t('common.noArticles') }}</p>
         </div>
 
         <div v-else class="space-y-4">
@@ -267,7 +264,7 @@ async function loadFollowing() {
 
     <!-- Error state -->
     <div v-else class="card p-12 text-center">
-      <p class="text-ink-muted">User not found.</p>
+      <p class="text-ink-muted">{{ t('user.notFound') }}</p>
     </div>
   </div>
 </template>

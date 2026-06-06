@@ -1,23 +1,27 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useAsyncState } from '@vueuse/core'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useUserStore } from '../stores/useUserStore'
 import { fetchBookmarks } from '../api/bookmarks'
 import { getArticle } from '../api/articles'
 import { useBookmarkToggle } from '../composables/useBookmarkToggle'
+import { useAsyncResource } from '../composables/useAsyncResource'
 import ArticleCard from '../components/ArticleCard.vue'
+import SkeletonCard from '../components/SkeletonCard.vue'
+import ErrorState from '../components/ErrorState.vue'
 import type { ArticleSummary, Bookmark } from '../api/types'
 import { Bookmark as BookmarkIcon, ArrowLeft } from 'lucide-vue-next'
 
 const router = useRouter()
 const userStore = useUserStore()
+const { t } = useI18n()
 
 const articles = ref<ArticleSummary[]>([])
 
-const { state: _, isLoading: loading, error: rawError, execute: loadBookmarks } = useAsyncState(
+const { loading, error, execute: loadBookmarks } = useAsyncResource(
   async () => {
-    if (!userStore.viewer) throw new Error('Please log in to view bookmarks')
+    if (!userStore.viewer) throw new Error(t('bookmarks.authError'))
     const bookmarks: Bookmark[] = await fetchBookmarks()
     const results = await Promise.all(
       bookmarks.map((b: Bookmark) => getArticle(b.article_id).catch(() => null)),
@@ -26,49 +30,33 @@ const { state: _, isLoading: loading, error: rawError, execute: loadBookmarks } 
     return articles.value
   },
   null,
-  { immediate: false }
+  { immediate: true },
 )
 
-const error = computed(() => {
-  const e = rawError.value as any
-  return e?.userMessage || e?.message || ''
-})
-
 const { remove: handleToggleBookmark } = useBookmarkToggle(articles)
-
-onMounted(() => loadBookmarks())
 </script>
 
 <template>
   <div class="bookmarks-page animate-fade-in">
-    <h1 class="text-display-md text-ink mb-2">Bookmarks</h1>
-    <p class="text-sm text-ink-muted mb-6">Your saved articles</p>
+    <h1 class="text-display-md text-ink mb-2">{{ t('bookmarks.title') }}</h1>
+    <p class="text-sm text-ink-muted mb-6">{{ t('bookmarks.subtitle') }}</p>
 
     <!-- Loading -->
-    <div v-if="loading" class="space-y-4">
-      <div v-for="i in 3" :key="i" class="card p-5 animate-pulse">
-        <div class="skeleton h-5 w-2/3 mb-3" />
-        <div class="skeleton h-4 w-1/3 mb-2" />
-        <div class="skeleton h-3 w-full" />
-      </div>
-    </div>
+    <SkeletonCard v-if="loading" />
 
     <!-- Error -->
-    <div v-else-if="error" class="card p-8 text-center">
-      <p class="text-ink-muted">{{ error }}</p>
-      <button v-if="error !== 'Please log in to view bookmarks'" class="btn-outline mt-4" @click="() => loadBookmarks()">
-        Retry
-      </button>
-      <router-link v-else to="/" class="btn-primary mt-4 no-underline inline-block">
-        Back to Home
-      </router-link>
-    </div>
+    <ErrorState
+      v-else-if="error"
+      :message="error"
+      :back-to-home="error === t('bookmarks.authError')"
+      @retry="loadBookmarks()"
+    />
 
     <!-- Empty -->
     <div v-else-if="articles.length === 0" class="card p-12 text-center">
       <BookmarkIcon class="w-12 h-12 text-ink-muted/40 mx-auto mb-3" stroke-width="1.5" />
-      <p class="text-ink-muted mb-4">No bookmarks yet.</p>
-      <p class="text-xs text-ink-muted/60">Bookmark articles to save them for later.</p>
+      <p class="text-ink-muted mb-4">{{ t('bookmarks.empty') }}</p>
+      <p class="text-xs text-ink-muted/60">{{ t('bookmarks.emptyHint') }}</p>
     </div>
 
     <!-- Article list -->

@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useAsyncState } from '@vueuse/core'
+import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { getHistory, getDiff, rollbackArticle } from '../api/articles'
+import { useAsyncResource } from '../composables/useAsyncResource'
+import ErrorState from '../components/ErrorState.vue'
+import ScoreBadges from '../components/ScoreBadges.vue'
 import type { CommitInfo, ArticleDiff, ArticleHistory } from '../api/types'
 import {
   GitCommitHorizontal,
@@ -14,6 +17,7 @@ import {
   ArrowLeft,
 } from 'lucide-vue-next'
 
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const id = route.params.id as string
@@ -25,21 +29,15 @@ const diffLoading = ref(false)
 const rollingBack = ref<string | null>(null)
 const rollbackError = ref('')
 
-const { state: history, isLoading: loading, error: rawError, execute: loadHistory } = useAsyncState(
+const { data: history, loading, error, execute: loadHistory } = useAsyncResource(
   () => getHistory(id),
   null as ArticleHistory | null,
-  { immediate: false }
+  { immediate: true },
 )
 
 const commits = computed(() => history.value?.commits ?? [])
-const error = computed(() => {
-  const e = rawError.value as any
-  return e?.userMessage || e?.response?.data?.detail || ''
-})
 
 const sortedCommits = computed(() => [...commits.value].reverse())
-
-onMounted(() => loadHistory())
 
 function toggleCommitSelect(hash: string) {
   if (!selectedHash1.value) {
@@ -120,10 +118,7 @@ function goBack() {
     </div>
 
     <!-- Error -->
-    <div v-else-if="error" class="card p-8 text-center">
-      <p class="text-ink-muted">{{ error }}</p>
-      <button class="btn-outline mt-4" @click="loadHistory()">Retry</button>
-    </div>
+    <ErrorState v-else-if="error" :message="error" @retry="loadHistory()" />
 
     <template v-else>
       <!-- Commit graph -->
@@ -159,7 +154,7 @@ function goBack() {
                 </span>
                 <span v-if="commit.parents?.length" class="flex items-center gap-0.5 text-xs text-ink-muted">
                   <GitBranch class="w-3 h-3" stroke-width="2" />
-                  {{ commit.parents.length }} parent{{ commit.parents.length > 1 ? 's' : '' }}
+                  {{ commit.parents.length }} {{ commit.parents.length > 1 ? t('history.parents') : t('history.parent') }}
                 </span>
               </div>
               <p class="text-sm text-ink leading-snug">
@@ -175,11 +170,7 @@ function goBack() {
                 v-if="commit.score"
                 class="flex items-center gap-2 mt-1.5 text-xs font-mono text-ink-muted"
               >
-                <span class="text-accent font-semibold">O:{{ commit.score.originality }}</span>
-                <span>R:{{ commit.score.rigor }}</span>
-                <span>C:{{ commit.score.completeness }}</span>
-                <span>P:{{ commit.score.pedagogy }}</span>
-                <span>I:{{ commit.score.impact }}</span>
+                <ScoreBadges :score="commit.score" :highlight-first="true" />
               </div>
             </div>
 
@@ -188,12 +179,12 @@ function goBack() {
               class="flex items-center gap-1 px-2.5 py-1 text-xs text-ink-muted
                      hover:text-ink hover:bg-[#21262d] rounded-md
                      transition-colors shrink-0"
-              aria-label="Rollback to this version"
+              :aria-label="t('history.rollbackAria')"
               :disabled="rollingBack === commit.hash"
               @click="handleRollback(commit.hash)"
             >
               <RotateCcw class="w-3 h-3" stroke-width="2" />
-              {{ rollingBack === commit.hash ? 'Rolling back...' : 'Rollback' }}
+              {{ rollingBack === commit.hash ? t('history.rollingBack') : t('history.rollback') }}
             </button>
           </div>
         </div>
@@ -204,13 +195,13 @@ function goBack() {
         v-if="selectedHash1 && !selectedHash2"
         class="card p-4 mb-6 text-center text-sm text-ink-muted"
       >
-        Select a second commit to view the diff
+        {{ t('history.selectSecondCommit') }}
       </div>
 
       <!-- Diff viewer -->
       <div v-if="diffResult" class="card p-4 mb-6">
         <h3 class="text-sm font-heading font-semibold text-ink mb-3">
-          Diff: {{ String(selectedHash1).substring(0, 7) }} → {{ String(selectedHash2).substring(0, 7) }}
+          {{ t('history.diff') }}: {{ String(selectedHash1).substring(0, 7) }} → {{ String(selectedHash2).substring(0, 7) }}
         </h3>
         <div
           v-if="diffResult.diff_text"
@@ -218,7 +209,7 @@ function goBack() {
         >
           <pre class="text-xs font-mono text-ink leading-relaxed whitespace-pre-wrap">{{ diffResult.diff_text }}</pre>
         </div>
-        <p v-else class="text-xs text-ink-muted">No diff available.</p>
+        <p v-else class="text-xs text-ink-muted">{{ t('history.noDiff') }}</p>
       </div>
 
       <!-- Loading diff -->
@@ -226,7 +217,7 @@ function goBack() {
         v-if="diffLoading"
         class="card p-8 text-center text-sm text-ink-muted"
       >
-        Loading diff...
+        {{ t('history.loadingDiff') }}
       </div>
     </template>
   </div>
