@@ -231,9 +231,8 @@ pub struct GitInitParams {
 }
 
 #[tauri::command]
-#[allow(unused_variables)]
 pub fn git_init(
-    state: State<'_, AppState>,
+    _state: State<'_, AppState>,
     params: GitInitParams,
 ) -> Result<local_git::GitCommitResult, AppError> {
     local_git::git_init(
@@ -258,9 +257,8 @@ pub struct GitCommitParams {
 }
 
 #[tauri::command]
-#[allow(unused_variables)]
 pub fn git_commit(
-    state: State<'_, AppState>,
+    _state: State<'_, AppState>,
     params: GitCommitParams,
 ) -> Result<local_git::GitCommitResult, AppError> {
     local_git::git_commit(
@@ -279,7 +277,7 @@ pub struct GitHistoryParams {
 
 #[tauri::command]
 pub fn git_history(
-    state: State<'_, AppState>,
+    _state: State<'_, AppState>,
     params: GitHistoryParams,
 ) -> Result<Vec<local_git::CommitEntry>, AppError> {
     local_git::git_history(&params.article_id)
@@ -293,7 +291,7 @@ pub struct GitShowParams {
 
 #[tauri::command]
 pub fn git_show(
-    state: State<'_, AppState>,
+    _state: State<'_, AppState>,
     params: GitShowParams,
 ) -> Result<String, AppError> {
     local_git::git_show(&params.article_id, &params.commit_hash)
