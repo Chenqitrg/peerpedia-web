@@ -84,11 +84,13 @@ function restoreMath(html: string, placeholders: PlaceholderMap): string {
   let result = html
   for (const key of keys) {
     const math = placeholders[key]
-    if (key.includes(`${PLACEHOLDER_PREFIX}D`)) {
-      result = result.replace(key, `<span class="katex-display">${math}</span>`)
-    } else {
-      result = result.replace(key, `<span class="katex-inline">${math}</span>`)
-    }
+    // Use split/join instead of String.replace() to avoid $$ interpretation:
+    // String.replace() treats $$ as literal $ in the replacement string,
+    // corrupting KaTeX display-mode delimiters ($$x^2$$ → $x^2$).
+    const span = key.includes(`${PLACEHOLDER_PREFIX}D`)
+      ? `<span class="katex-display">${math}</span>`
+      : `<span class="katex-inline">${math}</span>`
+    result = result.split(key).join(span)
   }
   return result
 }
