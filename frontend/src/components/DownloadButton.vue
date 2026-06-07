@@ -32,9 +32,16 @@ async function handleDownload() {
       data = props.content
     }
 
-    const name = props.filename
-      ? `${props.filename.replace(/[^a-zA-Z0-9一-鿿_-]/g, '_')}.${ext === '.html' ? 'html' : ext.replace('.', '')}`
-      : `article.${ext === '.html' ? 'html' : ext.replace('.', '')}`
+    const base = (props.filename || 'article')
+      .replace(/[/\\]/g, '-')       // path separators → dash
+      .replace(/\.\./g, '')         // no parent-dir traversal
+      .replace(/[^a-zA-Z0-9一-鿿 _-]/g, '')
+      .replace(/\s+/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^[._-]+|[._-]+$/g, '')
+      || 'article'
+    const suffix = props.format === 'compiled' ? 'html' : (props.contentFormat === 'typst' ? 'typ' : 'md')
+    const name = `${base}.${suffix}`
 
     const blob = new Blob([data], {
       type: props.format === 'compiled' ? 'text/html' : 'text/plain',

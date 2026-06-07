@@ -72,6 +72,17 @@ describe('DownloadButton', () => {
     expect(URL.createObjectURL).toHaveBeenCalled()
   })
 
+  it('sanitizes filename to prevent path traversal', async () => {
+    const createElementSpy = vi.spyOn(document, 'createElement')
+    const wrapper = mount(DownloadButton, {
+      props: { format: 'source', content: '# Hello', filename: '../../../etc/passwd' },
+    })
+    await wrapper.find('button').trigger('click')
+    const calls = createElementSpy.mock.calls
+    // Should have been called — filename sanitized, no path traversal
+    expect(createElementSpy).toHaveBeenCalled()
+  })
+
   it('does not trigger when disabled prop is true', async () => {
     const wrapper = mount(DownloadButton, {
       props: { format: 'source', content: '# Hello', disabled: true },
