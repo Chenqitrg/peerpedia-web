@@ -133,6 +133,27 @@ describe('parseMarkdown', () => {
     expect(result).toContain('katex')
   })
 
+  it('parseMarkdown renders markdown headings (# → <h1>)', () => {
+    const result = parseMarkdown('# Hello World')
+    expect(result).toContain('<h1')
+    expect(result).toContain('Hello World')
+  })
+
+  it('renderMathInHtml does NOT render markdown (must use parseMarkdown)', async () => {
+    // Regression: ArticlePage line 169 was calling renderMathInHtml on raw
+    // markdown. renderMathInHtml only processes katex spans — it won't
+    // convert # to <h1> or $$ to display math. parseMarkdown must be used.
+    const { renderMathInHtml } = await import('../math')
+    const raw = renderMathInHtml('# Hello\n\n$$x^2$$')
+    // renderMathInHtml leaves raw markdown untouched — no <h1>, no katex
+    expect(raw).not.toContain('<h1')
+    expect(raw).not.toContain('katex')
+    // parseMarkdown handles everything
+    const cooked = parseMarkdown('# Hello\n\n$$x^2$$')
+    expect(cooked).toContain('<h1')
+    expect(cooked).toContain('katex-display')
+  })
+
   it('renders multiple display math blocks independently', () => {
     const result = parseMarkdown('$$\na = 1\n$$\n\n$$\nb = 2\n$$')
     const displayCount = (result.match(/katex-display/g) || []).length
