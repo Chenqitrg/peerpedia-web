@@ -31,7 +31,7 @@ def api_list_users(db: Session = Depends(deps.get_db)):
     out = []
     for u in users:
         article_count = db.query(Article).filter(
-            Article.id.in_(session.query(ArticleAuthor.article_id).filter(ArticleAuthor.author_id == u.id))
+            Article.id.in_(db.query(ArticleAuthor.article_id).filter(ArticleAuthor.author_id == u.id))
         ).count()
         out.append(UserSummary(
             id=u.id, name=u.name, anonymous_name=u.anonymous_name,
@@ -127,7 +127,7 @@ def api_get_followers(user_id: str, db: Session = Depends(deps.get_db)):
     out = []
     for u in users:
         article_count = db.query(Article).filter(
-            Article.id.in_(session.query(ArticleAuthor.article_id).filter(ArticleAuthor.author_id == u.id))
+            Article.id.in_(db.query(ArticleAuthor.article_id).filter(ArticleAuthor.author_id == u.id))
         ).count()
         out.append(UserSummary(
             id=u.id, name=u.name, affiliation=u.affiliation,
@@ -144,7 +144,7 @@ def api_get_following(user_id: str, db: Session = Depends(deps.get_db)):
     out = []
     for u in users:
         article_count = db.query(Article).filter(
-            Article.id.in_(session.query(ArticleAuthor.article_id).filter(ArticleAuthor.author_id == u.id))
+            Article.id.in_(db.query(ArticleAuthor.article_id).filter(ArticleAuthor.author_id == u.id))
         ).count()
         out.append(UserSummary(
             id=u.id, name=u.name, affiliation=u.affiliation,

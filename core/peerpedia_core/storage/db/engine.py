@@ -36,10 +36,12 @@ class JSONType(TypeDecorator):
 
 class JSONList(JSONType):
     """Store Python list as JSON string in SQLite."""
+    cache_ok = True
 
 
 class JSONDict(JSONType):
     """Store Python dict as JSON string in SQLite."""
+    cache_ok = True
 
 
 # ── Base + Engine ────────────────────────────────────────────────────────────

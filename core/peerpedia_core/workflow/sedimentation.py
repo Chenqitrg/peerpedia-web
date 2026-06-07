@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 
 from peerpedia_core.config.params import params
+from peerpedia_core.storage.db.crud_article import get_article_authors
 from peerpedia_core.storage.db.models import Article
 
 
