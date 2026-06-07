@@ -48,13 +48,14 @@ const _draftsKey = '_t_drafts', _cacheKey = '_t_cache', _acctsKey = '_t_accts'
 const _followsKey = '_t_follows', _bookmarksKey = '_t_bookmarks'
 const _sessionsKey = '_t_sessions'
 
-/// Resolve a token to account_id in mock mode, or return the raw account_id if not found.
+/// Resolve a token to account_id in mock mode, or return a raw user identifier.
+/// Falls back through: token session lookup → account_id → follower_id → user_id.
 function _resolveToken(a: Record<string, unknown>, sessions: { token: string; account_id: string }[]): string | undefined {
   if (a.token) {
     const s = sessions.find(s => s.token === a.token)
-    return s?.account_id
+    if (s) return s.account_id
   }
-  return a.account_id as string | undefined
+  return (a.account_id as string) || (a.follower_id as string) || (a.user_id as string) || undefined
 }
 
 async function browserLocalInvoke(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
