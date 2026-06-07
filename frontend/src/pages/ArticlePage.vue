@@ -121,9 +121,6 @@ function buildArticleFromDraft(draft: { id: string; account_id: string; title: s
     fork_count: 0,
     forked_from: null,
     commit_count: 1,
-    compiled_format: draft.format,
-    compiled_output: draft.content,  // use raw content as compiled output
-    compiled_pages: null,
     score: null,
     sink_eta: null,
     days_remaining: null,
@@ -199,20 +196,13 @@ watch(() => route.params.id, async (newId) => {
 
 async function loadCompiledContent() {
   if (!article.value) return
-  let html = ''
-  if (article.value.compiled_output) {
-    html = article.value.compiled_output
-  } else {
-    try {
-      const src = await getArticleSource(id)
-      const result = await compilePreview({ content: src.content, format: src.format as 'markdown' | 'typst' })
-      html = result.output
-    } catch {
-      compiledHtml.value = ''
-      return
-    }
+  try {
+    const src = await getArticleSource(id)
+    const result = await compilePreview({ content: src.content, format: src.format as 'markdown' | 'typst' })
+    compiledHtml.value = renderMathInHtml(result.output)
+  } catch {
+    compiledHtml.value = ''
   }
-  compiledHtml.value = renderMathInHtml(html)
 }
 
 async function loadReviews() {

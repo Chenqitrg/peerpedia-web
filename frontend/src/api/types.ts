@@ -57,9 +57,6 @@ export interface ArticleDetail {
   fork_count: number
   forked_from: string | null
   commit_count: number
-  compiled_format: string | null
-  compiled_output: string | null
-  compiled_pages: number | null
   score: FiveDimScores | null
   sink_eta: string | null
   days_remaining: number | null
