@@ -290,10 +290,7 @@ pub struct GitShowParams {
 }
 
 #[tauri::command]
-pub fn git_show(
-    _state: State<'_, AppState>,
-    params: GitShowParams,
-) -> Result<String, AppError> {
+pub fn git_show(_state: State<'_, AppState>, params: GitShowParams) -> Result<String, AppError> {
     local_git::git_show(&params.article_id, &params.commit_hash)
 }
 

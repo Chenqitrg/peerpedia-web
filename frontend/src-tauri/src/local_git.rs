@@ -183,10 +183,7 @@ pub fn git_history(article_id: &str) -> Result<Vec<CommitEntry>, AppError> {
 // ── Show ─────────────────────────────────────────────────────────────────
 
 /// Return the content of an article file at a given commit.
-pub fn git_show(
-    article_id: &str,
-    commit_hash: &str,
-) -> Result<String, AppError> {
+pub fn git_show(article_id: &str, commit_hash: &str) -> Result<String, AppError> {
     let rp = repo_path(article_id)?;
 
     // Try .md first, then .typ
