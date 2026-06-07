@@ -97,6 +97,34 @@ describe('parseMarkdown', () => {
     expect(result).not.toContain('$$')
   })
 
+  it('renders $$x^2$$ as display math', () => {
+    const result = parseMarkdown('$$x^2$$')
+    // Use real parseMarkdown (not inline test) — returned HTML must be
+    // fully KaTeX-rendered, no raw $ leaking anywhere.
+    expect(result).toContain('katex-display')
+    expect(result).toContain('katex')
+    // No raw $ inside katex-display span (= renderMathInHtml failed)
+    expect(result).not.toMatch(/<span[^>]*katex-display[^>]*>\$/)
+    // No raw $ anywhere in output (= $$ became $ via String.replace)
+    expect(result).not.toMatch(/(?<!\\)\$(?!\$)/)
+  })
+
+  it('$$x^2$$ restoreMath preserves $$', async () => {
+    // Regression: String.replace() interprets $$ as literal $ in the
+    // replacement string. Verify restoreMath uses split/join instead.
+    const result = parseMarkdown('$$x^2$$')
+    expect(result).toContain('katex-display')
+    expect(result).toContain('katex')
+    // No raw $ in the output
+    expect(result).not.toMatch(/(?<!\\)\$(?!\$)/)
+  })
+
+  it('renders $$x^2 + y^2 = z^2$$ as display math', () => {
+    const result = parseMarkdown('$$\nx^2 + y^2 = z^2\n$$')
+    expect(result).toContain('katex-display')
+    expect(result).toContain('katex')
+  })
+
   it('placeholder survives marked parsing (no underscore emphasis)', () => {
     // Regression: marked's GFM interpreted _MATH_ in PEERPEDIA_MATH_D0 as
     // emphasis, breaking the placeholder. Now uses PEERPEDIA-MATH-D0 (hyphens).
