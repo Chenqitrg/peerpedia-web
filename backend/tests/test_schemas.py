@@ -59,7 +59,6 @@ class TestArticleDetail:
         )
         d = a.model_dump()
         assert d["review_count"] == 2
-        assert d["compiled_format"] == "html"
 
 
 class TestReviewOut:

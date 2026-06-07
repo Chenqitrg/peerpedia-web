@@ -1,5 +1,6 @@
 """Search API route — SQL-level filtering with file-based source fallback."""
 from fastapi import APIRouter, Depends, Query
+from peerpedia_core.storage.db.crud_article import get_article_authors
 from peerpedia_core.storage.db.models import Article
 from peerpedia_core.storage.git_backend import DEFAULT_ARTICLES_DIR
 from sqlalchemy import func, or_

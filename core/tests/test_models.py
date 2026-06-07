@@ -89,28 +89,24 @@ class TestArticle:
         assert a2.score["originality"] == 4.0
         session.close()
 
-    def test_compiled_cache_for_html(self, engine):
+    def test_article_authors_join_table(self, engine):
+        """ArticleAuthor table replaces the old JSON authors field."""
         session = get_session(engine)
         user = _make_user(session, "u4")
-        a = Article(status="published", authors=[user.id],
-                    )
-        session.add(a)
-        session.commit()
-        a2 = session.get(Article, a.id)
-        assert a2.compiled_format == "html"
-        # compiled_output removed
+        article = _make_article(session, status="published", authors=[user.id])
+        a2 = session.get(Article, article.id)
+        author_ids = get_article_authors(session, a2.id)
+        assert author_ids == [user.id]
         session.close()
 
-    def test_compiled_cache_for_svg(self, engine):
+    def test_article_authors_multiple(self, engine):
+        """ArticleAuthor preserves author order via position field."""
         session = get_session(engine)
-        user = _make_user(session, "u5")
-        a = Article(status="published", authors=[user.id],
-                    )
-        session.add(a)
-        session.commit()
-        a2 = session.get(Article, a.id)
-        assert a2.compiled_format == "svg"
-        # compiled_pages removed
+        u1 = _make_user(session, "u5a")
+        u2 = _make_user(session, "u5b")
+        article = _make_article(session, status="published", authors=[u1.id, u2.id])
+        author_ids = get_article_authors(session, article.id)
+        assert author_ids == [u1.id, u2.id]
         session.close()
 
     def test_fork_tracking(self, engine):
@@ -203,24 +199,27 @@ class TestReview:
             session.commit()
         session.close()
 
-    def test_thread_stored_as_dict_list(self, engine):
+    def test_review_message_crud(self, engine):
+        """Review.thread JSON replaced by ReviewMessage table with proper CRUD."""
+        from peerpedia_core.storage.db.crud_review import add_thread_message, get_thread_messages
+        from peerpedia_core.storage.db.models import ReviewMessage
         session = get_session(engine)
         author = _make_user(session, "au2")
         reviewer = _make_user(session, "rv2")
         article = _make_article(session, status="published", authors=[author.id])
-        msg = ThreadMessage(author_id=reviewer.id, content="需要补充证明。")
         review = Review(
             article_id=article.id, commit_hash="abc", reviewer_id=reviewer.id,
             scope="published", scores={"originality": 3, "rigor": 3, "completeness": 3,
                                         "pedagogy": 3, "impact": 3},
-            thread=[msg.to_dict()],
         )
         session.add(review)
         session.commit()
-        r = session.get(Review, review.id)
-        assert len(r.thread) == 1
-        assert r.thread[0]["author_id"] == reviewer.id
-        assert "证明" in r.thread[0]["content"]
+        # Add thread messages via new API
+        add_thread_message(session, review_id=review.id, author_id=reviewer.id, content="需要补充证明。")
+        msgs = get_thread_messages(session, review.id)
+        assert len(msgs) == 1
+        assert msgs[0].author_id == reviewer.id
+        assert "证明" in msgs[0].content
         session.close()
 
     def test_self_review_is_just_a_review(self, engine):
@@ -234,7 +233,7 @@ class TestReview:
         )
         session.add(review)
         session.commit()
-        assert review.reviewer_id in article.authors  # 这就是自评
+        assert review.reviewer_id in get_article_authors(session, article.id)  # self-review
         session.close()
 
     def test_review_updated_at_updates_on_change(self, engine):
@@ -362,7 +361,8 @@ class TestMergeProposal:
         # thread field removed — see ReviewMessage
         session.close()
 
-    def test_merge_thread(self, engine):
+    def test_merge_proposal_no_thread(self, engine):
+        """MergeProposal works without the deprecated thread field."""
         session = get_session(engine)
         author = _make_user(session, "oa2")
         forker = _make_user(session, "fo2")
@@ -372,15 +372,12 @@ class TestMergeProposal:
         mp = MergeProposal(
             fork_article_id=fork.id, target_article_id=original.id,
             proposer_id=forker.id, status="open",
-            thread=[
-                ThreadMessage(author_id=forker.id, content="请求合并，补充了第三章。").to_dict(),
-                ThreadMessage(author_id=author.id, content="收到，我看看。").to_dict(),
-            ],
         )
         session.add(mp)
         session.commit()
         m2 = session.get(MergeProposal, mp.id)
-        assert len(m2.thread) == 2
+        assert m2.status == "open"
+        assert m2.fork_article_id == fork.id
         session.close()
 
     def test_valid_statuses(self, engine):

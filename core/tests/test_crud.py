@@ -3,6 +3,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 from peerpedia_core.storage.db.engine import get_session
+from peerpedia_core.storage.db.crud_article import get_article_authors
 from peerpedia_core.storage.db.models import (
     Article,
     Review,
@@ -81,20 +82,8 @@ class TestArticleCRUD:
         session.close()
 
     def test_update_article_compiled_cache(self, engine):
-        from peerpedia_core.storage.db.crud_article import (
-            create_article,
-            get_article,
-            update_article_compiled,
-        )
-        session = get_session(engine)
-        user = _make_user(session, "author5")
-        a = create_article(session, author_ids=[user.id])
-        update_article_compiled(session, a.id, html_format="html",
-                                output="<h1>Hi</h1>", pages=None)
-        a2 = get_article(session, a.id)
-        assert a2.compiled_format == "html"
-        # compiled_output removed
-        session.close()
+        # update_article_compiled removed — compile is now on-demand with file cache
+        pass
 
     def test_increment_fork_count(self, engine):
         from peerpedia_core.storage.db.crud_article import (
@@ -295,10 +284,11 @@ class TestReviewCRUD:
                           reviewer_id=rv.id, scope="pool", scores=_default_scores())
         from peerpedia_core.types.messages import ThreadMessage
         msg = ThreadMessage(author_id=author.id, content="谢谢指出，已修改。")
-        add_thread_message(session, r.id, msg.to_dict())
-        updated = session.get(Review, r.id)
-        assert len(updated.thread) == 1
-        assert "谢谢指出" in updated.thread[0]["content"]
+        add_thread_message(session, review_id=r.id, author_id=msg.author_id, content=msg.content)
+        from peerpedia_core.storage.db.crud_review import get_thread_messages
+        msgs = get_thread_messages(session, r.id)
+        assert len(msgs) == 1
+        assert "谢谢指出" in msgs[0].content
         session.close()
 
 
@@ -473,7 +463,6 @@ class TestMergeProposalCRUD:
 
     def test_add_thread_message(self, engine):
         from peerpedia_core.storage.db.crud_merge import (
-            add_merge_thread_message,
             create_merge_proposal,
             get_merge_proposal,
         )
@@ -485,11 +474,9 @@ class TestMergeProposalCRUD:
         mp = create_merge_proposal(session, fork_id=fork.id,
                                     target_id=original.id,
                                     proposer_id=forker.id)
-        from peerpedia_core.types.messages import ThreadMessage
-        msg = ThreadMessage(author_id=forker.id, content="请审阅合并。")
-        add_merge_thread_message(session, mp.id, msg.to_dict())
+        # add_merge_thread_message removed — MergeProposal thread deferred per plan
         updated = get_merge_proposal(session, mp.id)
-        assert len(updated.thread) == 1
+        assert updated.status == "open"
         session.close()
 
     def test_create_merge_proposal_rejects_self(self, engine):
@@ -521,8 +508,8 @@ class TestCitationCRUD:
         a1 = _make_article(session, authors=[author.id])
         a2 = _make_article(session, authors=[author.id])
         a3 = _make_article(session, authors=[author.id])
-        create_or_update_citation(session, a1.id, a2.id, forward=0.5, backward=0.2)
-        create_or_update_citation(session, a1.id, a3.id, forward=0.3, backward=0.1)
+        create_or_update_citation(session, a1.id, a2.id)
+        create_or_update_citation(session, a1.id, a3.id)
         cites = get_cites(session, a1.id)
         assert len(cites) == 2
         cited_by = get_cited_by(session, a2.id)
@@ -539,13 +526,11 @@ class TestCitationCRUD:
         author = _make_user(session, "cp_au")
         a1 = _make_article(session, authors=[author.id])
         a2 = _make_article(session, authors=[author.id])
-        create_or_update_citation(session, a1.id, a2.id, forward=0.1, backward=0.1)
-        c = get_citation(session, a1.id, a2.id)
-        # prob field removed
-        # 更新
-        create_or_update_citation(session, a1.id, a2.id, forward=0.9, backward=0.05)
-        c2 = get_citation(session, a1.id, a2.id)
-        # prob field removed
+        c = create_or_update_citation(session, a1.id, a2.id)
+        assert c is not None
+        # prob fields removed from Citation
+        c2 = create_or_update_citation(session, a1.id, a2.id)
+        assert c2 is not None
         session.close()
 
     def test_create_or_update_citation_rejects_self_reference(self, engine):
