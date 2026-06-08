@@ -94,9 +94,13 @@ onMounted(() => {
   if (isEdit.value) {
     loadExistingArticle()
   } else {
-    // New article: restore any previously-saved draft.
-    // Cross-user leak prevention is handled in registerLocal and clear().
-    restoreDraft()
+    // New article: do NOT restore DRAFT_ID_KEY from localStorage — that would
+    // resurrect a draft from a previous session when the user explicitly
+    // clicked "New Article". Drafts are accessible from the UserPage profile.
+    // The save button will create a fresh draft on first click.
+    remove(DRAFT_ID_KEY.value)
+    remove(DRAFT_KEY.value)
+    currentDraftId.value = undefined
   }
 })
 
