@@ -89,9 +89,9 @@ onMounted(() => {
   if (isEdit.value) {
     loadExistingArticle()
   } else {
-    // New article: clear any stale draft keys from previous sessions
-    remove(DRAFT_ID_KEY.value)
-    remove(`editor-draft-id-${draftUid.value}-new`)
+    // New article: restore any previously-saved draft.
+    // Cross-user leak prevention is handled in registerLocal and clear().
+    restoreDraft()
   }
 })
 
