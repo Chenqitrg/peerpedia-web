@@ -344,7 +344,6 @@ describe('EditorPage', () => {
   // Regression: new article must always start fresh, never restore old draft
   it('starts fresh for new article even when localStorage has stale draft', async () => {
     _isTauri = true
-    // Simulate: localStorage has a draft from a previous session
     localStorage.setItem('editor-draft-id-u1-new', 'old-draft-id')
     localStorage.setItem('editor-draft-u1-new', JSON.stringify({ title: 'Old Draft', content: '# Old content' }))
 
@@ -360,15 +359,12 @@ describe('EditorPage', () => {
     await new Promise(r => setTimeout(r, 200))
     const vm = wrapper.vm as any
 
-    // Must start fresh — no restoring of old draft
     expect(vm.currentDraftId).toBeUndefined()
     expect(vm.title).toBe('')
     expect(vm.content).toBe('')
-    // Stale keys must be cleared from localStorage
     expect(localStorage.getItem('editor-draft-id-u1-new')).toBeNull()
     expect(localStorage.getItem('editor-draft-u1-new')).toBeNull()
   })
-
   // Regression: confirmSaveWithCommit sets commit message and saves
   it('confirmSaveWithCommit saves after setting commit message', async () => {
     _isTauri = true
