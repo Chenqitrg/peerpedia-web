@@ -29,6 +29,17 @@ export const useUserStore = defineStore('user', () => {
   isTauriMode.value = tauri.isTauri.value
   isBrowserLocal.value = tauri.isBrowserLocal.value
 
+  // Restore session token immediately (sync) from localStorage, before any
+  // async operation or component mount. Without this, page components that
+  // load data during setup will call Tauri commands with a null token.
+  if (isLocalMode()) {
+    const savedToken = loadString('peerpedia_local_token')
+    if (savedToken) {
+      localToken.value = savedToken
+      tauri.setSessionToken(savedToken)
+    }
+  }
+
   // Local mode: real Tauri desktop app OR browser dev mock.
   function isLocalMode() {
     return isTauriMode.value || isBrowserLocal.value
