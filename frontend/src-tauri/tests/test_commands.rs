@@ -89,6 +89,32 @@ fn test_token_list_drafts_flow() {
 }
 
 #[test]
+fn test_get_draft_backward_compat_no_token() {
+    /// Regression: ArticlePage calls getDraft({ id }) without token in Tauri mode.
+    /// Must work because GetDraftParams.token is now optional.
+    let conn = setup();
+
+    let account =
+        peerpedia::local_auth::create_account(&conn, "reader", "pass", "", "Reader").unwrap();
+
+    let draft = peerpedia::local_store::save_draft(
+        &conn,
+        None,
+        &account.id,
+        "ArticlePage Draft",
+        "# Hello from local draft",
+        "markdown",
+    )
+    .unwrap();
+
+    // Simulate ArticlePage.loadArticle: getDraft({ id: draftId }) — no token.
+    let loaded = peerpedia::local_store::get_draft(&conn, &draft.id).unwrap();
+    assert_eq!(loaded.id, draft.id);
+    assert_eq!(loaded.title, "ArticlePage Draft");
+    assert_eq!(loaded.account_id, account.id);
+}
+
+#[test]
 fn test_list_drafts_backward_compat_account_id() {
     /// Regression: after we added token-based auth, listDrafts must still work
     /// with a bare account_id when no token is available (e.g., edge case
