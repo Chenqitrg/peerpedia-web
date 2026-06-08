@@ -310,6 +310,67 @@ describe('EditorPage', () => {
     expect(vm.currentDraftId).toBeTruthy()
   })
 
+  // Regression: history icon shows after first save on new article
+  it('shows history link after saving a new draft', async () => {
+    _isTauri = true
+    const { useUserStore } = await import('../../stores/useUserStore')
+    setActivePinia(createPinia())
+    const userStore = useUserStore()
+    userStore.viewer = { id: 'u1', name: 'Alice Chen', username: 'alice' } as any
+
+    const EditorPage = (await import('../EditorPage.vue')).default
+    const wrapper = mount(EditorPage, {
+      global: { stubs: { 'router-link': RouterLinkStub, 'router-view': true } },
+    })
+    await new Promise(r => setTimeout(r, 50))
+    const vm = wrapper.vm as any
+
+    // Before save: no history link (isEdit=false, no currentDraftId)
+    expect(wrapper.find('[aria-label="History"]').exists()).toBe(false)
+
+    // Save a new draft
+    vm.title = 'History Test'
+    vm.content = '# Test'
+    vm.commitMsg = 'first'
+    await vm.saveDraft()
+    await new Promise(r => setTimeout(r, 50))
+
+    // After save: history link should appear (currentDraftId is set)
+    const historyLink = wrapper.find('[aria-label="History"]')
+    expect(historyLink.exists()).toBe(true)
+    expect(vm.currentDraftId).toBeTruthy()
+  })
+
+  // Regression: stale draft ID in localStorage is cleared when draft deleted
+  it('clears stale draft keys when saved draft no longer exists', async () => {
+    _isTauri = true
+    // Simulate: localStorage has a draft ID, but the draft was deleted
+    localStorage.setItem('editor-draft-id-u1-new', 'deleted-draft-id')
+    localStorage.setItem('editor-draft-u1-new', JSON.stringify({ title: 'Stale', content: '# Stale content' }))
+
+    // Mock getDraft to return error (draft not found)
+    mockGetDraft.mockResolvedValue({ error: 'Draft not found' })
+
+    const { useUserStore } = await import('../../stores/useUserStore')
+    setActivePinia(createPinia())
+    const userStore = useUserStore()
+    userStore.viewer = { id: 'u1', name: 'Alice Chen', username: 'alice' } as any
+
+    const EditorPage = (await import('../EditorPage.vue')).default
+    const wrapper = mount(EditorPage, {
+      global: { stubs: { 'router-link': RouterLinkStub, 'router-view': true } },
+    })
+    await new Promise(r => setTimeout(r, 200))
+    const vm = wrapper.vm as any
+
+    // Draft should NOT have been restored (stale keys cleared)
+    expect(vm.currentDraftId).toBeUndefined()
+    expect(vm.title).toBe('')  // Fresh editor
+    expect(vm.content).toBe('')  // Fresh editor
+    // Stale keys should be removed from localStorage
+    expect(localStorage.getItem('editor-draft-id-u1-new')).toBeNull()
+  })
+
   // Regression: confirmSaveWithCommit sets commit message and saves
   it('confirmSaveWithCommit saves after setting commit message', async () => {
     _isTauri = true
