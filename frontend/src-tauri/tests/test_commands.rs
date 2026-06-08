@@ -89,6 +89,37 @@ fn test_token_list_drafts_flow() {
 }
 
 #[test]
+fn test_list_drafts_backward_compat_account_id() {
+    /// Regression: after we added token-based auth, listDrafts must still work
+    /// with a bare account_id when no token is available (e.g., edge case
+    /// during store init before restoreSession completes).
+    let conn = setup();
+
+    let account =
+        peerpedia::local_auth::create_account(&conn, "writer2", "pass", "", "Writer2").unwrap();
+
+    peerpedia::local_store::save_draft(
+        &conn,
+        None,
+        &account.id,
+        "Backward Compat Draft",
+        "# Test",
+        "markdown",
+    )
+    .unwrap();
+
+    // Call list_drafts directly with account_id — no token.
+    // This simulates the frontend sending { account_id: 'xxx' } without token.
+    let drafts = peerpedia::local_store::list_drafts(&conn, &account.id).unwrap();
+    assert_eq!(
+        drafts.len(),
+        1,
+        "list_drafts with bare account_id must work"
+    );
+    assert_eq!(drafts[0].title, "Backward Compat Draft");
+}
+
+#[test]
 fn test_full_draft_flow() {
     let conn = setup();
 
