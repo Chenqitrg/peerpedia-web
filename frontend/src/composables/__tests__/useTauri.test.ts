@@ -498,4 +498,38 @@ describe('useTauri — session token sharing', () => {
     expect(drafts).toHaveLength(1)
     expect(drafts[0].title).toBe('Backward Compat Draft')
   })
+
+  it('full login→save→pageRefresh→list cycle (simulates user flow)', async () => {
+    // Phase 1: Initial login
+    const tauri1 = useTauri()
+    await tauri1.createAccount({ username: 'carol', password: 's3cret', email: '', name: 'Carol' })
+    const login = await tauri1.login({ username: 'carol', password: 's3cret' }) as any
+    const aid = login.id
+    const tok = login.token
+
+    // Simulate useUserStore.loginLocal: save token, set session
+    tauri1.setSessionToken(tok)
+    localStorage.setItem('peerpedia_local_token', tok)
+    // Also save the viewer so store.init can find it
+    const viewer = { id: aid, username: 'carol', name: 'Carol' }
+    localStorage.setItem('viewer', JSON.stringify(viewer))
+
+    // Phase 2: Save a draft (simulates EditorPage)
+    const saved = await tauri1.saveDraft({ account_id: aid, title: 'Test Draft', content: '# Hi', format: 'markdown' }) as any
+    expect(saved).toHaveProperty('id')
+
+    // Phase 3: Simulate page REFRESH — the module-level _sessionToken resets
+    // to null. The store.init re-reads from localStorage and calls
+    // setSessionToken (simulated here).
+    const tauri2 = useTauri()
+    const restoredToken = localStorage.getItem('peerpedia_local_token')
+    expect(restoredToken).toBe(tok)
+    tauri2.setSessionToken(restoredToken)
+
+    // Phase 4: UserPage.loadArticles — list drafts
+    const drafts = await tauri2.listDrafts({ account_id: aid })
+    expect(Array.isArray(drafts)).toBe(true)
+    expect(drafts.length).toBeGreaterThanOrEqual(1)
+    expect(drafts[0].title).toBe('Test Draft')
+  })
 })
