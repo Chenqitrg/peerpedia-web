@@ -341,15 +341,12 @@ describe('EditorPage', () => {
     expect(vm.currentDraftId).toBeTruthy()
   })
 
-  // Regression: stale draft ID in localStorage is cleared when draft deleted
-  it('clears stale draft keys when saved draft no longer exists', async () => {
+  // Regression: new article must always start fresh, never restore old draft
+  it('starts fresh for new article even when localStorage has stale draft', async () => {
     _isTauri = true
-    // Simulate: localStorage has a draft ID, but the draft was deleted
-    localStorage.setItem('editor-draft-id-u1-new', 'deleted-draft-id')
-    localStorage.setItem('editor-draft-u1-new', JSON.stringify({ title: 'Stale', content: '# Stale content' }))
-
-    // Mock getDraft to return error (draft not found)
-    mockGetDraft.mockResolvedValue({ error: 'Draft not found' })
+    // Simulate: localStorage has a draft from a previous session
+    localStorage.setItem('editor-draft-id-u1-new', 'old-draft-id')
+    localStorage.setItem('editor-draft-u1-new', JSON.stringify({ title: 'Old Draft', content: '# Old content' }))
 
     const { useUserStore } = await import('../../stores/useUserStore')
     setActivePinia(createPinia())
@@ -363,12 +360,13 @@ describe('EditorPage', () => {
     await new Promise(r => setTimeout(r, 200))
     const vm = wrapper.vm as any
 
-    // Draft should NOT have been restored (stale keys cleared)
+    // Must start fresh — no restoring of old draft
     expect(vm.currentDraftId).toBeUndefined()
-    expect(vm.title).toBe('')  // Fresh editor
-    expect(vm.content).toBe('')  // Fresh editor
-    // Stale keys should be removed from localStorage
+    expect(vm.title).toBe('')
+    expect(vm.content).toBe('')
+    // Stale keys must be cleared from localStorage
     expect(localStorage.getItem('editor-draft-id-u1-new')).toBeNull()
+    expect(localStorage.getItem('editor-draft-u1-new')).toBeNull()
   })
 
   // Regression: confirmSaveWithCommit sets commit message and saves
