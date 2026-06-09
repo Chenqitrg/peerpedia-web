@@ -33,9 +33,6 @@ class Article(Base):
     categories = Column(JSONList, nullable=True)
     status = Column(String, nullable=False, default="draft")  # draft|sedimentation|published
     score = Column(JSONDict, nullable=True)                    # FiveDimScores as dict
-    compiled_format = Column(String, nullable=True)            # "html" | "svg"
-    compiled_output = Column(String, nullable=True)            # single-page result
-    compiled_pages = Column(JSONList, nullable=True)           # list[str] for multi-page SVG
     sink_start = Column(DateTime, nullable=True)
     sink_duration_days = Column(Integer, nullable=False, default=7)
     sink_extended_count = Column(Integer, nullable=False, default=0)

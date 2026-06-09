@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, Query
 from peerpedia_core.storage.db.models import Article
 from peerpedia_core.storage.git_backend import DEFAULT_ARTICLES_DIR
-from sqlalchemy import func, or_
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from sqlalchemy.types import String
 
@@ -54,12 +54,12 @@ def search(
 
     - Category: SQL LIKE on JSON categories column (case-insensitive)
     - Title: SQL ILIKE (case-insensitive)
-    - Content: SQL ILIKE on compiled_output + file-based source fallback
+    - Content: title ILIKE + file-based source fallback
     - Sort: SQL ORDER BY (newest → created_at DESC, score → avg score DESC)
     - Pagination: SQL LIMIT/OFFSET with accurate total count
 
     Source file fallback: when a text query is provided, articles that don't
-    match via title/compiled_output are checked against their source files.
+    match via title are checked against their source files.
     This is limited to _MAX_SOURCE_SCAN candidates to avoid scanning every
     article in the database.
     """
@@ -78,12 +78,11 @@ def search(
             func.lower(Article.categories.cast(String)).contains(category_lower)
         )
 
-    # ── Text search: title + compiled_output (SQL) ────────────────────
+    # ── Text search: title (SQL) ──────────────────────────────────────
     if q_lower:
-        query = base.filter(or_(
+        query = base.filter(
             Article.title.ilike(f'%{q_lower}%'),
-            Article.compiled_output.ilike(f'%{q_lower}%'),
-        ))
+        )
     else:
         query = base
 
@@ -100,8 +99,7 @@ def search(
 
     # ── File-based source fallback ────────────────────────────────────
     # Only activated when text query is provided and SQL results are
-    # fewer than requested (suggesting some matches may be in source files
-    # whose compiled_output is NULL).
+    # fewer than requested (suggesting some matches may be in source files).
     if q_lower and len(results) < size:
         # Gather IDs we already have (SQL matches).
         already = {a.id for a in results}
