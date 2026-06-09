@@ -25,6 +25,11 @@ Share any article via a portable file or link.
 | **Syntax highlighting** | Integrate CodeMirror 6. Markdown mode + Typst mode. Line numbers, bracket matching. |
 | **Auto-complete & indentation** | CodeMirror plugins for Markdown references, Typst functions, smart indent. |
 | **Auto-save** | Debounced save (2s after last keystroke) via `useDraftPersistence`. "Saving…" / "Saved" indicator. |
+| **✅ Save-as-commit** | 每个保存 = Git commit。Tauri 模式下每次保存都弹出提交信息窗口，`commitMsg` 在每次提交后清空。 |
+| **✅ Save button state** | 无未保存更改时保存按钮变灰（`disabled:opacity-30`），`isClean` 计算属性比对内容/标题。 |
+| **✅ Diff word highlighting** | LCS 逐词差异高亮：删除词红色背景+删除线（`.diff-word-del`），新增词绿色背景（`.diff-word-add`）。过滤 `\ No newline` 标记避免破坏配对。 |
+| **✅ Typst PDF download** | 编译后下载按钮调用 `/compile-download` API → PDF。预览用 SVG，下载用 PDF。 |
+| **✅ Typst article preview** | 文章页从源文件检测格式（而非永不填充的 `compiled_format` 列），Typst 编译为 SVG 渲染。 |
 
 ### Distribute & Get Feedback · 分发与评测 (P0)
 
@@ -57,13 +62,18 @@ Share any article via a portable file or link.
 
 ### ✅ Phase 1.5 Completed
 
-| Feature | Commit |
-|---------|--------|
+| Feature | Commit / PR |
+|---------|-------------|
 | Delete articles | `4cce509` |
-| Diff view (side-by-side) | `6164305` |
+| Diff view (side-by-side + word-level highlighting) | `6164305`, #19 |
 | Draft search (FTS5) | `6164305` |
 | Typst SVG preview (▶ button) | `0d226ca` |
-| Editor UX (keep-alive, split pane — partial) | `9640323` |
+| Typst PDF download | #17, #19 |
+| Typst article page preview | #18 |
+| Editor UX (keep-alive, split pane, save states, per-save commit) | `9640323`, #17, #19 |
+| Save button disabled when clean | #17 |
+| Commit message popup per save | #19 |
+| `danger` color + diff word highlighting | #17, #19 |
 | Mutex deadlock fix | `49fabeb` |
 
 ---
