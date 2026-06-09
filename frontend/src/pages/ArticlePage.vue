@@ -205,8 +205,7 @@ async function loadArticle(articleId: string) {
       if (draft && !('error' in draft)) {
         const draftData = draft as { id: string; account_id: string; title: string; content: string; format: string; updated_at: string }
         article.value = buildArticleFromDraft(draftData)
-        const { parseMarkdown } = await import('../utils/markdown')
-        compiledHtml.value = parseMarkdown(draft.content || '')
+        await loadCompiledContent()
         // Populate commit hash from local git
         try {
           const history = await tauri.gitHistory({ article_id: articleId })
@@ -254,70 +253,75 @@ watch(() => route.params.id, async (newId) => {
 async function loadCompiledContent() {
   if (!article.value) return
   const isLocal = tauri.isTauri.value || tauri.isBrowserLocal.value
-  const fmt = article.value.compiled_format || 'markdown'
-  const isTypst = fmt === 'typst' || fmt === 'svg' || fmt === 'typst-svg' || fmt === 'typst-pdf'
+
+  let srcContent: string
+  let srcFormat: string
+
+  // In local/Tauri mode, content and format come from the draft cache
+  // (set by buildArticleFromDraft). No REST server available offline.
+  if (isLocal) {
+    srcContent = article.value.compiled_output || ''
+    srcFormat = article.value.compiled_format || 'markdown'
+  } else {
+    // Web mode: fetch source from server to determine real format.
+    // compiled_format is never populated in the DB (on-demand compile).
+    try {
+      const src = await getArticleSource(id)
+      srcContent = src.content
+      srcFormat = src.format
+    } catch {
+      compiledHtml.value = ''
+      return
+    }
+  }
+  const isTypst = srcFormat === 'typst'
 
   // ── Typst articles ────────────────────────────────────────────────
   if (isTypst) {
     if (isLocal) {
-      // Local mode: use Tauri IPC to compile Typst → SVG
-      const raw = article.value.compiled_output || ''
-      if (raw) {
-        try {
-          const result = await tauri.compileTypst({ content: raw, format: 'typst' })
-          if (result && typeof result === 'string') {
-            compiledHtml.value = `<div class="typst-preview">${result}</div>`
-          } else if (result && typeof result === 'object' && 'error' in result) {
-            compiledHtml.value = `<div class="typst-preview-error text-[#d73a49] p-4 font-mono text-sm">${(result as { error: string }).error}</div>`
-          }
-        } catch {
-          compiledHtml.value = ''
+      try {
+        const result = await tauri.compileTypst({ content: srcContent, format: 'typst' })
+        if (result && typeof result === 'string') {
+          compiledHtml.value = `<div class="typst-preview">${result}</div>`
+        } else if (result && typeof result === 'object' && 'error' in result) {
+          compiledHtml.value = `<div class="typst-preview-error text-[#d73a49] p-4 font-mono text-sm">${(result as { error: string }).error}</div>`
         }
+      } catch {
+        compiledHtml.value = ''
       }
       return
     }
 
-    // Web mode: request SVG via compile-preview API
+    // Web mode: compile Typst → SVG via server API
     try {
-      const src = await getArticleSource(id)
-      const result = await compilePreview({ content: src.content, format: 'typst' })
-      // SVG output — skip renderMathInHtml (it's SVG, not HTML with KaTeX)
-      if (result.format === 'svg') {
-        compiledHtml.value = result.output
-      } else {
-        compiledHtml.value = result.output
-      }
+      const result = await compilePreview({ content: srcContent, format: 'typst' })
+      compiledHtml.value = result.output  // SVG — skip renderMathInHtml
     } catch {
       compiledHtml.value = ''
     }
     return
   }
 
-  // ── Markdown articles (existing flow) ─────────────────────────────
+  // ── Markdown articles ─────────────────────────────────────────────
   if (isLocal) {
-    const raw = article.value.compiled_output || ''
-    if (raw) {
+    if (srcContent) {
       const { parseMarkdown } = await import('../utils/markdown')
-      compiledHtml.value = parseMarkdown(raw)
+      compiledHtml.value = parseMarkdown(srcContent)
     }
     return
   }
 
-  // Web mode: server returns pre-compiled HTML with katex spans.
-  let html = ''
+  // Web mode: prefer server-side compiled_output, else compile via API
   if (article.value.compiled_output) {
-    html = article.value.compiled_output
+    compiledHtml.value = renderMathInHtml(article.value.compiled_output)
   } else {
     try {
-      const src = await getArticleSource(id)
-      const result = await compilePreview({ content: src.content, format: src.format as 'markdown' | 'typst' })
-      html = result.output
+      const result = await compilePreview({ content: srcContent, format: 'markdown' })
+      compiledHtml.value = renderMathInHtml(result.output)
     } catch {
       compiledHtml.value = ''
-      return
     }
   }
-  compiledHtml.value = renderMathInHtml(html)
 }
 
 async function loadReviews() {
