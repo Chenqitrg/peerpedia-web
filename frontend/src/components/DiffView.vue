@@ -87,11 +87,14 @@ function backtrackInsertions(a: string[], b: string[], dp: number[][]): Set<numb
 /** Render deleted line content with word-level highlighting by comparing against
  *  the corresponding added line. Returns HTML string. */
 function highlightDeletedWords(delContent: string, addContent: string | null): string {
-  if (!addContent) return escapeHtml(delContent)
+  if (!addContent) return `<span class="diff-word-del">${escapeHtml(delContent)}</span>`
   const delTokens = tokenize(delContent)
   const addTokens = tokenize(addContent)
   const dp = lcsTable(delTokens, addTokens)
   const deleted = backtrackDeletions(delTokens, addTokens, dp)
+  // Only apply word-level highlighting when there's a meaningful partial diff
+  // (at least one token matches and at least one token differs)
+  if (deleted.size === 0) return escapeHtml(delContent)
   return delTokens.map((t, i) =>
     deleted.has(i) ? `<span class="diff-word-del">${escapeHtml(t)}</span>` : escapeHtml(t)
   ).join('')
@@ -100,11 +103,13 @@ function highlightDeletedWords(delContent: string, addContent: string | null): s
 /** Render added line content with word-level highlighting by comparing against
  *  the corresponding deleted line. Returns HTML string. */
 function highlightAddedWords(addContent: string, delContent: string | null): string {
-  if (!delContent) return escapeHtml(addContent)
+  if (!delContent) return `<span class="diff-word-add">${escapeHtml(addContent)}</span>`
   const addTokens = tokenize(addContent)
   const delTokens = tokenize(delContent)
   const dp = lcsTable(delTokens, addTokens)
   const inserted = backtrackInsertions(delTokens, addTokens, dp)
+  // Only apply word-level highlighting when there's a meaningful partial diff
+  if (inserted.size === 0) return escapeHtml(addContent)
   return addTokens.map((t, i) =>
     inserted.has(i) ? `<span class="diff-word-add">${escapeHtml(t)}</span>` : escapeHtml(t)
   ).join('')
@@ -114,11 +119,18 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
+/** Check if a line is a git "no newline" marker that should be hidden. */
+function isNoNewline(line: DiffLine): boolean {
+  return line.content.startsWith('\\ ') && line.content.includes('No newline')
+}
+
 /** Process hunk lines to produce word-highlighted HTML content.
  *  Pairs consecutive del/add runs for word-level diff. */
 function processedHunks(hunks: DiffHunk[]): ProcessedHunk[] {
   return hunks.map(hunk => {
-    const lines = hunk.lines
+    // Filter out git noise lines that break del↔add pairing
+    const lines = hunk.lines.filter(l => !isNoNewline(l))
+    if (lines.length === 0) return { ...hunk, lines: [] }
     const processed: ProcessedHunk['lines'] = lines.map(l => ({
       ...l,
       displayContent: escapeHtml(l.content),

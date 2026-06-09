@@ -244,6 +244,12 @@ async function saveDraft() {
   savedTitle.value = title.value
   savedMsg.value = true
   setTimeout(() => { savedMsg.value = false }, 2000)
+
+  // Clear commit message after each save so the popup reopens next time.
+  // In Tauri/local mode every save is a git commit and needs a fresh message.
+  if (tauri.isTauri.value || tauri.isBrowserLocal.value) {
+    commitMsg.value = ''
+  }
 }
 
 async function handleCompile() {

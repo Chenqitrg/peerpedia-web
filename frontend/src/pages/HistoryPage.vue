@@ -149,7 +149,7 @@ function parseUnifiedDiff(diffText: string, files: string[]): DiffResult {
           new_lineno: null,
         })
         oldLine++
-      } else if (!line.startsWith('diff --git') && !line.startsWith('index ') && !line.startsWith('---') && !line.startsWith('+++')) {
+      } else if (!line.startsWith('diff --git') && !line.startsWith('index ') && !line.startsWith('---') && !line.startsWith('+++') && !line.startsWith('\\ ')) {
         currentHunk.lines.push({
           line_type: 'ctx',
           content: line,
