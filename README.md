@@ -29,8 +29,8 @@ arXiv solved **distribution**. But it didn't solve **filtering** — the problem
 **Phase 1 — Tauri Desktop（冷启动）✅**
 A better notebook. Offline Markdown/Typst writing + Git version control + local SQLite. 5MB install, 30MB RAM. Useful alone — the key to cold-start users.
 
-**Phase 1.5 — Polish & Ship（打磨分发）🚧**
-Delete, diff view, Typst SVG preview, draft search, editor UX. Make the desktop app solid enough to distribute.
+**Phase 1.5 — Polish & Ship（打磨分发）✅**
+Delete, diff view (with word-level highlighting), Typst SVG preview + PDF download, draft search, editor UX (save-as-commit, per-save commit message, disabled-when-clean save button). Desktop app is solid.
 
 **Phase 2 — Score arXiv（包围城市）**
 Community scoring layer on top of preprints. A quality filter that doesn't belong to any publisher.
@@ -218,7 +218,7 @@ peerpedia/
 # Backend (120 tests)
 python -m pytest backend/tests/ core/tests/ -q
 
-# Frontend (252 tests)
+# Frontend (327 tests)
 cd frontend && npx vitest run
 
 # Rust (53 tests)
@@ -236,7 +236,7 @@ See [`docs/plan_reshape.md`](docs/plan_reshape.md) for the detailed engineering 
 | Phase | Focus | Status |
 |-------|-------|--------|
 | **1 — Desktop MVP** | Offline writing, local git, session auth, profile with drafts | ✅ Done |
-| **1.5 — Polish & Ship** | Delete, diff view, Typst SVG preview, FTS5 draft search, editor UX | 🚧 In progress |
+| **1.5 — Polish & Ship** | Delete, word-level diff, Typst SVG+PDF, FTS5 search, editor UX, per-save commit | ✅ Done |
 | **2 — Score arXiv** | Community scoring, sedimentation pool, reputation | 🔜 Next |
 | **3 — P2P Network** | Content-addressed storage, peer-to-peer distribution | 🔮 Future |
 

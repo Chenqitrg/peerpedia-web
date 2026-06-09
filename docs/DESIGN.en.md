@@ -69,7 +69,9 @@ Phase 1 desktop is fully offline-capable:
 - **Network status**: `useNetworkStatus` with Wifi/WifiOff icon. Starts offline, flips online on first successful ping — no 60s window where offline features incorrectly appear accessible.
 - **Network-blocked features**: `useOffline` permanently blocks pool, schools, and search.network in local/Tauri mode. These features show a disabled state (grayed icons with tooltip), not an error after navigation.
 - **Save = Git commit**: every draft save creates or updates a local Git repository (`local_git.rs`). Commit history is available offline via `git log`.
-- **Download = committed artifact**: download filenames embed the 7-char commit hash (e.g., `Title-a1b2c3d.html`). Downloads are disabled until the first save — every downloaded file is tied to a committed version. Source downloads use `FileCode` icon, compiled downloads use `FileDown` icon. In the article page, labels are shown; in the editor toolbar, icons only with instant tooltips.
+- **Download = committed artifact**: download filenames embed the 7-char commit hash (e.g., `Title-a1b2c3d.pdf`). Downloads are disabled until the first save — every downloaded file is tied to a committed version. Source downloads use `.typ`/`.md` extension, compiled Markdown → `.html`, compiled Typst → `.pdf` (via server-side `/compile-download` API). In the article page, labels are shown; in the editor toolbar, icons only with instant tooltips.
+- **Save-as-commit**: each save in Tauri/local mode triggers a git commit. The commit message popup opens for every save — `commitMsg` is cleared after each successful commit, forcing a fresh message per save.
+- **Save button state**: the save button is disabled (grayed out, `opacity-30`) when no unsaved changes exist (`isClean` computed compares content/title against last saved state).
 - **Local accounts**: bcrypt + SQLite, multi-account switching, no server required.
 - **Client-side compilation**: Markdown → HTML via `marked` + KaTeX. The compilation pipeline (protect math → parse markdown → restore math → render KaTeX) runs entirely in the browser.
 
@@ -370,6 +372,14 @@ The script is idempotent — safe to run multiple times. It:
 2. Migrates JSON data to join tables
 3. Rebuilds `articles`, `reviews`, `merge_proposals`, `citations` tables without deprecated columns
 
+### 5.4 Diff View with Word-Level Highlighting
+
+The diff view (`DiffView.vue`) compares two git commits and renders changes with:
+- **Line-level colors**: deletions in red (`text-danger`, `bg-danger/10`), additions in green (`text-success`, `bg-success/10`)
+- **Word-level diff**: LCS-based token matching within paired del↔add lines. Changed words are wrapped in `<span class="diff-word-del">` (red background + line-through) or `<span class="diff-word-add">` (green background)
+- **Git noise filtering**: `\ No newline at end of file` markers are stripped in both the Rust parser (`local_git.rs`) and the frontend component to prevent breaking del↔add pairing
+- **Unpaired lines**: standalone deletions/additions get full-line `<span>` wrapper so they remain visible
+
 ### 8.2 Future: SQLite → PostgreSQL
 
 SQLite is the Phase 1 database. Phase 2 will migrate to PostgreSQL. No business logic depends on SQLite-specific features.
@@ -390,16 +400,16 @@ SQLite is the Phase 1 database. Phase 2 will migrate to PostgreSQL. No business 
 
 The detailed engineering plan is maintained in [`docs/plan_reshape.md`](plan_reshape.md).
 
-### Phase 1.5 — Polish & Ship (In Progress)
+### Phase 1.5 — Polish & Ship (Complete)
 
 | Priority | Feature | Status |
 |----------|---------|--------|
 | P0 | Delete articles | ✅ |
-| P0 | Diff view (side-by-side) | ✅ |
+| P0 | Diff view (with word-level highlighting) | ✅ |
 | P0 | Typst compilation (SVG preview) | ✅ |
-| P0 | Typst compilation (PDF download) | ⬜ |
+| P0 | Typst compilation (PDF download) | ✅ |
 | P0 | Draft search (FTS5) | ✅ |
-| P0 | Editor UX (keep-alive, split pane) | ✅ |
+| P0 | Editor UX (keep-alive, split pane, save states, per-save commit msg) | ✅ |
 | P0 | Distribute & user testing | ⬜ |
 | P1 | arXiv mirror with scoring | ⬜ |
 | P1 | Tags & categories | ⬜ |
@@ -428,4 +438,4 @@ All tunable parameters live in `core/peerpedia_core/config/params.py`:
 
 ---
 
-*Last updated: 2026-06-09 · 120 backend tests · 319 frontend tests · 16 Rust tests · 9 DB entities*
+*Last updated: 2026-06-09 · 120 backend tests · 327 frontend tests · 16 Rust tests · 9 DB entities*
