@@ -45,6 +45,23 @@ def count_articles(session: Session, status: str | None = None,
     return q.count()
 
 
+def update_article_compiled(
+    session: Session,
+    article_id: str,
+    html_format: str,
+    output: str | None,
+    pages: list[str] | None,
+) -> Article:
+    a = session.get(Article, article_id)
+    if a is None:
+        raise ValueError(f"Article {article_id} not found")
+    a.compiled_format = html_format
+    a.compiled_output = output
+    a.compiled_pages = pages
+    session.commit()
+    return a
+
+
 def update_article_status(session: Session, article_id: str, new_status: str) -> Article:
     a = session.get(Article, article_id)
     if a is None:
