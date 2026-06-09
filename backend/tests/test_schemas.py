@@ -50,8 +50,6 @@ class TestArticleDetail:
             id="a1", status="published",
             authors=[AuthorInfo(id="u1", name="Alice", anonymous_name="anon_alice")],
             fork_count=0, created_at=now, updated_at=now,
-            compiled_format="html", compiled_output="<h1>Hi</h1>",
-            compiled_pages=None,
             score={"originality": 4.0, "rigor": 3.0, "completeness": 4.0,
                    "pedagogy": 3.0, "impact": 3.5},
             sink_eta=None, days_remaining=None,
@@ -59,7 +57,6 @@ class TestArticleDetail:
         )
         d = a.model_dump()
         assert d["review_count"] == 2
-        assert d["compiled_format"] == "html"
 
 
 class TestReviewOut:

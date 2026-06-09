@@ -80,22 +80,6 @@ class TestArticleCRUD:
         assert get_article(session, a.id).status == "sedimentation"
         session.close()
 
-    def test_update_article_compiled_cache(self, engine):
-        from peerpedia_core.storage.db.crud_article import (
-            create_article,
-            get_article,
-            update_article_compiled,
-        )
-        session = get_session(engine)
-        user = _make_user(session, "author5")
-        a = create_article(session, authors=[user.id])
-        update_article_compiled(session, a.id, html_format="html",
-                                output="<h1>Hi</h1>", pages=None)
-        a2 = get_article(session, a.id)
-        assert a2.compiled_format == "html"
-        assert a2.compiled_output == "<h1>Hi</h1>"
-        session.close()
-
     def test_increment_fork_count(self, engine):
         from peerpedia_core.storage.db.crud_article import (
             create_article,
