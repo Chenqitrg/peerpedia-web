@@ -432,7 +432,7 @@ defineExpose({ contributions, handlePublish, showSelfReview, totalContribution }
                    transition-colors duration-200"
             :aria-label="t('editor.saveDraft')"
             :data-tooltip="t('editor.saveDraft')"
-            :disabled="submitting"
+            :disabled="submitting || isClean"
             @click="handleSaveDraft"
           >
             <Save class="w-4 h-4" stroke-width="2" />
