@@ -75,6 +75,8 @@ Share any article via a portable file or link.
 | Commit message popup per save | #19 |
 | `danger` color + diff word highlighting | #17, #19 |
 | Mutex deadlock fix | `49fabeb` |
+| Test coverage (50 black-box E2E tests) | #22 |
+| Tech debt: SQL pagination, route flattening, dedup helpers, JWT fix | #23 |
 
 ---
 

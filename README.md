@@ -192,17 +192,15 @@ peerpedia/
 │           └── local_store.rs  # Drafts + article cache
 ├── backend/                    # FastAPI server
 │   └── peerpedia_api/
-│       ├── routes/             # 12 route modules
+│       ├── routes/             # 10 route modules (articles.py, auth.py, etc.)
 │       ├── schemas/            # Pydantic request/response models
 │       └── tests/              # Integration tests
 ├── core/                       # Business logic
 │   └── peerpedia_core/
-│       ├── storage/db/         # SQLAlchemy ORM (9 entities) + CRUD
+│       ├── storage/db/         # SQLAlchemy ORM (7 entities) + CRUD
 │       ├── storage/git_backend.py
 │       ├── storage/compiler.py
 │       └── workflow/           # scoring, sedimentation, reputation
-├── scripts/
-│   └── migrate_architecture.py # P0 schema migration
 ├── docs/
 │   ├── DESIGN.md               # Design document (Chinese)
 │   ├── DESIGN.en.md            # Design document (English)
@@ -215,13 +213,13 @@ peerpedia/
 ## Testing · 测试
 
 ```bash
-# Backend (120 tests)
+# Backend (349 tests)
 python -m pytest backend/tests/ core/tests/ -q
 
-# Frontend (327 tests)
+# Frontend (319 tests)
 cd frontend && npx vitest run
 
-# Rust (53 tests)
+# Rust (16 tests)
 cd frontend/src-tauri && cargo test
 ```
 

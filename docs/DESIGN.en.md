@@ -329,15 +329,14 @@ Compile output is **never** stored in the database. The compile endpoint generat
 | GET | `/api/v1/pool` | Sedimentation pool feed |
 | GET | `/api/v1/feed` | Activity feed |
 
-### 6.2 Key API Changes (P0 Refactor)
+### 6.2 Planned API Changes (Phase 2)
 
-| Change | Old | New |
-|--------|-----|-----|
-| ArticleDetail response | includes `compiled_output`, `compiled_pages` | removed — use `/compile-preview` |
-| Article authors | `authors: list[str]` in JSON | `ArticleAuthor` join table (API still returns `list[AuthorInfo]`) |
-| Review thread | `thread: list[dict]` in JSON | `ReviewMessage` table (API still returns `list[ThreadMessageOut]`) |
-| Citation edge | includes `forward_prob`, `backward_prob` | removed |
-| MergeProposal | includes `thread` | removed (deferred) |
+| Change | Current | Planned |
+|--------|---------|---------|
+| Article authors | `authors: list[str]` JSON column | `ArticleAuthor` join table |
+| Review thread | `thread: list[dict]` JSON column | `ReviewMessage` table |
+| MergeProposal thread | `thread: list[dict]` JSON column | Deferred |
+| Compile output | `compiled_*` columns in DB | On-demand filesystem cache only |
 
 ---
 
@@ -347,7 +346,7 @@ Compile output is **never** stored in the database. The compile endpoint generat
 
 | Suite | Tests | Framework |
 |-------|-------|-----------|
-| Backend | 120 | pytest |
+| Backend | 349 | pytest |
 | Frontend | 319 | vitest |
 | Rust | 16 | cargo test |
 
@@ -359,20 +358,13 @@ Compile output is **never** stored in the database. The compile endpoint generat
 
 ## 8. Deployment & Migration
 
-### 8.1 Database Migration
+### 8.1 Database Migration (Planned)
 
-When upgrading from the old schema (JSON fields), run:
+JSON columns (`Article.authors`, `Review.thread`, `MergeProposal.thread`) are
+still in use. The migration to proper join tables is planned for Phase 2.
+A migration script will be created alongside the schema change.
 
-```bash
-python scripts/migrate_architecture.py --db sqlite:///peerpedia.db
-```
-
-The script is idempotent — safe to run multiple times. It:
-1. Creates `article_authors` and `review_messages` tables
-2. Migrates JSON data to join tables
-3. Rebuilds `articles`, `reviews`, `merge_proposals`, `citations` tables without deprecated columns
-
-### 5.4 Diff View with Word-Level Highlighting
+### 8.2 Diff View with Word-Level Highlighting
 
 The diff view (`DiffView.vue`) compares two git commits and renders changes with:
 - **Line-level colors**: deletions in red (`text-danger`, `bg-danger/10`), additions in green (`text-success`, `bg-success/10`)
@@ -438,4 +430,4 @@ All tunable parameters live in `core/peerpedia_core/config/params.py`:
 
 ---
 
-*Last updated: 2026-06-09 · 120 backend tests · 327 frontend tests · 16 Rust tests · 9 DB entities*
+*Last updated: 2026-06-09 · 349 backend tests · 319 frontend tests · 16 Rust tests · 7 DB entities*
