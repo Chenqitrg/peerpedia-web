@@ -1,6 +1,6 @@
 """User API routes."""
 from fastapi import APIRouter, Depends, HTTPException
-from peerpedia_core.storage.db.crud_article import list_articles, get_articles_by_author
+from peerpedia_core.storage.db.crud_article import get_articles_by_author
 from peerpedia_core.storage.db.crud_user import (
     create_user,
     follow_user,
