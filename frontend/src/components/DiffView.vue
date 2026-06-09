@@ -119,11 +119,18 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
+/** Check if a line is a git "no newline" marker that should be hidden. */
+function isNoNewline(line: DiffLine): boolean {
+  return line.content.startsWith('\\ ') && line.content.includes('No newline')
+}
+
 /** Process hunk lines to produce word-highlighted HTML content.
  *  Pairs consecutive del/add runs for word-level diff. */
 function processedHunks(hunks: DiffHunk[]): ProcessedHunk[] {
   return hunks.map(hunk => {
-    const lines = hunk.lines
+    // Filter out git noise lines that break del↔add pairing
+    const lines = hunk.lines.filter(l => !isNoNewline(l))
+    if (lines.length === 0) return { ...hunk, lines: [] }
     const processed: ProcessedHunk['lines'] = lines.map(l => ({
       ...l,
       displayContent: escapeHtml(l.content),
