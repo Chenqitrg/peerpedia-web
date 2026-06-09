@@ -362,4 +362,69 @@ describe('Tab Identity Specification', () => {
     // After all switching, every tab must still show its original title
     expect(final).toEqual(initial)
   })
+
+  // ── REGRESSION: watch fires before onDeactivated ─────────────
+  // Bug: When switching tabs, Vue fires watch(() => route.params.id) BEFORE
+  // onDeactivated. The old isActive guard was too late — the deactivated
+  // component would loadArticle(newId), overwriting its cached article data
+  // and calling updateTab with the wrong title, causing two tabs to show
+  // the same title. Fix: capture myArticleId at setup and compare.
+
+  it('REGRESSION: deactivated ArticlePage does not reload when route id changes', async () => {
+    const app = await mountApp(); wrp = app.wrapper; rou = app.router
+
+    // Open article A → title "Loaded-art-a" from API
+    await rou.push('/article/art-a')
+    await settle()
+    await expand(wrp)
+    const titleA = tabTitles(wrp)[0]
+    expect(titleA).toBeTruthy()
+    expect(titleA).not.toBe('Loading...')
+
+    // Open article B → deactivates A. A's watch fires with newId='art-b'
+    // but myArticleId='art-a', so guard prevents reload.
+    await rou.push('/article/art-b')
+    await settle()
+
+    // Tab A's title must still be its original — NOT overwritten to B's title
+    await expand(wrp)
+    expect(tabTitles(wrp)[0]).toBe(titleA)
+
+    // Both titles must be distinct
+    const titles = tabTitles(wrp)
+    expect(titles.length).toBe(2)
+    expect(titles[0]).not.toBe(titles[1])
+  })
+
+  it('REGRESSION: rapid switching never causes title merge', async () => {
+    const app = await mountApp(); wrp = app.wrapper; rou = app.router
+
+    // Open 3 articles and let them load
+    await rou.push('/article/art-a')
+    await settle()
+    await rou.push('/article/art-b')
+    await settle()
+    await rou.push('/article/art-c')
+    await settle()
+
+    await expand(wrp)
+    const original = tabTitles(wrp)
+    expect(new Set(original).size).toBe(3) // all distinct
+
+    // Simulate very rapid clicking — no settle between clicks.
+    // This triggers watch → onDeactivated race for each cached instance.
+    await expand(wrp)
+    const items = wrp.findAll('.tab-drawer-item')
+    for (let round = 0; round < 5; round++) {
+      await items[0].trigger('click')
+      await items[2].trigger('click')
+      await items[1].trigger('click')
+    }
+    await settle()
+
+    await expand(wrp)
+    const final = tabTitles(wrp)
+    expect(final).toEqual(original)
+    expect(new Set(final).size).toBe(3)
+  })
 })
