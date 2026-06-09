@@ -1,10 +1,10 @@
 """Article CRUD routes: list, get, create, update."""
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 from fastapi import Depends, HTTPException
 from peerpedia_core.config.params import params
 from peerpedia_core.storage.db.crud_article import (
+    count_articles,
     create_article,
     delete_article,
     get_article,
@@ -19,7 +19,6 @@ from peerpedia_core.storage.db.crud_review import (
 )
 from peerpedia_core.storage.db.models import User
 from peerpedia_core.storage.git_backend import (
-    DEFAULT_ARTICLES_DIR,
     commit_article,
     get_commit_history,
     init_article_repo,
@@ -32,6 +31,7 @@ from peerpedia_api.helpers import (
     build_article_summary,
     get_commit_count,
     get_commit_hash,
+    repo_path,
     resolve_authors,
 )
 from peerpedia_api.schemas.article import (
@@ -43,11 +43,6 @@ from peerpedia_api.schemas.article import (
 from ._router import router
 
 # ── Shared helpers ──────────────────────────────────────────────────────
-
-def repo_path(article_id: str) -> Path:
-    """Return the git repository path for an article."""
-    return DEFAULT_ARTICLES_DIR / article_id
-
 
 def compute_sink(a) -> tuple[datetime | None, int | None]:
     """Compute sink ETA and days remaining from article."""
@@ -126,19 +121,18 @@ def api_list_articles(
     size: int = 20,
     db: Session = Depends(deps.get_db),
 ):
-    articles = list_articles(db, status=status, author_id=author_id)
-    total = len(articles)
-    start = (page - 1) * size
-    paged = articles[start:start + size]
+    articles = list_articles(db, status=status, author_id=author_id,
+                             limit=size, offset=(page - 1) * size)
+    total = count_articles(db, status=status, author_id=author_id)
     summaries = [
         build_article_summary(
             db, a,
             current_user=current_user,
-            sink_eta=compute_sink(a)[0],
-            days_remaining=compute_sink(a)[1],
+            sink_eta=(eta := compute_sink(a))[0],
+            days_remaining=eta[1],
             sink_duration_days=getattr(a, "sink_duration_days", None),
         )
-        for a in paged
+        for a in articles
     ]
     return {"articles": [s.model_dump() for s in summaries], "total": total,
             "page": page, "size": size}
