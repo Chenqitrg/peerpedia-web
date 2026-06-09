@@ -359,6 +359,9 @@ fn parse_diff_output(output: &str) -> Result<DiffResult, AppError> {
                 let ln = old_line;
                 old_line += 1;
                 (DiffLineType::Delete, content.to_string(), Some(ln), None)
+            } else if line.starts_with("\\ ") && line.contains("No newline") {
+                // Skip git "No newline" markers — they break diff pairing
+                continue;
             } else {
                 let content = if !line.is_empty() { line } else { "" };
                 let (o, n) = (old_line, new_line);

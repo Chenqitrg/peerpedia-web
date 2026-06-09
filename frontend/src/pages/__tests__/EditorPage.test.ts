@@ -396,7 +396,6 @@ describe('EditorPage', () => {
     await new Promise(r => setTimeout(r, 10))
 
     expect(vm.showCommitPopup).toBe(false)
-    expect(vm.commitMsg).toBe('My commit message')
     expect(mockSaveDraft).toHaveBeenCalled()
   })
 
@@ -551,5 +550,43 @@ describe('EditorPage', () => {
     expect(vm.previewHtml).toContain('typst: command not found')
     // Also set in error bar
     expect(vm.errorMsg).toContain('typst')
+  })
+
+  // Regression: each save in Tauri mode must prompt for a fresh commit message
+  it('opens commit popup on each save in Tauri mode', async () => {
+    _isTauri = true
+    const { useUserStore } = await import('../../stores/useUserStore')
+    setActivePinia(createPinia())
+    const userStore = useUserStore()
+    userStore.viewer = { id: 'u1', name: 'Alice Chen', username: 'alice' } as any
+
+    const EditorPage = (await import('../EditorPage.vue')).default
+    const wrapper = mount(EditorPage, {
+      global: { stubs: { 'router-link': RouterLinkStub, 'router-view': true } },
+    })
+    await new Promise(r => setTimeout(r, 50))
+    const vm = wrapper.vm as any
+
+    vm.title = 'Test'
+    vm.content = '# First edit'
+
+    // First save: commitMsg is empty → popup opens
+    await vm.handleSaveDraft()
+    await new Promise(r => setTimeout(r, 10))
+    expect(vm.showCommitPopup).toBe(true)
+
+    // Complete first save via popup
+    vm.tempCommitMsg = 'First commit'
+    await vm.confirmSaveWithCommit()
+    await new Promise(r => setTimeout(r, 10))
+    expect(vm.showCommitPopup).toBe(false)
+
+    // Make more edits
+    vm.content = '# Second edit'
+    // Consequence: commitMsg should have been cleared,
+    // so handleSaveDraft opens the popup again
+    await vm.handleSaveDraft()
+    await new Promise(r => setTimeout(r, 10))
+    expect(vm.showCommitPopup).toBe(true)
   })
 })
