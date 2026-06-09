@@ -47,7 +47,7 @@ Phase 1 + 1.5（Tauri Desktop — 离线写作 + 打磨）
 ┌─────────────────────────────────────────────────────────┐
 │  Vue 3 → IPC → Rust → SQLite + Git（本地）                │
 │  离线写作 · 客户端编译 · 版本控制 · 浏览即缓存               │
-│  删除 · diff · Typst SVG · FTS5 搜索 · keep-alive         │
+│  删除 · diff · Typst SVG+PDF · FTS5 搜索 · keep-alive      │
 └─────────────────────────────────────────────────────────┘
 
 Phase 2+（Web — 社区协作）

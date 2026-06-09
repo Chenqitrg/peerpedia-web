@@ -293,7 +293,7 @@ Compile output is **never** stored in the database. The compile endpoint generat
 |--------|------------------|----------------|
 | Markdown → HTML | Client-side (marked + KaTeX) | Client-side (marked + KaTeX) |
 | Typst → SVG | Tauri sidecar CLI ✅ | Server compiler |
-| Typst → PDF | Tauri sidecar CLI (TODO) | Server compiler |
+| Typst → PDF | Tauri sidecar CLI ✅ | Server compiler |
 
 ---
 
