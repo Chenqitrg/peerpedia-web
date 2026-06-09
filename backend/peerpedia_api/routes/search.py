@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, Query
 from peerpedia_core.storage.db.models import Article
 from peerpedia_core.storage.git_backend import DEFAULT_ARTICLES_DIR
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 from sqlalchemy.types import String
 
@@ -54,7 +54,7 @@ def search(
 
     - Category: SQL LIKE on JSON categories column (case-insensitive)
     - Title: SQL ILIKE (case-insensitive)
-    - Content: title ILIKE + file-based source fallback
+    - Content: SQL ILIKE on compiled_output + file-based source fallback
     - Sort: SQL ORDER BY (newest → created_at DESC, score → avg score DESC)
     - Pagination: SQL LIMIT/OFFSET with accurate total count
 
@@ -78,11 +78,12 @@ def search(
             func.lower(Article.categories.cast(String)).contains(category_lower)
         )
 
-    # ── Text search: title (SQL) ──────────────────────────────────────
+    # ── Text search: title + compiled_output (SQL) ────────────────────
     if q_lower:
-        query = base.filter(
+        query = base.filter(or_(
             Article.title.ilike(f'%{q_lower}%'),
-        )
+            Article.compiled_output.ilike(f'%{q_lower}%'),
+        ))
     else:
         query = base
 
@@ -105,7 +106,7 @@ def search(
         already = {a.id for a in results}
 
         # Get candidates: articles matching status + category but NOT the
-        # title SQL condition.
+        # title/compiled_output SQL condition.
         fallback = base
         if sort_lower == "newest":
             fallback = fallback.order_by(Article.created_at.desc())

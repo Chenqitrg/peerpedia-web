@@ -80,6 +80,22 @@ class TestArticleCRUD:
         assert get_article(session, a.id).status == "sedimentation"
         session.close()
 
+    def test_update_article_compiled_cache(self, engine):
+        from peerpedia_core.storage.db.crud_article import (
+            create_article,
+            get_article,
+            update_article_compiled,
+        )
+        session = get_session(engine)
+        user = _make_user(session, "author5")
+        a = create_article(session, authors=[user.id])
+        update_article_compiled(session, a.id, html_format="html",
+                                output="<h1>Hi</h1>", pages=None)
+        a2 = get_article(session, a.id)
+        assert a2.compiled_format == "html"
+        assert a2.compiled_output == "<h1>Hi</h1>"
+        session.close()
+
     def test_increment_fork_count(self, engine):
         from peerpedia_core.storage.db.crud_article import (
             create_article,
@@ -505,8 +521,8 @@ class TestCitationCRUD:
         a1 = _make_article(session, authors=[author.id])
         a2 = _make_article(session, authors=[author.id])
         a3 = _make_article(session, authors=[author.id])
-        create_or_update_citation(session, a1.id, a2.id)
-        create_or_update_citation(session, a1.id, a3.id)
+        create_or_update_citation(session, a1.id, a2.id, forward=0.5, backward=0.2)
+        create_or_update_citation(session, a1.id, a3.id, forward=0.3, backward=0.1)
         cites = get_cites(session, a1.id)
         assert len(cites) == 2
         cited_by = get_cited_by(session, a2.id)
@@ -514,8 +530,7 @@ class TestCitationCRUD:
         assert cited_by[0].from_article_id == a1.id
         session.close()
 
-    def test_create_or_update_is_idempotent(self, engine):
-        """create_or_update_citation is idempotent — second call is a no-op."""
+    def test_update_probabilities(self, engine):
         from peerpedia_core.storage.db.crud_citation import (
             create_or_update_citation,
             get_citation,
@@ -524,15 +539,12 @@ class TestCitationCRUD:
         author = _make_user(session, "cp_au")
         a1 = _make_article(session, authors=[author.id])
         a2 = _make_article(session, authors=[author.id])
-        create_or_update_citation(session, a1.id, a2.id)
+        create_or_update_citation(session, a1.id, a2.id, forward=0.1, backward=0.1)
         c = get_citation(session, a1.id, a2.id)
-        assert c is not None
-        assert c.from_article_id == a1.id
-        assert c.to_article_id == a2.id
-        # Second call should not raise
-        create_or_update_citation(session, a1.id, a2.id)
+        assert c.forward_prob == 0.1
+        create_or_update_citation(session, a1.id, a2.id, forward=0.9, backward=0.05)
         c2 = get_citation(session, a1.id, a2.id)
-        assert c2 is not None
+        assert c2.forward_prob == 0.9
         session.close()
 
     def test_create_or_update_citation_rejects_self_reference(self, engine):

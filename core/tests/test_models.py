@@ -57,6 +57,7 @@ class TestArticle:
         assert a.status == "draft"
         assert a.authors == [user.id]
         assert a.score is None
+        assert a.compiled_format is None
         assert a.sink_start is None
         assert a.sink_duration_days == 7
         assert a.sink_extended_count == 0
@@ -85,6 +86,31 @@ class TestArticle:
         a2 = session.get(Article, a.id)
         assert a2.score == score_dict
         assert a2.score["originality"] == 4.0
+        session.close()
+
+    def test_compiled_cache_for_html(self, engine):
+        session = get_session(engine)
+        user = _make_user(session, "u4")
+        a = Article(status="published", authors=[user.id],
+                    compiled_format="html", compiled_output="<h1>Test</h1>")
+        session.add(a)
+        session.commit()
+        a2 = session.get(Article, a.id)
+        assert a2.compiled_format == "html"
+        assert a2.compiled_output == "<h1>Test</h1>"
+        session.close()
+
+    def test_compiled_cache_for_svg(self, engine):
+        session = get_session(engine)
+        user = _make_user(session, "u5")
+        a = Article(status="published", authors=[user.id],
+                    compiled_format="svg", compiled_output=None,
+                    compiled_pages=["<svg>p1</svg>", "<svg>p2</svg>"])
+        session.add(a)
+        session.commit()
+        a2 = session.get(Article, a.id)
+        assert a2.compiled_format == "svg"
+        assert a2.compiled_pages == ["<svg>p1</svg>", "<svg>p2</svg>"]
         session.close()
 
     def test_fork_tracking(self, engine):
@@ -383,11 +409,14 @@ class TestCitation:
         author = _make_user(session, "cit_author")
         a1 = _make_article(session, status="published", authors=[author.id])
         a2 = _make_article(session, status="published", authors=[author.id])
-        c = Citation(from_article_id=a1.id, to_article_id=a2.id)
+        c = Citation(from_article_id=a1.id, to_article_id=a2.id,
+                     forward_prob=0.3, backward_prob=0.1)
         session.add(c)
         session.commit()
         assert c.from_article_id == a1.id
         assert c.to_article_id == a2.id
+        assert c.forward_prob == 0.3
+        assert c.backward_prob == 0.1
         session.close()
 
     def test_unique_citation(self, engine):

@@ -8,7 +8,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, UniqueConstraint
 
 from peerpedia_core.storage.db.engine import Base, JSONDict, JSONList
 
@@ -33,6 +33,9 @@ class Article(Base):
     categories = Column(JSONList, nullable=True)
     status = Column(String, nullable=False, default="draft")  # draft|sedimentation|published
     score = Column(JSONDict, nullable=True)                    # FiveDimScores as dict
+    compiled_format = Column(String, nullable=True)            # "html" | "svg"
+    compiled_output = Column(String, nullable=True)            # single-page result
+    compiled_pages = Column(JSONList, nullable=True)           # list[str] for multi-page SVG
     sink_start = Column(DateTime, nullable=True)
     sink_duration_days = Column(Integer, nullable=False, default=7)
     sink_extended_count = Column(Integer, nullable=False, default=0)
@@ -133,3 +136,5 @@ class Citation(Base):
 
     from_article_id = Column(String, ForeignKey("articles.id"), primary_key=True)
     to_article_id = Column(String, ForeignKey("articles.id"), primary_key=True)
+    forward_prob = Column(Float, nullable=False, default=0.0)
+    backward_prob = Column(Float, nullable=False, default=0.0)
