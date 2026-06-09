@@ -21,10 +21,7 @@ sys.path.insert(0, str(Path(__file__).parent / "backend"))
 
 def seed(db_url: str, articles_dir: Path):
     from peerpedia_core.storage.db.crud_article import (
-        add_article_authors,
         create_article,
-        get_author_ids,
-        get_articles_by_author,
         set_sink_start,
         update_article_status,
     )

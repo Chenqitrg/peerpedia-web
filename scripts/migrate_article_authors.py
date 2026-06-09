@@ -17,7 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "core"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 
-from peerpedia_core.storage.db.engine import Base, get_engine
+from peerpedia_core.storage.db.engine import get_engine
 from peerpedia_core.storage.db.models import ArticleAuthor
 
 

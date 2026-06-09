@@ -3,7 +3,6 @@ from sqlalchemy.orm import Session
 
 from peerpedia_core.storage.db.models import Article, ArticleAuthor
 
-
 # ── Author helpers (join table) ───────────────────────────────────────────
 
 def add_article_authors(session: Session, article_id: str, author_ids: list[str]) -> None:
