@@ -409,14 +409,11 @@ class TestCitation:
         author = _make_user(session, "cit_author")
         a1 = _make_article(session, status="published", authors=[author.id])
         a2 = _make_article(session, status="published", authors=[author.id])
-        c = Citation(from_article_id=a1.id, to_article_id=a2.id,
-                     forward_prob=0.3, backward_prob=0.1)
+        c = Citation(from_article_id=a1.id, to_article_id=a2.id)
         session.add(c)
         session.commit()
         assert c.from_article_id == a1.id
         assert c.to_article_id == a2.id
-        assert c.forward_prob == 0.3
-        assert c.backward_prob == 0.1
         session.close()
 
     def test_unique_citation(self, engine):

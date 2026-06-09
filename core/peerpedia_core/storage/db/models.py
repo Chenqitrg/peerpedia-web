@@ -8,7 +8,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, UniqueConstraint
 
 from peerpedia_core.storage.db.engine import Base, JSONDict, JSONList
 
@@ -136,5 +136,3 @@ class Citation(Base):
 
     from_article_id = Column(String, ForeignKey("articles.id"), primary_key=True)
     to_article_id = Column(String, ForeignKey("articles.id"), primary_key=True)
-    forward_prob = Column(Float, nullable=False, default=0.0)
-    backward_prob = Column(Float, nullable=False, default=0.0)
