@@ -87,11 +87,13 @@ function backtrackInsertions(a: string[], b: string[], dp: number[][]): Set<numb
 /** Render deleted line content with word-level highlighting by comparing against
  *  the corresponding added line. Returns HTML string. */
 function highlightDeletedWords(delContent: string, addContent: string | null): string {
-  if (!addContent) return escapeHtml(delContent)
+  if (!addContent) return `<span class="diff-word-del">${escapeHtml(delContent)}</span>`
   const delTokens = tokenize(delContent)
   const addTokens = tokenize(addContent)
   const dp = lcsTable(delTokens, addTokens)
   const deleted = backtrackDeletions(delTokens, addTokens, dp)
+  // If every token is deleted (completely different), wrap entire line
+  if (deleted.size === delTokens.length) return `<span class="diff-word-del">${escapeHtml(delContent)}</span>`
   return delTokens.map((t, i) =>
     deleted.has(i) ? `<span class="diff-word-del">${escapeHtml(t)}</span>` : escapeHtml(t)
   ).join('')
@@ -100,11 +102,13 @@ function highlightDeletedWords(delContent: string, addContent: string | null): s
 /** Render added line content with word-level highlighting by comparing against
  *  the corresponding deleted line. Returns HTML string. */
 function highlightAddedWords(addContent: string, delContent: string | null): string {
-  if (!delContent) return escapeHtml(addContent)
+  if (!delContent) return `<span class="diff-word-add">${escapeHtml(addContent)}</span>`
   const addTokens = tokenize(addContent)
   const delTokens = tokenize(delContent)
   const dp = lcsTable(delTokens, addTokens)
   const inserted = backtrackInsertions(delTokens, addTokens, dp)
+  // If every token is inserted (completely different), wrap entire line
+  if (inserted.size === addTokens.length) return `<span class="diff-word-add">${escapeHtml(addContent)}</span>`
   return addTokens.map((t, i) =>
     inserted.has(i) ? `<span class="diff-word-add">${escapeHtml(t)}</span>` : escapeHtml(t)
   ).join('')
