@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from peerpedia_api import deps
 
-from ._crud import repo_path
+from peerpedia_api.helpers import repo_path
 from ._router import router
 
 

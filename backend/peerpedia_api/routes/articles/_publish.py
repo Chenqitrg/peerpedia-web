@@ -19,7 +19,8 @@ from peerpedia_api.schemas.article import (
     SinkExtensionRequest,
 )
 
-from ._crud import build_article_detail, repo_path
+from ._crud import build_article_detail
+from peerpedia_api.helpers import repo_path
 from ._router import router
 
 
