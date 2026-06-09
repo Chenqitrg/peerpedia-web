@@ -70,21 +70,21 @@ Phase 2+（Web — 社区协作）
 | Auth | JWT (Web) / bcrypt + SQLite (Desktop) |
 | Source of Truth | Git = Source of Truth, DB = Index |
 
-### DB Schema · 数据模型（9 entities）
+### DB Schema · 数据模型（7 entities + 2 planned）
 
 | Table | Purpose |
 |-------|---------|
 | `articles` | Core article metadata (title, status, score, etc.) |
-| `article_authors` | Article ↔ User join (replaces JSON `authors` field) |
 | `users` | Account + reputation |
 | `reviews` | Five-dimension scores per (article, reviewer, scope, commit) |
-| `review_messages` | Threaded discussion under reviews (replaces JSON `thread` field) |
 | `follows` | User follow relationships |
 | `bookmarks` | User bookmarks |
 | `merge_proposals` | Fork → merge workflow |
 | `citations` | Article → Article citation edges |
+| `article_authors` 🔜 | Article ↔ User join (replace JSON `authors` field) — Phase 2 |
+| `review_messages` 🔜 | Threaded discussion (replace JSON `thread` field) — Phase 2 |
 
-Key architecture decision: **all relationships use proper join tables**, not JSON columns. `article_authors` and `review_messages` replace the old `authors` and `thread` JSON fields. Compile output is generated on-demand with filesystem cache — never stored in the database.
+Currently `Article.authors` and `Review.thread` use JSON columns. The migration to proper join tables is planned for Phase 2.
 
 ---
 

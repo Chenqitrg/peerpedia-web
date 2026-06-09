@@ -430,4 +430,4 @@ All tunable parameters live in `core/peerpedia_core/config/params.py`:
 
 ---
 
-*Last updated: 2026-06-09 · 349 backend tests · 319 frontend tests · 16 Rust tests · 7 DB entities*
+*Last updated: 2026-06-09 · 349 backend tests · 319 frontend tests · 16 Rust tests · 7 DB entities (+2 planned)*
