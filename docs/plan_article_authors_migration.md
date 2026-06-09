@@ -1,12 +1,14 @@
 # Pre-Online Tech Debt — JSON → Join Tables
 
+> **Status: P0 complete (2026-06-09).** See PR #25. P1/P3 deferred.
+
 ## Context
 
 Before deploying PeerPedia for multi-user testing, migrate `Article.authors` from
 JSON column to proper `article_authors` join table. This is a P0 blocker for Phase 2:
-- `Article.authors.contains(user_id)` is a full-table scan in SQLite
-- "Find articles by author" is the app's most frequent query
-- Multi-user testing will surface this immediately
+- ~~`Article.authors.contains(user_id)` is a full-table scan in SQLite~~ → now uses indexed JOIN
+- "Find articles by author" is the app's most frequent query → now O(log n)
+- Multi-user testing will surface this immediately → resolved
 
 ## Scope
 
@@ -56,8 +58,8 @@ migrate JSON data.
 
 ## Verification
 ```bash
-python scripts/migrate_article_authors.py
-.venv/bin/python -m pytest backend/tests/ core/tests/ -q
+python scripts/migrate_article_authors.py  # for existing DBs with old schema
+.venv/bin/python -m pytest backend/tests/ core/tests/ -q  # 353 passed
 ```
 
 ## NOT in Scope

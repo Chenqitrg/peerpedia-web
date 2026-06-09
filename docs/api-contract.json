@@ -1761,7 +1761,7 @@
           "search"
         ],
         "summary": "Search",
-        "description": "Search articles with SQL-level filtering: category (JSON column LIKE), title (ILIKE), content (compiled_output ILIKE + source file fallback), sort (newest/score ORDER BY), pagination (LIMIT/OFFSET with accurate COUNT).",
+        "description": "Search articles with SQL-level filtering: title (ILIKE), content (source file grep fallback), sort (newest/score ORDER BY), pagination (LIMIT/OFFSET with accurate COUNT).",
         "operationId": "search_api_v1_search_get",
         "parameters": [
           {

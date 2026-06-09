@@ -202,7 +202,7 @@ peerpedia/
 │       ├── storage/compiler.py
 │       └── workflow/           # scoring, sedimentation, reputation
 ├── scripts/
-│   └── migrate_architecture.py # P0 schema migration
+│   └── migrate_article_authors.py # JSON → join table migration
 ├── docs/
 │   ├── DESIGN.md               # Design document (Chinese)
 │   ├── DESIGN.en.md            # Design document (English)
@@ -215,7 +215,7 @@ peerpedia/
 ## Testing · 测试
 
 ```bash
-# Backend (120 tests)
+# Backend (353 tests)
 python -m pytest backend/tests/ core/tests/ -q
 
 # Frontend (327 tests)

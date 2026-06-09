@@ -1,6 +1,6 @@
 # PeerPedia (知诸网) — Design Document
 
-> 2026-06-07 · All implemented features · Architecture debt resolved
+> 2026-06-09 · All implemented features · JSON→join table migration complete
 
 ---
 
@@ -347,7 +347,7 @@ Compile output is **never** stored in the database. The compile endpoint generat
 
 | Suite | Tests | Framework |
 |-------|-------|-----------|
-| Backend | 120 | pytest |
+| Backend | 353 | pytest |
 | Frontend | 319 | vitest |
 | Rust | 16 | cargo test |
 
@@ -361,16 +361,18 @@ Compile output is **never** stored in the database. The compile endpoint generat
 
 ### 8.1 Database Migration
 
-When upgrading from the old schema (JSON fields), run:
+The `Article.authors` JSON column has been migrated to the `article_authors` join table. For existing databases, run:
 
 ```bash
-python scripts/migrate_architecture.py --db sqlite:///peerpedia.db
+python scripts/migrate_article_authors.py --db sqlite:///peerpedia.db
 ```
 
-The script is idempotent — safe to run multiple times. It:
-1. Creates `article_authors` and `review_messages` tables
-2. Migrates JSON data to join tables
-3. Rebuilds `articles`, `reviews`, `merge_proposals`, `citations` tables without deprecated columns
+The script:
+1. Creates the `article_authors` table
+2. Reads old JSON `authors` data via raw SQL and inserts into the join table
+3. Skips orphaned author references safely
+
+Note: `Review.thread` → `review_messages` migration is deferred (thread messages don't paginate yet).
 
 ### 5.4 Diff View with Word-Level Highlighting
 
@@ -438,4 +440,4 @@ All tunable parameters live in `core/peerpedia_core/config/params.py`:
 
 ---
 
-*Last updated: 2026-06-09 · 120 backend tests · 327 frontend tests · 16 Rust tests · 9 DB entities*
+*Last updated: 2026-06-09 · 353 backend tests · 319 frontend tests · 16 Rust tests · 9 DB entities*
