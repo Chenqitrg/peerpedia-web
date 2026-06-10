@@ -51,7 +51,13 @@ assert_eq() {
 echo "=== Starting backend on ${BASE} ==="
 ROOT=$(git -C "$(dirname "$0")/../../.." rev-parse --show-toplevel 2>/dev/null || pwd)
 cd "$ROOT"
-.venv/bin/python -m uvicorn peerpedia_api.main:app --host "$HOST" --port "$PORT" &
+# Use venv python if available (local), fall back to system python (CI).
+if [ -f .venv/bin/python ]; then
+  PYTHON=.venv/bin/python
+else
+  PYTHON=python
+fi
+$PYTHON -m uvicorn peerpedia_api.main:app --host "$HOST" --port "$PORT" &
 SERVER_PID=$!
 
 for i in $(seq 1 30); do
