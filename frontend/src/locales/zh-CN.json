@@ -11,7 +11,17 @@
     "logout": "退出登录",
     "signIn": "登录",
     "createAccount": "注册",
-    "toggleMenu": "切换导航菜单"
+    "toggleMenu": "切换导航菜单",
+    "mainNavigation": "主导航",
+    "chooseFormat": "选择文章格式",
+    "close": "关闭",
+    "chooseFormatTitle": "选择格式",
+    "chooseFormatDesc": "选择新文章的格式",
+    "formatMarkdown": "标准格式，支持数学公式 (KaTeX)",
+    "formatTypst": "学术排版，SVG 输出",
+    "statusConnected": "已连接",
+    "statusLocal": "本地模式",
+    "statusOffline": "离线"
   },
   "schools": {
     "subtitle": "发现研究者，关注你感兴趣的学术工作。"
@@ -103,7 +113,11 @@
     "publishToPool": "发布至沉淀池",
     "contribution": "贡献度",
     "contributionMustTotal100": "贡献度总和必须为 100%。当前：",
-    "back": "返回"
+    "back": "返回",
+    "hidePreview": "隐藏预览",
+    "showPreview": "显示预览",
+    "mdPlaceholder": "# 标题\n\n用 Markdown 写文章...",
+    "typstPlaceholder": "= 标题\n\n用 Typst 写文章..."
   },
   "auth": {
     "signIn": "登录",
@@ -117,7 +131,10 @@
   },
   "user": {
     "anonymousName": "匿名名称",
-    "notFound": "用户未找到"
+    "notFound": "用户未找到",
+    "articlesCount": "{count} 篇文章",
+    "myDrafts": "我的草稿",
+    "articlesTitle": "文章"
   },
   "status": {
     "published": "已发布",
@@ -139,7 +156,9 @@
     "reviews": "条评论",
     "scores": "评分",
     "back": "返回",
-    "proposeMerge": "提议合并"
+    "proposeMerge": "提议合并",
+    "delete": "删除文章",
+    "startConversation": "发起讨论..."
   },
   "history": {
     "parent": "父提交",
@@ -181,9 +200,24 @@
   },
   "download": {
     "source": "源码",
-    "compiled": "HTML"
+    "compiled": "HTML",
+    "repo": "下载仓库 (.git bundle)",
+    "repoShort": "仓库",
+    "sourceMd": "下载源文件 (.md)",
+    "sourceTypst": "下载源文件 (.typ)",
+    "compiledHtml": "下载编译文件 (.html)",
+    "compiledPdf": "下载编译文件 (.pdf)"
   },
   "citations": {
     "backToArticle": "返回文章"
+  },
+  "tab": {
+    "close": "关闭标签页"
+  },
+  "ui": {
+    "rating": "评分",
+    "radarChart": "五维度雷达图",
+    "previousPage": "上一页",
+    "nextPage": "下一页"
   }
 }
