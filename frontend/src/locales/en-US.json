@@ -11,7 +11,17 @@
     "logout": "Log Out",
     "signIn": "Sign In",
     "createAccount": "Create Account",
-    "toggleMenu": "Toggle navigation menu"
+    "toggleMenu": "Toggle navigation menu",
+    "mainNavigation": "Main navigation",
+    "chooseFormat": "Choose article format",
+    "close": "Close",
+    "chooseFormatTitle": "Choose Format",
+    "chooseFormatDesc": "Select the format for your new article",
+    "formatMarkdown": "Standard format with math support (KaTeX)",
+    "formatTypst": "Academic typesetting with SVG output",
+    "statusConnected": "Connected",
+    "statusLocal": "Local mode",
+    "statusOffline": "Offline"
   },
   "schools": {
     "subtitle": "Discover researchers. Follow people whose work you find interesting."
@@ -109,7 +119,11 @@
     "publishToPool": "Publish to Pool",
     "contribution": "Contribution",
     "contributionMustTotal100": "Contributions must total 100%.",
-    "back": "Back"
+    "back": "Back",
+    "hidePreview": "Hide preview",
+    "showPreview": "Show preview",
+    "mdPlaceholder": "# Title\n\nWrite your article in Markdown...",
+    "typstPlaceholder": "= Title\n\nWrite your article in Typst..."
   },
   "auth": {
     "signIn": "Sign In",
@@ -123,7 +137,10 @@
   },
   "user": {
     "anonymousName": "Anonymous name",
-    "notFound": "User not found."
+    "notFound": "User not found.",
+    "articlesCount": "{count} articles",
+    "myDrafts": "My Drafts",
+    "articlesTitle": "Articles"
   },
   "status": {
     "published": "Published",
@@ -145,7 +162,9 @@
     "reviews": "reviews",
     "scores": "Scores",
     "back": "Back",
-    "proposeMerge": "Propose merge"
+    "proposeMerge": "Propose merge",
+    "delete": "Delete article",
+    "startConversation": "Start a conversation..."
   },
   "history": {
     "parent": "parent",
@@ -187,9 +206,24 @@
   },
   "download": {
     "source": "Source",
-    "compiled": "HTML"
+    "compiled": "HTML",
+    "repo": "Download repo (.git bundle)",
+    "repoShort": "Repo",
+    "sourceMd": "Download source (.md)",
+    "sourceTypst": "Download source (.typ)",
+    "compiledHtml": "Download compiled (.html)",
+    "compiledPdf": "Download compiled (.pdf)"
   },
   "citations": {
     "backToArticle": "Back to article"
+  },
+  "tab": {
+    "close": "Close tab"
+  },
+  "ui": {
+    "rating": "Rating",
+    "radarChart": "Five dimension radar chart",
+    "previousPage": "Previous page",
+    "nextPage": "Next page"
   }
 }

@@ -569,8 +569,8 @@ defineExpose({ contributions, handlePublish, showSelfReview, totalContribution }
           class="flex items-center justify-center w-9 h-9 rounded-lg
                  text-ink-muted hover:text-ink hover:bg-[#21262d]
                  transition-colors duration-200"
-          :aria-label="showPreview ? 'Hide preview' : 'Show preview'"
-          :data-tooltip="showPreview ? 'Hide preview' : 'Show preview'"
+          :aria-label="showPreview ? t('editor.hidePreview') : t('editor.showPreview')"
+          :data-tooltip="showPreview ? t('editor.hidePreview') : t('editor.showPreview')"
           @click="showPreview = !showPreview"
         >
           <Eye v-if="showPreview" class="w-4 h-4" stroke-width="2" />
@@ -680,8 +680,8 @@ defineExpose({ contributions, handlePublish, showSelfReview, totalContribution }
           v-model="content"
           :format="format"
           :placeholder="format === 'markdown'
-            ? '# Title\n\nWrite your article in Markdown...'
-            : '= Title\n\nWrite your article in Typst...'"
+            ? t('editor.mdPlaceholder')
+            : t('editor.typstPlaceholder')"
           class="flex-1 w-full"
         />
       </div>
