@@ -37,7 +37,7 @@ async function load() {
       if (result && !('error' in result) && Array.isArray(result)) {
         users.value = result.map(a => ({
           id: a.id,
-          name: a.username,
+          name: (a as any).username || a.id,
           anonymous_name: '',
           article_count: 0,
           reputation: {},
