@@ -368,7 +368,7 @@ async function openDiffView() {
   const remoteHash = sch()
   const localHash = lh()
   if (!remoteHash || !localHash) {
-    diffError.value = '无法加载对比'
+    diffError.value = t('sync.cannotLoadDiff')
     return
   }
   const [remote, local] = await Promise.all([
@@ -376,7 +376,7 @@ async function openDiffView() {
     getContentAtCommit(localHash),
   ])
   if (remote === null || local === null) {
-    diffError.value = '无法读取版本内容'
+    diffError.value = t('sync.cannotReadVersions')
     return
   }
   remoteContent.value = remote
@@ -624,7 +624,7 @@ defineExpose({ updateSingleScore, reviewStore, mergeError })
           <button
             v-if="syncState === 'conflict'"
             class="sync-icon-btn inline-flex align-middle ml-2"
-            title="与服务器版本冲突，点击解决"
+            :title="t('sync.conflictTooltip')"
             @click="openDiffView"
           >
             <GitCompare :size="18" stroke-width="2" class="text-warning" />
@@ -833,23 +833,23 @@ defineExpose({ updateSingleScore, reviewStore, mergeError })
       <div v-if="showDiff" class="diff-overlay" @click.self="showDiff = false">
         <div class="diff-panel">
           <div class="diff-header">
-            <h3>版本对比</h3>
-            <span class="text-xs text-ink-muted">远程版本 vs 本地版本</span>
+            <h3>{{ t('sync.diffTitle') }}</h3>
+            <span class="text-xs text-ink-muted">{{ t('sync.diffSubtitle') }}</span>
             <button class="sync-close-btn" @click="showDiff = false">
               <X :size="18" stroke-width="2" />
             </button>
           </div>
           <div v-if="diffError" class="diff-error">
             {{ diffError }}
-            <button @click="diffError = null">关闭</button>
+            <button @click="diffError = null">{{ t('sync.close') }}</button>
           </div>
           <div v-else-if="remoteContent && localContent" class="diff-content">
             <div class="diff-pane">
-              <div class="diff-pane-label">远程版本</div>
+              <div class="diff-pane-label">{{ t('sync.remoteVersion') }}</div>
               <pre class="diff-pane-text">{{ remoteContent }}</pre>
             </div>
             <div class="diff-pane">
-              <div class="diff-pane-label">本地版本</div>
+              <div class="diff-pane-label">{{ t('sync.localVersion') }}</div>
               <pre class="diff-pane-text">{{ localContent }}</pre>
             </div>
           </div>
@@ -861,7 +861,7 @@ defineExpose({ updateSingleScore, reviewStore, mergeError })
             >
               <Loader v-if="pushing" :size="16" stroke-width="2" class="animate-spin" />
               <Check v-else :size="16" stroke-width="2" />
-              Keep Local
+              {{ t('sync.keepLocal') }}
             </button>
             <button
               class="btn-secondary"
@@ -869,7 +869,7 @@ defineExpose({ updateSingleScore, reviewStore, mergeError })
               @click="handleUseRemote"
             >
               <X :size="16" stroke-width="2" />
-              Use Remote
+              {{ t('sync.useRemote') }}
             </button>
           </div>
         </div>
