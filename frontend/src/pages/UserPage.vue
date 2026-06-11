@@ -125,7 +125,10 @@ async function handleFollow() {
     isFollowing.value = !isFollowing.value
     // Refresh offline cache after mutation.
     useFollowCache().refreshCache(userStore.viewer.id).catch(() => {})
-  } catch { /* revert on failure — no state change */ }
+  } catch (e: any) {
+    console.error('[UserPage] follow error:', e?.response?.status, e?.response?.data?.detail || e?.message || e)
+    /* revert on failure — no state change */
+  }
   finally { followLoading.value = false }
 }
 

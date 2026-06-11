@@ -77,7 +77,8 @@ async function toggleFollow(u: UserSummary) {
     }
     // Refresh offline cache.
     useFollowCache().refreshCache(userStore.viewer.id).catch(() => {})
-  } catch {
+  } catch (e: any) {
+    console.error('[SchoolsPage] follow error:', e?.response?.status, e?.response?.data?.detail || e?.message || e)
     // Revert on failure.
     if (isCurrentlyFollowing) {
       following.value.add(u.id)
