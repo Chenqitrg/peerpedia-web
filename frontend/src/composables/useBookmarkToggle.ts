@@ -1,4 +1,5 @@
 import { type Ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useUserStore } from '../stores/useUserStore'
 import { useTauri } from './useTauri'
 import { useNetworkStatus } from './useNetworkStatus'
@@ -18,6 +19,7 @@ export function useBookmarkToggle(
 ) {
   const userStore = useUserStore()
   const tauri = useTauri()
+  const { t } = useI18n()
   const { isOnline } = useNetworkStatus()
   const isLocal = (userStore.isTauriMode || userStore.isBrowserLocal) && !isOnline.value
 
@@ -44,7 +46,7 @@ export function useBookmarkToggle(
       if (!synced || !userStore.token?.value) {
         article.is_bookmarked = previous
         if (onError) {
-          onError(userStore.syncError?.value || '书签功能需要服务器账号')
+          onError(userStore.syncError?.value || t('bookmark.serverRequired'))
         }
         return
       }
@@ -55,7 +57,7 @@ export function useBookmarkToggle(
         // L4: bookmarks require server connection — rollback optimistic update.
         article.is_bookmarked = previous
         if (onError) {
-          onError('书签功能需要服务器连接')
+          onError(t('bookmark.serverRequired'))
         }
         return
       } else {
@@ -79,7 +81,7 @@ export function useBookmarkToggle(
     try {
       if (isLocal) {
         if (onError) {
-          onError('书签功能需要服务器连接')
+          onError(t('bookmark.serverRequired'))
         }
         return
       } else {

@@ -88,7 +88,7 @@ async function goToFork() {
       <button
         v-if="syncState === 'conflict'"
         class="sync-icon-btn"
-        :title="'与服务器版本冲突，点击解决'"
+        :title="t('sync.conflictTooltip')"
         @click.stop="emit('sync-resolve', article.id)"
       >
         <GitCompare :size="16" stroke-width="2" class="text-warning" />

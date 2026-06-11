@@ -1,4 +1,5 @@
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useUserStore } from '../stores/useUserStore'
 import { useTauri } from './useTauri'
 import { useNetworkStatus } from './useNetworkStatus'
@@ -32,6 +33,7 @@ export function useArticleSync(
   const userStore = useUserStore()
   const tauri = useTauri()
   const { isOnline } = useNetworkStatus()
+  const { t } = useI18n()
 
   const error = ref<string | null>(null)
   const pushing = ref(false)
@@ -51,12 +53,12 @@ export function useArticleSync(
   /** First upload: POST to create server article, store sync mapping. */
   async function upload(): Promise<boolean> {
     if (!userStore.token?.value) {
-      error.value = '请先登录服务器'
+      error.value = t('sync.loginRequired')
       return false
     }
     const id = draftId()
     if (!id) {
-      error.value = '没有可上传的文章'
+      error.value = t('sync.noArticle')
       return false
     }
 
@@ -66,20 +68,20 @@ export function useArticleSync(
     try {
       const draft = await tauri.getDraft({ id })
       if (!draft || isTauriError(draft)) {
-        error.value = '无法读取本地草稿'
+        error.value = t('sync.cannotReadDraft')
         return false
       }
       const d = draft as Draft
 
       const history = await tauri.gitHistory({ article_id: id })
       if (!history || isTauriError(history)) {
-        error.value = '无法读取 git 历史'
+        error.value = t('sync.cannotReadHistory')
         return false
       }
       const headHash =
         Array.isArray(history) && history.length > 0 ? history[0].hash : null
       if (!headHash) {
-        error.value = '文章没有任何提交'
+        error.value = t('sync.noCommits')
         return false
       }
 
@@ -88,7 +90,7 @@ export function useArticleSync(
         commit_hash: headHash,
       })
       if (!contentResult || isTauriError(contentResult)) {
-        error.value = '无法读取文章内容'
+        error.value = t('sync.cannotReadContent')
         return false
       }
 
@@ -113,7 +115,7 @@ export function useArticleSync(
 
       const serverId = result?.id
       if (!serverId) {
-        error.value = '服务器返回异常'
+        error.value = t('sync.serverError')
         return false
       }
 
@@ -128,7 +130,7 @@ export function useArticleSync(
 
       return true
     } catch (e: unknown) {
-      error.value = extractErrorMessage(e) || '上传失败'
+      error.value = extractErrorMessage(e) || t('sync.uploadFailed')
       return false
     } finally {
       pushing.value = false
@@ -139,7 +141,7 @@ export function useArticleSync(
   async function pushUpdate(): Promise<boolean> {
     const sid = serverArticleId()
     if (!sid || !userStore.token?.value) {
-      error.value = '无法更新：缺少服务器文章 ID'
+      error.value = t('sync.updateNoId')
       return false
     }
     const id = draftId()
@@ -150,20 +152,20 @@ export function useArticleSync(
 
     try {
       const draft = await tauri.getDraft({ id })
-      if (!draft || isTauriError(draft)) throw new Error('无法读取本地草稿')
+      if (!draft || isTauriError(draft)) throw new Error(t('sync.cannotReadDraft'))
 
       const history = await tauri.gitHistory({ article_id: id })
-      if (!history || isTauriError(history)) throw new Error('无法读取 git 历史')
+      if (!history || isTauriError(history)) throw new Error(t('sync.cannotReadHistory'))
       const headHash =
         Array.isArray(history) && history.length > 0 ? history[0].hash : null
-      if (!headHash) throw new Error('文章没有任何提交')
+      if (!headHash) throw new Error(t('sync.noCommits'))
 
       const contentResult = await tauri.gitShow({
         article_id: id,
         commit_hash: headHash,
       })
       if (!contentResult || isTauriError(contentResult))
-        throw new Error('无法读取文章内容')
+        throw new Error(t('sync.cannotReadContent'))
 
       const d = draft as Draft
       await updateArticle(sid, {
@@ -182,7 +184,7 @@ export function useArticleSync(
 
       return true
     } catch (e: unknown) {
-      error.value = extractErrorMessage(e) || '更新失败'
+      error.value = extractErrorMessage(e) || t('sync.updateFailed')
       return false
     } finally {
       pushing.value = false
@@ -216,7 +218,7 @@ export function useArticleSync(
 
       return true
     } catch (e: unknown) {
-      error.value = extractErrorMessage(e) || '回滚失败'
+      error.value = extractErrorMessage(e) || t('sync.rollbackFailed')
       return false
     } finally {
       pushing.value = false
