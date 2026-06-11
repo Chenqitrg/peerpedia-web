@@ -36,8 +36,7 @@ const id = computed(() => route.params.id as string)
 // In local mode (Tauri or browser-local), use local account data.
 const isSelf = computed(() => userStore.viewer?.id === id.value)
 const isLocal = computed(() => userStore.isTauriMode || userStore.isBrowserLocal)
-// Follow/bookmark actions need server when online; profile loading uses local identity.
-const useServerApi = computed(() => isLocal.value && isOnline.value)
+const localId = computed(() => userStore.localAccount?.id || userStore.viewer?.id || '')
 const { isOnline } = useNetworkStatus()
 
 function _localUserToProfile(a: { id: string; username: string }): UserProfile {
@@ -61,12 +60,16 @@ const { data: user, loading, error, execute: loadUser } = useAsyncResource(
     // Self in local mode — use viewer profile directly.
     if (isLocal.value && isSelf.value && userStore.viewer) return userStore.viewer
     // Other user in local mode — look up from browser-local accounts.
+    // When online, also check the server API (local accounts may not include
+    // users registered solely on the server).
     if (isLocal.value && !isSelf.value) {
       const accts = await tauri.listAccounts()
       if (accts && !('error' in accts) && Array.isArray(accts)) {
         const found = accts.find(a => a.id === id.value)
         if (found) return _localUserToProfile(found)
       }
+      // Fall back to server API when online — the user may be a server-only user.
+      if (isOnline.value) return getUser(id.value)
       throw new Error('User not found')
     }
     return getUser(id.value)
@@ -85,61 +88,49 @@ const followLoading = ref(false)
 // Load initial follow state.
 async function loadFollowState() {
   if (!userStore.viewer || isSelf.value) return
-  // Online: check via server API
-  if (isOnline.value && userStore.token?.value) {
+  if (isLocal.value) {
+    // Tauri / browser-local mode — check local storage.
+    const r = await tauri.isFollowing({ follower_id: localId.value, followed_id: id.value })
+    if (r && !('error' in r)) {
+      isFollowing.value = r.following
+    }
+  } else {
+    // Web mode — check via server REST API.
     try {
       const following = await getFollowing(userStore.viewer.id)
       const followed = Array.isArray(following) ? following : (following as any)?.users || []
       isFollowing.value = followed.some((u: any) => u.id === id.value)
-      return
     } catch { /* fall through */ }
-  }
-  // Offline local: check via Tauri IPC
-  if (isLocal.value && !isOnline.value) {
-    const r = await tauri.isFollowing({ follower_id: userStore.viewer.id, followed_id: id.value })
-    if (r && !('error' in r)) {
-      isFollowing.value = r.following
-    }
   }
 }
 
 async function handleFollow() {
-  console.log('[follow] handleFollow called, viewer:', !!userStore.viewer, 'isOnline:', isOnline.value, 'token:', !!userStore.token?.value)
   if (!userStore.viewer) return
-
-  // If server is reachable but we have no token, try to sync local creds first
-  const needsSync = (userStore.isTauriMode || userStore.isBrowserLocal) && isOnline.value && !userStore.token?.value
-  if (needsSync) {
-    followLoading.value = true
-    const synced = await userStore.trySyncServerAuth()
-    followLoading.value = false
-    if (!synced || !userStore.token?.value) return
-  }
-
   followLoading.value = true
   try {
-    if (isLocal.value && !useServerApi.value) {
-      console.log('[follow] offline — blocked')
-      return
+    if (isLocal.value) {
+      if (isFollowing.value) {
+        await tauri.unfollowUser({ follower_id: localId.value, followed_id: id.value })
+      } else {
+        await tauri.followUser({ follower_id: localId.value, followed_id: id.value })
+      }
     } else {
-      console.log('[follow] calling REST API:', isFollowing.value ? 'unfollow' : 'follow', id.value)
       if (isFollowing.value) {
         await unfollowUser(id.value)
       } else {
         await followUser(id.value)
       }
-      console.log('[follow] API success')
     }
     isFollowing.value = !isFollowing.value
-  } catch (e: any) { console.log('[follow] error:', e?.response?.status, e?.response?.data || e?.message) }
+  } catch { /* revert on failure — no state change */ }
   finally { followLoading.value = false }
 }
 
 async function loadArticles() {
   const merged: ArticleSummary[] = []
 
-  // 1. Server articles (skip in pure Tauri mode — server won't respond)
-  if (!tauri.isTauri.value) {
+  // 1. Server articles — fetch when online (including Tauri+online)
+  if (!tauri.isTauri.value || isOnline.value) {
     try {
       const artData = await getArticles({ author_id: id.value, page: 1, size: 50 })
       const serverArticles = Array.isArray(artData) ? artData : (artData.articles ?? [])

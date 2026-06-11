@@ -8,7 +8,7 @@
 use crate::error::AppError;
 use crate::local_auth::{self, Account, AccountSummary, AccountWithToken};
 use crate::local_git;
-use crate::local_store::{self, CachedArticle, Draft, DraftSummary};
+use crate::local_store::{self, CachedArticle, Draft, DraftSummary, FollowEntry};
 use crate::AppState;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
@@ -579,4 +579,97 @@ pub struct ExportArticleParams {
 #[tauri::command]
 pub fn export_article(params: ExportArticleParams) -> Result<String, AppError> {
     local_git::export_article(&params.article_id)
+}
+
+// ── Follow commands ───────────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct FollowUserParams {
+    pub token: Option<String>,
+    #[serde(default)]
+    pub follower_id: String,
+    pub followed_id: String,
+}
+
+#[tauri::command]
+pub fn follow_user(
+    state: State<'_, AppState>,
+    params: FollowUserParams,
+) -> Result<OkResponse, AppError> {
+    let account_id = if let Some(ref token) = params.token {
+        resolve_account(&state, token)?
+    } else if !params.follower_id.is_empty() {
+        params.follower_id.clone()
+    } else {
+        return Err(AppError::AuthFailed("Authentication required".into()));
+    };
+    let conn = lock_db(&state)?;
+    local_store::follow_user(&conn, &account_id, &params.followed_id)?;
+    Ok(OkResponse { ok: true })
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UnfollowUserParams {
+    pub token: Option<String>,
+    #[serde(default)]
+    pub follower_id: String,
+    pub followed_id: String,
+}
+
+#[tauri::command]
+pub fn unfollow_user(
+    state: State<'_, AppState>,
+    params: UnfollowUserParams,
+) -> Result<OkResponse, AppError> {
+    let account_id = if let Some(ref token) = params.token {
+        resolve_account(&state, token)?
+    } else if !params.follower_id.is_empty() {
+        params.follower_id.clone()
+    } else {
+        return Err(AppError::AuthFailed("Authentication required".into()));
+    };
+    let conn = lock_db(&state)?;
+    local_store::unfollow_user(&conn, &account_id, &params.followed_id)?;
+    Ok(OkResponse { ok: true })
+}
+
+#[derive(Debug, Deserialize)]
+pub struct IsFollowingParams {
+    pub follower_id: String,
+    pub followed_id: String,
+}
+
+#[tauri::command]
+pub fn is_following(
+    state: State<'_, AppState>,
+    params: IsFollowingParams,
+) -> Result<serde_json::Value, AppError> {
+    let conn = lock_db(&state)?;
+    let following = local_store::is_following(&conn, &params.follower_id, &params.followed_id)?;
+    Ok(serde_json::json!({ "following": following }))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GetFollowListParams {
+    pub token: Option<String>,
+    #[serde(default)]
+    pub user_id: String,
+}
+
+#[tauri::command(name = "get_following")]
+pub fn get_following_cmd(
+    state: State<'_, AppState>,
+    params: GetFollowListParams,
+) -> Result<Vec<FollowEntry>, AppError> {
+    let conn = lock_db(&state)?;
+    local_store::get_following(&conn, &params.user_id)
+}
+
+#[tauri::command(name = "get_followers")]
+pub fn get_followers_cmd(
+    state: State<'_, AppState>,
+    params: GetFollowListParams,
+) -> Result<Vec<FollowEntry>, AppError> {
+    let conn = lock_db(&state)?;
+    local_store::get_followers(&conn, &params.user_id)
 }
