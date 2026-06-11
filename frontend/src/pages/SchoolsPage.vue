@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { getUsers } from '../api/users'
+import { getUsers, followUser, unfollowUser, getFollowing } from '../api/users'
 import { useUserStore } from '../stores/useUserStore'
 import ReputationBadges from '../components/ReputationBadges.vue'
-import { followUser, unfollowUser } from '../api/users'
 import { useTauri } from '../composables/useTauri'
 import { useOffline } from '../composables/useOffline'
+import { useNetworkStatus } from '../composables/useNetworkStatus'
 import { useAsyncResource } from '../composables/useAsyncResource'
 import ErrorState from '../components/ErrorState.vue'
 import type { UserSummary } from '../api/types'
@@ -18,17 +18,46 @@ const { t } = useI18n()
 const userStore = useUserStore()
 const tauri = useTauri()
 const { canRead, getFallback } = useOffline()
+const { isOnline } = useNetworkStatus()
 const following = ref<Set<string>>(new Set())
 
 const isLocal = computed(() => userStore.isTauriMode || userStore.isBrowserLocal)
+// In local mode, follow operations use the local account ID (not viewer.id,
+// which may be overwritten with a server UUID after apiLogin sync).
+const localId = computed(() => userStore.localAccount?.id || userStore.viewer?.id || '')
+
+async function loadFollowState() {
+  if (!userStore.viewer) return
+  const ids = new Set<string>()
+
+  if (isLocal.value) {
+    // Tauri / browser-local mode — load from local storage.
+    try {
+      const r = await tauri.getFollowing({ user_id: localId.value })
+      if (r && !('error' in r) && Array.isArray(r)) {
+        for (const f of r) ids.add(f.id)
+      }
+    } catch { /* fall through */ }
+  } else {
+    // Web mode — load from server REST API.
+    try {
+      const following_users = await getFollowing(userStore.viewer.id)
+      const list = Array.isArray(following_users) ? following_users : (following_users as any)?.users || []
+      for (const u of list) ids.add(u.id)
+    } catch { /* fall through */ }
+  }
+
+  following.value = ids
+}
 
 const { data: users, loading, error, execute } = useAsyncResource(
   async () => {
-    // Block data fetch when offline or in local mode — schools requires
-    // a server connection and should never show local accounts.
     if (!canRead('schools')) return [] as UserSummary[]
     const list = await getUsers()
     list.sort((a: UserSummary, b: UserSummary) => b.article_count - a.article_count)
+    // Load follow state after users arrive, in same async context
+    // to avoid racing with toggleFollow.
+    if (userStore.viewer) await loadFollowState()
     return list
   },
   [] as UserSummary[],
@@ -44,30 +73,38 @@ async function toggleFollow(u: UserSummary) {
   } else {
     following.value.add(u.id)
   }
-  // Persist locally in dev-mock mode, via REST API otherwise.
-  if (isLocal.value) {
-    if (isCurrentlyFollowing) {
-      await tauri.unfollowUser({ follower_id: userStore.viewer.id, followed_id: u.id })
+  // Persist: Tauri IPC for local mode, REST API for web mode.
+  try {
+    if (isLocal.value) {
+      if (isCurrentlyFollowing) {
+        await tauri.unfollowUser({ follower_id: localId.value, followed_id: u.id })
+      } else {
+        await tauri.followUser({ follower_id: localId.value, followed_id: u.id })
+      }
     } else {
-      await tauri.followUser({ follower_id: userStore.viewer.id, followed_id: u.id })
-    }
-  } else {
-    try {
       if (isCurrentlyFollowing) {
         await unfollowUser(u.id)
       } else {
         await followUser(u.id)
       }
-    } catch {
-      // Revert on failure when server is available.
-      if (isCurrentlyFollowing) {
-        following.value.add(u.id)
-      } else {
-        following.value.delete(u.id)
-      }
+    }
+  } catch {
+    // Revert on failure.
+    if (isCurrentlyFollowing) {
+      following.value.add(u.id)
+    } else {
+      following.value.delete(u.id)
     }
   }
 }
+
+// If isOnline was false at mount time, useAsyncResource immediate was false
+// and users never loaded. Re-trigger when the network comes online.
+watch(isOnline, (online) => {
+  if (online && users.value.length === 0 && !loading.value) {
+    execute()
+  }
+})
 
 function goToUser(id: string) {
   router.push(`/user/${id}`)
