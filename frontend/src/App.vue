@@ -53,7 +53,7 @@ const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 const tabStore = useTabStore()
-const { startPing, stopPing } = useNetworkStatus()
+const { startPing, stopPing, isOnline } = useNetworkStatus()
 
 const isEditorPage = computed(() => route.path.startsWith('/edit'))
 
@@ -77,6 +77,13 @@ router.afterEach((to) => {
     // Pass fullPath so editor tabs with different ?new=1&_t=X get unique ids.
     // Article paths get normalized: /articles/foo → /article/foo.
     tabStore.activateTabByRoute(to.fullPath)
+  }
+})
+
+// ── L4: Auto-sync local account to server when network becomes available ──
+watch(isOnline, (online) => {
+  if (online) {
+    userStore.trySyncServerAuth()
   }
 })
 
