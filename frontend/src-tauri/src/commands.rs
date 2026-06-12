@@ -395,13 +395,16 @@ pub struct GitInitParams {
 
 #[tauri::command]
 pub async fn git_init(params: GitInitParams) -> Result<local_git::GitCommitResult, AppError> {
-    local_git::git_init(
-        &params.article_id,
-        &params.content,
-        &params.format,
-        &params.commit_message,
-        &params.author,
-    )
+    let article_id = params.article_id;
+    let content = params.content;
+    let format = params.format;
+    let commit_message = params.commit_message;
+    let author = params.author;
+    tokio::task::spawn_blocking(move || {
+        local_git::git_init(&article_id, &content, &format, &commit_message, &author)
+    })
+    .await
+    .map_err(|e| AppError::IoError(format!("git_init panicked: {}", e)))?
 }
 
 #[derive(Debug, Deserialize)]
@@ -418,13 +421,16 @@ pub struct GitCommitParams {
 
 #[tauri::command]
 pub async fn git_commit(params: GitCommitParams) -> Result<local_git::GitCommitResult, AppError> {
-    local_git::git_commit(
-        &params.article_id,
-        &params.content,
-        &params.format,
-        &params.commit_message,
-        &params.author,
-    )
+    let article_id = params.article_id;
+    let content = params.content;
+    let format = params.format;
+    let commit_message = params.commit_message;
+    let author = params.author;
+    tokio::task::spawn_blocking(move || {
+        local_git::git_commit(&article_id, &content, &format, &commit_message, &author)
+    })
+    .await
+    .map_err(|e| AppError::IoError(format!("git_commit panicked: {}", e)))?
 }
 
 #[derive(Debug, Deserialize)]
@@ -436,7 +442,10 @@ pub struct GitHistoryParams {
 pub async fn git_history(
     params: GitHistoryParams,
 ) -> Result<Vec<local_git::CommitEntry>, AppError> {
-    local_git::git_history(&params.article_id)
+    let article_id = params.article_id;
+    tokio::task::spawn_blocking(move || local_git::git_history(&article_id))
+        .await
+        .map_err(|e| AppError::IoError(format!("git_history panicked: {}", e)))?
 }
 
 #[derive(Debug, Deserialize)]
@@ -447,8 +456,14 @@ pub struct GitShowParams {
 
 #[tauri::command]
 pub async fn git_show(params: GitShowParams) -> Result<String, AppError> {
-    let (content, _format) = local_git::git_show(&params.article_id, &params.commit_hash)?;
-    Ok(content)
+    let article_id = params.article_id;
+    let commit_hash = params.commit_hash;
+    tokio::task::spawn_blocking(move || {
+        let (content, _format) = local_git::git_show(&article_id, &commit_hash)?;
+        Ok(content)
+    })
+    .await
+    .map_err(|e| AppError::IoError(format!("git_show panicked: {}", e)))?
 }
 
 #[derive(Debug, Deserialize)]
@@ -460,7 +475,12 @@ pub struct GitDiffParams {
 
 #[tauri::command]
 pub async fn git_diff(params: GitDiffParams) -> Result<local_git::DiffResult, AppError> {
-    local_git::git_diff(&params.article_id, &params.hash1, &params.hash2)
+    let article_id = params.article_id;
+    let hash1 = params.hash1;
+    let hash2 = params.hash2;
+    tokio::task::spawn_blocking(move || local_git::git_diff(&article_id, &hash1, &hash2))
+        .await
+        .map_err(|e| AppError::IoError(format!("git_diff panicked: {}", e)))?
 }
 
 #[derive(Debug, Deserialize)]
@@ -474,7 +494,12 @@ pub struct GitRollbackParams {
 pub async fn git_rollback(
     params: GitRollbackParams,
 ) -> Result<local_git::GitCommitResult, AppError> {
-    local_git::git_rollback(&params.article_id, &params.commit_hash, &params.author)
+    let article_id = params.article_id;
+    let commit_hash = params.commit_hash;
+    let author = params.author;
+    tokio::task::spawn_blocking(move || local_git::git_rollback(&article_id, &commit_hash, &author))
+        .await
+        .map_err(|e| AppError::IoError(format!("git_rollback panicked: {}", e)))?
 }
 
 #[derive(Debug, Deserialize)]
@@ -501,7 +526,11 @@ pub struct CompileTypstParams {
 
 #[tauri::command]
 pub async fn compile_typst(params: CompileTypstParams) -> Result<String, AppError> {
-    local_store::compile_typst(&params.content, &params.format)
+    let content = params.content;
+    let format = params.format;
+    tokio::task::spawn_blocking(move || local_store::compile_typst(&content, &format))
+        .await
+        .map_err(|e| AppError::IoError(format!("compile_typst panicked: {}", e)))?
 }
 
 #[derive(Deserialize)]
@@ -511,7 +540,10 @@ pub struct CompileTypstPdfParams {
 
 #[tauri::command]
 pub async fn compile_typst_pdf(params: CompileTypstPdfParams) -> Result<String, AppError> {
-    local_store::compile_typst_pdf(&params.content)
+    let content = params.content;
+    tokio::task::spawn_blocking(move || local_store::compile_typst_pdf(&content))
+        .await
+        .map_err(|e| AppError::IoError(format!("compile_typst_pdf panicked: {}", e)))?
 }
 
 // ── Article full cache command ──────────────────────────────────────────
@@ -591,5 +623,8 @@ pub struct ExportArticleParams {
 
 #[tauri::command]
 pub async fn export_article(params: ExportArticleParams) -> Result<String, AppError> {
-    local_git::export_article(&params.article_id)
+    let article_id = params.article_id;
+    tokio::task::spawn_blocking(move || local_git::export_article(&article_id))
+        .await
+        .map_err(|e| AppError::IoError(format!("export_article panicked: {}", e)))?
 }
