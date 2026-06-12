@@ -14,13 +14,14 @@
 import { useTauri } from './useTauri'
 import { getFeedCache } from '../api/feed'
 import type { FeedCacheResponse } from '../api/feed'
-import type { ArticleDetail, ArticleSource, ArticleSummary, UserSummary } from '../api/types'
+import type { ArticleDetail, ArticleSource, ArticleSummary, UserProfile, UserSummary } from '../api/types'
 
 const FOLLOW_IDS_PREFIX = '_follow_ids_'
 const COUNTS_PREFIX = '_counts_'
 const FOLLOWING_USERS_PREFIX = '_following_users_'
 const FEED_PREFIX = '_feed_'
 const USER_ARTICLES_PREFIX = '_user_articles_'
+const USER_PROFILE_PREFIX = '_user_profile_'
 const ARTICLE_PREFIX = '_article_'
 
 function idsKey(userId: string): string { return `${FOLLOW_IDS_PREFIX}${userId}` }
@@ -159,6 +160,23 @@ export function useFollowCache() {
     } catch { /* ignore */ }
   }
 
+  // ── User Profiles (for offline browsing of followed users) ──────────
+
+  async function getCachedUserProfile(userId: string): Promise<UserProfile | null> {
+    try {
+      const r = await tauri.getCachedArticle({ id: `${USER_PROFILE_PREFIX}${userId}` })
+      if (!r || 'error' in r || !r.json) return null
+      return JSON.parse(r.json)
+    } catch { return null }
+  }
+
+  async function setCachedUserProfile(userId: string, profile: UserProfile): Promise<void> {
+    try {
+      const payload = JSON.stringify({ ...profile, cached_at: new Date().toISOString() })
+      await tauri.cacheArticle({ id: `${USER_PROFILE_PREFIX}${userId}`, article_json: payload })
+    } catch { /* ignore */ }
+  }
+
   // ── Explicitly opened articles (full content) ──────────────────────
 
   async function getCachedArticle(articleId: string): Promise<{ detail: ArticleDetail; source: ArticleSource } | null> {
@@ -191,6 +209,8 @@ export function useFollowCache() {
     getCachedFeed,
     getCachedUserArticles,
     setCachedUserArticles,
+    getCachedUserProfile,
+    setCachedUserProfile,
     getCachedArticle,
     setCachedArticle,
   }
