@@ -14,8 +14,17 @@ export const apiClient = axios.create({
 })
 
 // ── Request interceptor: attach Bearer token ───────────────────────────
+// ── Request interceptor: skip when offline ─────────────────────────────
 
 apiClient.interceptors.request.use(config => {
+  // When server is known to be unreachable, reject immediately without
+  // making a network request — prevents the browser from logging a red
+  // "Failed to load resource" error for every API call.
+  if (!_getNS().isOnline.value) {
+    return Promise.reject(
+      new axios.Cancel('Server unreachable — offline')
+    )
+  }
   const token = loadString('token')
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
@@ -31,6 +40,10 @@ apiClient.interceptors.response.use(
     return response
   },
   error => {
+    // Offline guard — suppressed request, not a real error.
+    if (axios.isCancel(error)) {
+      return Promise.reject(error)
+    }
     if (!error.response) {
       if (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
         _getNS().notifyFailure()
