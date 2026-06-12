@@ -199,10 +199,19 @@ async function loadArticle(articleId: string) {
         articleFormat.value = cached.source.format as 'markdown' | 'typst'
         articleSourceContent.value = cached.source.content
         if (cached.source.content) {
-          const { parseMarkdown } = await import('../utils/markdown')
-          compiledHtml.value = parseMarkdown(cached.source.content)
+          if (cached.source.format === 'typst') {
+            try {
+              const result = await tauri.compileTypst({ content: cached.source.content, format: 'typst' })
+              if (result && typeof result === 'string') {
+                compiledHtml.value = `<div class="typst-preview">${sanitizeTypstSvg(result)}</div>`
+              }
+            } catch { compiledHtml.value = '' }
+          } else {
+            const { parseMarkdown } = await import('../utils/markdown')
+            compiledHtml.value = renderMathInHtml(parseMarkdown(cached.source.content))
+          }
         }
-        loadReviews()
+        try { loadReviews() } catch { /* offline — no reviews available */ }
         return
       }
       // Try local draft (own articles).

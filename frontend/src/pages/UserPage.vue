@@ -60,16 +60,21 @@ const { data: user, loading, error, execute: loadUser } = useAsyncResource(
     // Self in local mode — use viewer profile directly.
     if (isLocal.value && isSelf.value && userStore.viewer) return userStore.viewer
     // Other user in local mode — look up from browser-local accounts.
-    // When online, also check the server API (local accounts may not include
-    // users registered solely on the server).
     if (isLocal.value && !isSelf.value) {
       const accts = await tauri.listAccounts()
       if (accts && !('error' in accts) && Array.isArray(accts)) {
         const found = accts.find(a => a.id === id.value)
         if (found) return _localUserToProfile(found)
       }
-      // Fall back to server API when online — the user may be a server-only user.
-      if (isOnline.value) return getUser(id.value)
+      // Online — fetch from server, then cache for offline.
+      if (isOnline.value) {
+        const profile = await getUser(id.value)
+        useFollowCache().setCachedUserProfile(id.value, profile).catch(() => {})
+        return profile
+      }
+      // Offline — try cached profile for followed users.
+      const cached = await useFollowCache().getCachedUserProfile(id.value)
+      if (cached) return cached
       throw new Error('User not found')
     }
     return getUser(id.value)
