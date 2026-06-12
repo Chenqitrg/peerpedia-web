@@ -39,6 +39,7 @@ import {
 } from 'lucide-vue-next'
 import { useArticleSync } from '../composables/useArticleSync'
 import { useFollowCache } from '../composables/useFollowCache'
+import { saveJSON, loadJSON } from '../composables/useLocalStorage'
 import DiffView from '../components/DiffView.vue'
 
 const route = useRoute()
@@ -452,6 +453,37 @@ function refreshArticle() {
   loadReviews()
 }
 
+function _syncBookmarkCache(viewerId: string, articleId: string, add: boolean) {
+  const cacheKey = `bookmarks-${viewerId}`
+  const items = loadJSON<import('../api/types').ArticleSummary[]>(cacheKey) || []
+  // Remove existing entry for this article.
+  const filtered = items.filter((a: { id: string }) => a.id !== articleId)
+  if (add && article.value) {
+    // Build a minimal ArticleSummary from the current article detail.
+    filtered.push({
+      id: article.value.id,
+      title: article.value.title,
+      status: article.value.status,
+      authors: article.value.authors,
+      abstract: null,
+      content_preview: articleSourceContent.value.slice(0, 200),
+      commit_hash: article.value.commit_hash,
+      fork_count: article.value.fork_count,
+      forked_from: article.value.forked_from,
+      commit_count: article.value.commit_count,
+      score: article.value.score,
+      sink_eta: null,
+      days_remaining: null,
+      sink_duration_days: null,
+      is_bookmarked: true,
+      is_own_article: false,
+      created_at: article.value.created_at,
+      updated_at: article.value.updated_at,
+    })
+  }
+  saveJSON(cacheKey, filtered)
+}
+
 async function toggleBookmark() {
   if (!article.value || !userStore.viewer) return
 
@@ -464,11 +496,11 @@ async function toggleBookmark() {
   // If server is reachable but we have no token, try to sync local creds first
   const needsSync = (userStore.isTauriMode || userStore.isBrowserLocal)
     && isOnline.value
-    && !userStore.token?.value
+    && !userStore.token
 
   if (needsSync) {
     const synced = await userStore.trySyncServerAuth()
-    if (!synced || !userStore.token?.value) {
+    if (!synced || !userStore.token) {
       article.value.is_bookmarked = wasBookmarked
       return
     }
@@ -484,8 +516,11 @@ async function toggleBookmark() {
     } else {
       if (wasBookmarked) {
         await removeBookmark(article.value.id)
+        _syncBookmarkCache(userStore.viewer.id, article.value.id)
       } else {
-        await addBookmark(article.value.id)
+        const result = await addBookmark(article.value.id)
+        // Update localStorage cache so bookmarks are visible offline.
+        _syncBookmarkCache(userStore.viewer.id, article.value.id, result.id)
       }
     }
   } catch {
