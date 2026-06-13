@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2024-2026 Chenqi Meng and PeerPedia contributors
+# SPDX-License-Identifier: CC-BY-NC-SA-4.0
+
 """Article routes: CRUD, history, diff, fork, rollback, publish, source, download."""
 import shutil
 import tarfile

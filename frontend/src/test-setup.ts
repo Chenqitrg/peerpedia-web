@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2024-2026 Chenqi Meng and PeerPedia contributors
+// SPDX-License-Identifier: CC-BY-NC-SA-4.0
+
 import { vi } from 'vitest'
 import { config } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'

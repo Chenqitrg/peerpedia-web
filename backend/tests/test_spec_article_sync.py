@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2024-2026 Chenqi Meng and PeerPedia contributors
+# SPDX-License-Identifier: CC-BY-NC-SA-4.0
+
 """xspec: L4 Article sync — server-side contract tests.
 
 These tests define the expected product behavior from the SERVER perspective.

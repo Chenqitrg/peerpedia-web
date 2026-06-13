@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2024-2026 Chenqi Meng and PeerPedia contributors
+# SPDX-License-Identifier: CC-BY-NC-SA-4.0
+
 """Extra git route tests — verify actual content, not just status codes.
 
 These tests strengthen the git-backed article sub-routes (history, diff,

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2024-2026 Chenqi Meng and PeerPedia contributors
+# SPDX-License-Identifier: CC-BY-NC-SA-4.0
+
 """xspec: Bookmark full-cycle user journey test.
 
 SPEC-BM-E2E — Bookmark complete user journey

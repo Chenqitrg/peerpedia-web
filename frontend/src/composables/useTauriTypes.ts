@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2024-2026 Chenqi Meng and PeerPedia contributors
+// SPDX-License-Identifier: CC-BY-NC-SA-4.0
+
 // Parameter and return types for Tauri IPC commands.
 // Extracted from useTauri.ts — pure type definitions, no runtime code.
 

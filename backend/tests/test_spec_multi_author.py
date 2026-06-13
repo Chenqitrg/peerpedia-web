@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2024-2026 Chenqi Meng and PeerPedia contributors
+# SPDX-License-Identifier: CC-BY-NC-SA-4.0
+
 """XSpec tests for multi-author git history functions.
 
 SPEC-1 through SPEC-5: get_authors_from_git and rebuild_article_authors.

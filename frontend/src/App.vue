@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: 2024-2026 Chenqi Meng and PeerPedia contributors -->
+<!-- SPDX-License-Identifier: CC-BY-NC-SA-4.0 -->
+
 <template>
   <div id="app" class="min-h-screen bg-page flex flex-col">
     <NavBar />

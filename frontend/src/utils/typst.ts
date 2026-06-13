@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2024-2026 Chenqi Meng and PeerPedia contributors
+// SPDX-License-Identifier: CC-BY-NC-SA-4.0
+
 /**
  * Sanitize Typst-compiled SVG for dark-theme display.
  * - Strips root width/height attrs so CSS can drive responsive sizing

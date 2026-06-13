@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2024-2026 Chenqi Meng and PeerPedia contributors
+// SPDX-License-Identifier: CC-BY-NC-SA-4.0
+
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useTabStore } from '../useTabStore'

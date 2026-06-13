@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2024-2026 Chenqi Meng and PeerPedia contributors
+// SPDX-License-Identifier: CC-BY-NC-SA-4.0
+
 // Local account system — bcrypt password hashing + SQLite storage.
 //
 // Accounts are stored in the local SQLite database. Passwords are hashed with bcrypt

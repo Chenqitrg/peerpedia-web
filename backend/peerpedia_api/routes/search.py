@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2024-2026 Chenqi Meng and PeerPedia contributors
+# SPDX-License-Identifier: CC-BY-NC-SA-4.0
+
 """Search API route — SQL-level filtering with file-based source fallback."""
 from fastapi import APIRouter, Depends, Query
 from peerpedia_core.storage.db.models import Article

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2024-2026 Chenqi Meng and PeerPedia contributors
+// SPDX-License-Identifier: CC-BY-NC-SA-4.0
+
 import katex from 'katex'
 
 /** Render KaTeX math spans in compiled HTML to actual rendered math.

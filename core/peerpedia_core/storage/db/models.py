@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2024-2026 Chenqi Meng and PeerPedia contributors
+# SPDX-License-Identifier: CC-BY-NC-SA-4.0
+
 """Cleaned database models — 7 entities matching the redesign spec.
 
 Article content is stored in git repos (~/.peerpedia/articles/{id}/).

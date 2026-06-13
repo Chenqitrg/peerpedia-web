@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2024-2026 Chenqi Meng and PeerPedia contributors
+// SPDX-License-Identifier: CC-BY-NC-SA-4.0
+
 // Platform abstraction: Tauri IPC vs browser-local vs Web.
 //
 // In Tauri mode:              calls window.__TAURI__.core.invoke() for each IPC command.

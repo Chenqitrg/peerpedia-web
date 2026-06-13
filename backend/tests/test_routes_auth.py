@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2024-2026 Chenqi Meng and PeerPedia contributors
+# SPDX-License-Identifier: CC-BY-NC-SA-4.0
+
 """Auth tests — register, login, me, edge cases.
 
 These tests ensure every seed user scenario is well-tested:

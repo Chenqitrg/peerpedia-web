@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2024-2026 Chenqi Meng and PeerPedia contributors
+# SPDX-License-Identifier: CC-BY-NC-SA-4.0
+
 """Seed-driven tests — verify seed data integrity and exercise seed scenarios.
 
 These tests validate that the seed data is correct AND that all the features

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2024-2026 Chenqi Meng and PeerPedia contributors
+# SPDX-License-Identifier: CC-BY-NC-SA-4.0
+
 """End-to-end user journey tests — black-box, multi-step, cross-API.
 
 These tests verify complete user stories from the user's perspective:
