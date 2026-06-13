@@ -49,15 +49,11 @@ async function handleDelete() {
         }
       }
     } else if (tauri.isTauri.value || tauri.isBrowserLocal.value) {
-      // Offline: local delete only
-      const result = await tauri.deleteArticle({
-        id: props.articleId,
-        account_id: props.authorId || '',
-      })
-      if (result && 'error' in result) {
-        errorMessage.value = 'Delete failed: ' + result.error
-        emit('error', errorMessage.value)
-        return
+      // Offline: mark pending delete (data preserved for reconnect confirmation).
+      try {
+        await tauri.setPendingDelete({ id: props.articleId })
+      } catch (e: unknown) {
+        console.warn('setPendingDelete failed:', e)
       }
     } else {
       // Neither online nor Tauri — shouldn't happen

@@ -651,6 +651,16 @@ pub async fn set_pending_delete(
     Ok(OkResponse { ok: true })
 }
 
+#[tauri::command]
+pub async fn set_pending_push(
+    state: State<'_, AppState>,
+    params: PendingResolveParams,
+) -> Result<OkResponse, AppError> {
+    let conn = lock_db(&state).await?;
+    local_store::set_pending_push(&conn, &params.id)?;
+    Ok(OkResponse { ok: true })
+}
+
 // ── Export command ──────────────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
