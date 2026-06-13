@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2024-2026 Chenqi Meng and PeerPedia contributors
+// SPDX-License-Identifier: CC-BY-NC-SA-4.0
+
 // IPC command handlers — thin wrappers that deserialize params, delegate to the
 // appropriate module, and return Result<T, AppError>. Tauri serializes the Result
 // automatically: Ok → JSON value, Err → { code, message } via AppError's Serialize.

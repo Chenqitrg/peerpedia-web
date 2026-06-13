@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2024-2026 Chenqi Meng and PeerPedia contributors
+// SPDX-License-Identifier: CC-BY-NC-SA-4.0
+
 // Offline cache for follow data.
 // Stores following IDs + followed users' article metadata in the
 // existing article_cache table (via Tauri IPC). Uses namespaced cache

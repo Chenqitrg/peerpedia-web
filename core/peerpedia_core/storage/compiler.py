@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2024-2026 Chenqi Meng and PeerPedia contributors
+# SPDX-License-Identifier: CC-BY-NC-SA-4.0
+
 """Layer 1: Compiler backends for Typst and Markdown.
 
 This is a versioned module — new backends can be added via PIP without

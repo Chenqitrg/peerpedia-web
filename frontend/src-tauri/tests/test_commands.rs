@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2024-2026 Chenqi Meng and PeerPedia contributors
+// SPDX-License-Identifier: CC-BY-NC-SA-4.0
+
 // Integration tests — verify the full pipeline from module functions → SQLite → response.
 // Use in-memory databases to avoid polluting the persistent ~/.peerpedia/peerpedia.db.
 

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2024-2026 Chenqi Meng and PeerPedia contributors
+# SPDX-License-Identifier: CC-BY-NC-SA-4.0
+
 """Thread messages — used in Review and MergeProposal conversations."""
 from dataclasses import dataclass, field
 from datetime import datetime, timezone

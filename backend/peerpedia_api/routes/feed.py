@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2024-2026 Chenqi Meng and PeerPedia contributors
+# SPDX-License-Identifier: CC-BY-NC-SA-4.0
+
 """Feed API route."""
 from fastapi import APIRouter, Depends
 from peerpedia_core.storage.db.crud_article import get_author_ids_batch, list_articles

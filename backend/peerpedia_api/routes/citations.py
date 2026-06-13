@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2024-2026 Chenqi Meng and PeerPedia contributors
+# SPDX-License-Identifier: CC-BY-NC-SA-4.0
+
 """Citation API routes."""
 from fastapi import APIRouter, Depends, HTTPException
 from peerpedia_core.storage.db.crud_article import get_article

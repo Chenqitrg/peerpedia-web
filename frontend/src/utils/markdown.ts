@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2024-2026 Chenqi Meng and PeerPedia contributors
+// SPDX-License-Identifier: CC-BY-NC-SA-4.0
+
 // Client-side Markdown → HTML compilation with KaTeX math support.
 //
 // Ports the _protect_math → _render_markdown → _restore_math pattern

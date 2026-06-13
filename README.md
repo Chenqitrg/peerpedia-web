@@ -386,4 +386,16 @@ MIT. Content: CC BY-SA 4.0.
 
 ---
 
+---
+
+## 许可 · License
+
+Code: [CC BY-NC-SA 4.0](LICENSE) © 2024-2026 [Chenqi Meng](https://github.com/Chenqitrg) and PeerPedia contributors.
+
+内容 · Content: [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
+
+禁止用于 AI 模型训练 · No AI/ML training.
+
+---
+
 *"走向更好的学术 — To a better academia."*

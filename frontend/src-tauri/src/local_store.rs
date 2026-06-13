@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2024-2026 Chenqi Meng and PeerPedia contributors
+// SPDX-License-Identifier: CC-BY-NC-SA-4.0
+
 // Local draft storage and article cache.
 //
 // Drafts are private to each local account. Article cache stores read-only snapshots
