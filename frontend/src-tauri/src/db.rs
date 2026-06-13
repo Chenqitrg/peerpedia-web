@@ -17,7 +17,7 @@ use crate::error::AppError;
 use rusqlite::Connection;
 use std::path::PathBuf;
 
-const CURRENT_SCHEMA_VERSION: i32 = 8;
+const CURRENT_SCHEMA_VERSION: i32 = 9;
 
 /// Resolve the database path: ~/.peerpedia/peerpedia.db
 fn get_db_path() -> Result<PathBuf, AppError> {
@@ -184,6 +184,32 @@ fn apply_migration(conn: &Connection, version: i32) -> Result<(), AppError> {
         }
         8 => {
             tx.execute_batch("DROP TABLE IF EXISTS follows;")?;
+        }
+        9 => {
+            // Drop old sync columns; add offline-state columns.
+            // SQLite < 3.35.0 doesn't support DROP COLUMN — recreate table.
+            tx.execute_batch(
+                "CREATE TABLE drafts_new (
+                    id          TEXT PRIMARY KEY,
+                    account_id  TEXT NOT NULL,
+                    title       TEXT NOT NULL DEFAULT '',
+                    content     TEXT NOT NULL DEFAULT '',
+                    format      TEXT NOT NULL DEFAULT 'markdown',
+                    updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+                    pending_push    INTEGER NOT NULL DEFAULT 0,
+                    pending_delete  INTEGER NOT NULL DEFAULT 0,
+                    offline_since   TEXT,
+                    FOREIGN KEY (account_id) REFERENCES local_accounts(id) ON DELETE CASCADE
+                );
+
+                INSERT INTO drafts_new (id, account_id, title, content, format, updated_at)
+                SELECT id, account_id, title, content, format, updated_at FROM drafts;
+
+                DROP TABLE drafts;
+                ALTER TABLE drafts_new RENAME TO drafts;",
+            )?;
+            // Rebuild FTS index on the new table.
+            tx.execute_batch("INSERT INTO drafts_fts(drafts_fts) VALUES('rebuild');")?;
         }
         _ => {
             // Unknown migration — rollback and report.

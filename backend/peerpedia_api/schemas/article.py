@@ -114,6 +114,7 @@ class ArticleDetail(BaseModel):
 # ── Input schemas ────────────────────────────────────────────────────────
 
 class ArticleCreate(BaseModel):
+    id: Optional[str] = None  # client-generated UUID (accepted, validated as UUID)
     title: str = ""
     abstract: str = ""
     keywords: list[str] = []

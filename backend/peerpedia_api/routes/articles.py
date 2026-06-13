@@ -190,15 +190,31 @@ def api_create_article(
                 detail=f"Author '{author_id}' is not synced to the server. "
                        "Please log out and log in again while the server is running.",
             )
+    # Client-generated UUID: validate and check for duplicates.
+    # Authors are always derived from current_user — client UUID is trusted
+    # only for article identity, never for authorship.
+    client_id = body.id
+    if client_id is not None:
+        try:
+            uuid.UUID(client_id)
+        except ValueError:
+            raise HTTPException(status_code=422, detail=f"Invalid article ID: {client_id}")
+        if get_article(db, client_id) is not None:
+            raise HTTPException(status_code=409, detail=f"Article '{client_id}' already exists")
+    kwargs = {
+        "title": body.title,
+        "abstract": body.abstract,
+        "keywords": body.keywords,
+        "categories": body.categories,
+        "forked_from": body.forked_from,
+    }
+    if client_id is not None:
+        kwargs["id"] = client_id
     a = create_article(
         db,
         authors=author_list,
         status="draft",
-        title=body.title,
-        abstract=body.abstract,
-        keywords=body.keywords,
-        categories=body.categories,
-        forked_from=body.forked_from,
+        **kwargs,
     )
     rp = init_article_repo(a.id)
     ext = ".typ" if body.format == "typst" else ".md"

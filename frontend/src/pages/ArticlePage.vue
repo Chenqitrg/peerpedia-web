@@ -377,7 +377,7 @@ async function loadReviews() {
 const { isSynced } = useNetworkStatus()
 
 // ── L4 Article sync ─────────────────────────────────────────────────────
-const draftSyncMeta = ref<{ server_article_id?: string | null; server_commit_hash?: string | null } | null>(null)
+const serverCommitHash = ref<string | null>(null)
 const localHeadHash = ref<string | null>(null)
 const showDiff = ref(false)
 const remoteContent = ref('')
@@ -385,14 +385,13 @@ const localContent = ref('')
 const diffError = ref<string | null>(null)
 
 const draftId = () => myArticleId
-const sid = () => draftSyncMeta.value?.server_article_id
-const sch = () => draftSyncMeta.value?.server_commit_hash
+const sid = () => myArticleId  // UUID unification: draft ID = server article ID
+const sch = () => serverCommitHash.value
 const lh = () => localHeadHash.value
 
 const {
   syncState,
   pushing,
-  upload,
   pushUpdate,
   useRemote,
   getContentAtCommit,
@@ -401,10 +400,6 @@ const {
 
 async function loadSyncMeta() {
   if (!tauri.isTauri.value) return
-  const result = await tauri.getDraft({ id: myArticleId })
-  if (result && !('error' in result)) {
-    draftSyncMeta.value = result as { server_article_id?: string | null; server_commit_hash?: string | null }
-  }
   const history = await tauri.gitHistory({ article_id: myArticleId })
   if (history && !('error' in history) && Array.isArray(history) && history.length > 0) {
     localHeadHash.value = history[0].hash

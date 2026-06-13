@@ -50,7 +50,9 @@ fn main() {
             commands::compile_typst,
             commands::compile_typst_pdf,
             commands::export_article,
-            commands::set_server_article_id,
+            commands::get_pending_ops,
+            commands::clear_pending,
+            commands::set_pending_delete,
         ])
         .run(tauri::generate_context!())
         .expect("error while running PeerPedia");

@@ -23,7 +23,7 @@ export type {
   CacheArticleParams, GetCachedArticleParams,
   BookmarkParams, GetBookmarksParams,
   GitInitParams, GitCommitParams, GitHistoryParams, GitShowParams, GitRollbackParams, InvalidateCacheParams,
-  SetServerArticleIdParams,
+  PendingOp, PendingOpsParams, PendingResolveParams,
   GitCommitResult, CommitEntry,
   Account, AccountSummary, Draft, DraftSummary, CachedArticle,
 } from './useTauriTypes'
@@ -34,7 +34,7 @@ import type {
   CacheArticleParams, GetCachedArticleParams,
   BookmarkParams, GetBookmarksParams,
   GitInitParams, GitCommitParams, GitHistoryParams, GitShowParams, GitRollbackParams, InvalidateCacheParams,
-  SetServerArticleIdParams,
+  PendingOp, PendingOpsParams, PendingResolveParams,
   GitCommitResult, CommitEntry,
   Account, AccountSummary, Draft, DraftSummary, CachedArticle,
 } from './useTauriTypes'
@@ -256,12 +256,15 @@ export function useTauri() {
       return _invoke<string>('export_article', params as unknown as Record<string, unknown>)
     },
 
-    // Article sync
-    async setServerArticleId(params: SetServerArticleIdParams) {
-      return _invoke<{ ok: boolean }>(
-        'set_server_article_id',
-        params as unknown as Record<string, unknown>,
-      )
+    // Pending operations (offline queue)
+    async getPendingOps(params: PendingOpsParams) {
+      return _invoke<PendingOp[]>('get_pending_ops', params as unknown as Record<string, unknown>)
+    },
+    async clearPending(params: PendingResolveParams) {
+      return _invoke<{ ok: boolean }>('clear_pending', params as unknown as Record<string, unknown>)
+    },
+    async setPendingDelete(params: PendingResolveParams) {
+      return _invoke<{ ok: boolean }>('set_pending_delete', params as unknown as Record<string, unknown>)
     },
   }
 }

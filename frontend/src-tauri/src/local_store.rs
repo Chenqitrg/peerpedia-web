@@ -22,8 +22,19 @@ pub struct Draft {
     pub content: String,
     pub format: String,
     pub updated_at: String,
-    pub server_article_id: Option<String>,
-    pub server_commit_hash: Option<String>,
+    pub pending_push: bool,
+    pub pending_delete: bool,
+    pub offline_since: Option<String>,
+}
+
+/// Pending operation for reconnect resolution.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PendingOp {
+    pub id: String,
+    pub title: String,
+    pub op_type: String, // "push" | "delete"
+    pub updated_at: String,
+    pub offline_since: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,7 +73,7 @@ pub struct HistoryEntry {
 
 /// Save a draft. If `id` is empty or new, a new draft is created. Otherwise the
 /// existing draft is updated — but only if it belongs to the same account.
-#[allow(clippy::too_many_arguments)]
+/// Client-generated UUID is accepted via `id`; if omitted, a new UUID is generated.
 pub fn save_draft(
     conn: &Connection,
     id: Option<&str>,
@@ -70,8 +81,6 @@ pub fn save_draft(
     title: &str,
     content: &str,
     format: &str,
-    server_article_id: Option<&str>,
-    server_commit_hash: Option<&str>,
 ) -> Result<Draft, AppError> {
     let draft_id = id
         .filter(|s| !s.is_empty())
@@ -95,20 +104,15 @@ pub fn save_draft(
     }
 
     conn.execute(
-        "INSERT INTO drafts (id, account_id, title, content, format, updated_at, server_article_id, server_commit_hash)
-         VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'), ?6, ?7)
+        "INSERT INTO drafts (id, account_id, title, content, format, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))
          ON CONFLICT(id) DO UPDATE SET
            title = excluded.title,
            content = excluded.content,
            format = excluded.format,
-           updated_at = datetime('now'),
-           server_article_id = excluded.server_article_id,
-           server_commit_hash = excluded.server_commit_hash
+           updated_at = datetime('now')
          WHERE account_id = excluded.account_id",
-        rusqlite::params![
-            draft_id, account_id, title, content, format,
-            server_article_id, server_commit_hash,
-        ],
+        rusqlite::params![draft_id, account_id, title, content, format],
     )?;
 
     // Read back the saved row to get the real updated_at timestamp.
@@ -138,7 +142,7 @@ pub fn list_drafts(conn: &Connection, account_id: &str) -> Result<Vec<DraftSumma
 /// Get a single draft by ID.
 pub fn get_draft(conn: &Connection, id: &str) -> Result<Draft, AppError> {
     conn.query_row(
-        "SELECT id, account_id, title, content, format, updated_at, server_article_id, server_commit_hash FROM drafts WHERE id = ?1",
+        "SELECT id, account_id, title, content, format, updated_at, pending_push, pending_delete, offline_since FROM drafts WHERE id = ?1",
         [id],
         |row| {
             Ok(Draft {
@@ -148,8 +152,9 @@ pub fn get_draft(conn: &Connection, id: &str) -> Result<Draft, AppError> {
                 content: row.get(3)?,
                 format: row.get(4)?,
                 updated_at: row.get(5)?,
-                server_article_id: row.get(6)?,
-                server_commit_hash: row.get(7)?,
+                pending_push: row.get::<_, i32>(6)? != 0,
+                pending_delete: row.get::<_, i32>(7)? != 0,
+                offline_since: row.get(8)?,
             })
         },
     )
@@ -161,13 +166,75 @@ pub fn get_draft(conn: &Connection, id: &str) -> Result<Draft, AppError> {
     })
 }
 
-/// Delete a draft by ID.
+/// Delete a draft by ID. Hard delete — removes the row.
 pub fn delete_draft(conn: &Connection, id: &str) -> Result<(), AppError> {
     let affected = conn.execute("DELETE FROM drafts WHERE id = ?1", [id])?;
     if affected == 0 {
         return Err(AppError::NotFound(format!("Draft '{}' not found", id)));
     }
     Ok(())
+}
+
+// ── Pending operations (offline queue) ─────────────────────────────────────
+
+/// Mark a draft as pending push (offline save).
+pub fn set_pending_push(conn: &Connection, id: &str) -> Result<(), AppError> {
+    let affected = conn.execute(
+        "UPDATE drafts SET pending_push = 1, offline_since = COALESCE(offline_since, datetime('now')) WHERE id = ?1",
+        [id],
+    )?;
+    if affected == 0 {
+        return Err(AppError::NotFound(format!("Draft '{}' not found", id)));
+    }
+    Ok(())
+}
+
+/// Mark a draft as pending delete (offline delete).
+pub fn set_pending_delete(conn: &Connection, id: &str) -> Result<(), AppError> {
+    let affected = conn.execute(
+        "UPDATE drafts SET pending_delete = 1, offline_since = COALESCE(offline_since, datetime('now')) WHERE id = ?1",
+        [id],
+    )?;
+    if affected == 0 {
+        return Err(AppError::NotFound(format!("Draft '{}' not found", id)));
+    }
+    Ok(())
+}
+
+/// Clear pending markers after successful resolution.
+pub fn clear_pending(conn: &Connection, id: &str) -> Result<(), AppError> {
+    conn.execute(
+        "UPDATE drafts SET pending_push = 0, pending_delete = 0, offline_since = NULL WHERE id = ?1",
+        [id],
+    )?;
+    Ok(())
+}
+
+/// Get all drafts with pending operations for an account.
+pub fn get_pending_ops(conn: &Connection, account_id: &str) -> Result<Vec<PendingOp>, AppError> {
+    let mut stmt = conn.prepare(
+        "SELECT id, title, updated_at, pending_push, pending_delete, offline_since
+         FROM drafts
+         WHERE account_id = ?1 AND (pending_push = 1 OR pending_delete = 1)
+         ORDER BY updated_at DESC",
+    )?;
+    let rows = stmt.query_map([account_id], |row| {
+        let _push: i32 = row.get(3)?;
+        let del: i32 = row.get(4)?;
+        let op_type = if del != 0 { "delete" } else { "push" };
+        Ok(PendingOp {
+            id: row.get(0)?,
+            title: row.get(1)?,
+            updated_at: row.get(2)?,
+            op_type: op_type.to_string(),
+            offline_since: row.get(5)?,
+        })
+    })?;
+    let mut ops = Vec::new();
+    for row in rows {
+        ops.push(row?);
+    }
+    Ok(ops)
 }
 
 /// Search drafts using FTS5 full-text search.

@@ -6,9 +6,9 @@ import { useI18n } from 'vue-i18n'
 import { useUserStore } from '../stores/useUserStore'
 import { useTauri } from './useTauri'
 import { useNetworkStatus } from './useNetworkStatus'
-import { createArticle, updateArticle } from '../api/articles'
+import { updateArticle } from '../api/articles'
 import { extractErrorMessage } from './useLocalStorage'
-import type { Draft, SetServerArticleIdParams } from './useTauriTypes'
+import type { Draft } from './useTauriTypes'
 
 export type SyncState = 'upload' | 'synced' | 'conflict' | 'offline' | 'loading'
 
@@ -53,92 +53,7 @@ export function useArticleSync(
     return 'synced'
   })
 
-  /** First upload: POST to create server article, store sync mapping. */
-  async function upload(): Promise<boolean> {
-    if (!userStore.token) {
-      error.value = t('sync.loginRequired')
-      return false
-    }
-    const id = draftId()
-    if (!id) {
-      error.value = t('sync.noArticle')
-      return false
-    }
-
-    pushing.value = true
-    error.value = null
-
-    try {
-      const draft = await tauri.getDraft({ id })
-      if (!draft || isTauriError(draft)) {
-        error.value = t('sync.cannotReadDraft')
-        return false
-      }
-      const d = draft as Draft
-
-      const history = await tauri.gitHistory({ article_id: id })
-      if (!history || isTauriError(history)) {
-        error.value = t('sync.cannotReadHistory')
-        return false
-      }
-      const headHash =
-        Array.isArray(history) && history.length > 0 ? history[0].hash : null
-      if (!headHash) {
-        error.value = t('sync.noCommits')
-        return false
-      }
-
-      const contentResult = await tauri.gitShow({
-        article_id: id,
-        commit_hash: headHash,
-      })
-      if (!contentResult || isTauriError(contentResult)) {
-        error.value = t('sync.cannotReadContent')
-        return false
-      }
-
-      const result = await createArticle({
-        title: d.title || 'Untitled',
-        content: contentResult as string,
-        format: (d.format as 'markdown' | 'typst') || 'markdown',
-        keywords: [],
-        categories: [],
-        abstract: '',
-        commit_message: 'Initial upload from PeerPedia Desktop',
-        self_review: {
-          originality: 3,
-          rigor: 3,
-          completeness: 3,
-          pedagogy: 3,
-          impact: 3,
-        },
-      })
-
-      const serverId = result?.id
-      if (!serverId) {
-        error.value = t('sync.serverError')
-        return false
-      }
-
-      const sidParams: SetServerArticleIdParams = {
-        draft_id: id,
-        server_article_id: serverId,
-        server_commit_hash: headHash,
-        token: (userStore.localToken || undefined) || undefined,
-        account_id: userStore.viewer?.id || '',
-      }
-      await tauri.setServerArticleId(sidParams)
-
-      return true
-    } catch (e: unknown) {
-      error.value = extractErrorMessage(e) || t('sync.uploadFailed')
-      return false
-    } finally {
-      pushing.value = false
-    }
-  }
-
-  /** Push local changes to server (Keep Local in conflict resolution). */
+  /** Push local changes to server. */
   async function pushUpdate(): Promise<boolean> {
     const sid = serverArticleId()
     if (!sid || !userStore.token) {
@@ -174,15 +89,6 @@ export function useArticleSync(
         content: contentResult as string,
       })
 
-      const sidParams: SetServerArticleIdParams = {
-        draft_id: id,
-        server_article_id: sid,
-        server_commit_hash: headHash,
-        token: (userStore.localToken || undefined) || undefined,
-        account_id: userStore.viewer?.id || '',
-      }
-      await tauri.setServerArticleId(sidParams)
-
       return true
     } catch (e: unknown) {
       error.value = extractErrorMessage(e) || t('sync.updateFailed')
@@ -206,16 +112,6 @@ export function useArticleSync(
         commit_hash: remoteCommitHash,
         author: userStore.viewer?.name || 'PeerPedia',
       })
-
-      const sid = serverArticleId()
-      const sidParams: SetServerArticleIdParams = {
-        draft_id: id,
-        server_article_id: sid || '',
-        server_commit_hash: remoteCommitHash,
-        token: (userStore.localToken || undefined) || undefined,
-        account_id: userStore.viewer?.id || '',
-      }
-      await tauri.setServerArticleId(sidParams)
 
       return true
     } catch (e: unknown) {
@@ -246,7 +142,6 @@ export function useArticleSync(
     syncState,
     error,
     pushing,
-    upload,
     pushUpdate,
     useRemote,
     getContentAtCommit,

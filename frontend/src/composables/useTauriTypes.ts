@@ -103,12 +103,22 @@ export interface GitRollbackParams {
   author: string
 }
 
-export interface SetServerArticleIdParams {
-  draft_id: string
-  server_article_id: string
-  server_commit_hash: string
+export interface PendingOp {
+  id: string
+  title: string
+  op_type: string  // "push" | "delete"
+  updated_at: string
+  offline_since?: string | null
+}
+
+export interface PendingOpsParams {
   token?: string
   account_id?: string
+}
+
+export interface PendingResolveParams {
+  id: string
+  token?: string
 }
 
 export interface InvalidateCacheParams {
@@ -148,8 +158,9 @@ export interface Draft {
   content: string
   format: string
   updated_at: string
-  server_article_id?: string | null
-  server_commit_hash?: string | null
+  pending_push?: boolean
+  pending_delete?: boolean
+  offline_since?: string | null
 }
 
 export interface DraftSummary {
