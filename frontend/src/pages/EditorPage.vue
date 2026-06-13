@@ -394,17 +394,10 @@ async function saveDraft() {
       }
     } else if (tauri.isTauri.value || tauri.isBrowserLocal.value) {
       // Offline: mark pending push for reconnect resolution.
-      try {
-        await tauri.saveDraft({
-          id: currentDraftId.value,
-          account_id: accountId,
-          title: title.value,
-          content: content.value,
-          format: format.value,
-        })
-        // pending_push is set by the Rust layer when saveDraft is called
-        // while offline — the frontend just triggers the save.
-      } catch { /* best-effort */ }
+      const draftId = currentDraftId.value
+      if (draftId) {
+        try { await tauri.setPendingPush({ id: draftId }) } catch { /* best-effort */ }
+      }
     }
     return
   }

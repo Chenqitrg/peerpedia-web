@@ -61,6 +61,7 @@ import { useUserStore } from './stores/useUserStore'
 import { useTabStore } from './stores/useTabStore'
 import { loadString, remove } from './composables/useLocalStorage'
 import { useNetworkStatus } from './composables/useNetworkStatus'
+import { useTauri } from './composables/useTauri'
 
 const route = useRoute()
 const router = useRouter()
@@ -105,6 +106,35 @@ watch(
   },
   { immediate: true },
 )
+
+// ── Reconnect: check pending ops when network comes back ─────────
+const tauri = useTauri()
+const pendingOps = ref<{ id: string; title: string; op_type: string; updated_at: string; offline_since?: string | null }[]>([])
+const showReconnect = ref(false)
+
+watch(isSynced, async (online) => {
+  if (!online || !tauri.isTauri.value) return
+  const ops = await tauri.getPendingOps({ account_id: userStore.viewer?.id || 'local' })
+  if (ops && Array.isArray(ops) && !('error' in ops) && ops.length > 0) {
+    pendingOps.value = ops
+    showReconnect.value = true
+  }
+})
+
+async function resolvePending(id: string, action: 'push' | 'discard' | 'confirm_delete' | 'restore') {
+  if (action === 'push') {
+    // TODO: push commit to server
+  } else if (action === 'confirm_delete') {
+    // TODO: DELETE /articles/{id}
+  } else if (action === 'restore') {
+    // Clear pending_delete, keep data
+  }
+  await tauri.clearPending({ id })
+  pendingOps.value = pendingOps.value.filter(o => o.id !== id)
+  if (pendingOps.value.length === 0) {
+    showReconnect.value = false
+  }
+}
 
 // ── Close confirmation dialog (dirty tabs) ─────────────────────
 

@@ -266,5 +266,8 @@ export function useTauri() {
     async setPendingDelete(params: PendingResolveParams) {
       return _invoke<{ ok: boolean }>('set_pending_delete', params as unknown as Record<string, unknown>)
     },
+    async setPendingPush(params: PendingResolveParams) {
+      return _invoke<{ ok: boolean }>('set_pending_push', params as unknown as Record<string, unknown>)
+    },
   }
 }

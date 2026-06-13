@@ -53,6 +53,7 @@ fn main() {
             commands::get_pending_ops,
             commands::clear_pending,
             commands::set_pending_delete,
+            commands::set_pending_push,
         ])
         .run(tauri::generate_context!())
         .expect("error while running PeerPedia");
