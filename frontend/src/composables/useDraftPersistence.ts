@@ -11,6 +11,7 @@
 import { useTauri } from './useTauri'
 import type { Draft, DraftSummary } from './useTauri'
 import apiClient from '../api/client'
+import { v4 as uuidv4 } from 'uuid'
 
 function draftStorageKey(accountId?: string): string {
   return accountId ? `peerpedia_draft_${accountId}` : 'peerpedia_draft'
@@ -47,24 +48,6 @@ export function useDraftPersistence() {
         format,
       })
 
-      // Also try REST API in background so articles appear on server when available.
-      try {
-        if (draftId) {
-          await apiClient.put(`/articles/${draftId}`, {
-            title, content,
-            commit_message: 'Save draft',
-            publish: false,
-          })
-        } else {
-          await apiClient.post('/articles', {
-            title, content, format,
-            commit_message: 'Save draft',
-            publish: false,
-            self_review: { originality: 0, rigor: 0, completeness: 0, pedagogy: 0, impact: 0 },
-          })
-        }
-      } catch { /* Server unavailable — offline is fine. */ }
-
       if (!result) return { error: 'Tauri unavailable' }
       if ('error' in result) return result as PersistenceResult
       return result as Draft
@@ -87,8 +70,10 @@ export function useDraftPersistence() {
         return { id: data.id, title: data.title, content, format }
       }
 
-      // New draft: create via POST.
+      // New draft: generate client UUID, create via POST.
+      const clientId = uuidv4()
       const payload: Record<string, unknown> = {
+        id: clientId,
         title,
         content,
         format,

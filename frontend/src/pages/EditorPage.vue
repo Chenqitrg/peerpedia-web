@@ -14,7 +14,6 @@ import { useDraftPersistence } from '../composables/useDraftPersistence'
 import { useCommitFlow } from '../composables/useCommitFlow'
 import { useSplitPane } from '../composables/useSplitPane'
 import { useTauri } from '../composables/useTauri'
-import { useArticleSync } from '@/composables/useArticleSync'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { useEditorTab } from '../composables/useTabIntegration'
 import { useTabStore } from '../stores/useTabStore'
@@ -118,36 +117,6 @@ const DRAFT_ID_KEY = computed(() => `editor-draft-id-${draftUid.value}-${editId.
 const draftPersistence = useDraftPersistence()
 const tauri = useTauri()
 const { isSynced } = useNetworkStatus()
-
-// ── L4 Auto-upload: silently backup to server on save ──────────────────
-const _draftId = () => currentDraftId.value || editId.value || ''
-const _sid = ref<string | null>(null)
-const _sch = ref<string | null>(null)
-const _lh = ref<string | null>(null)
-const { upload: autoUpload } = useArticleSync(_draftId, () => _sid.value, () => _sch.value, () => _lh.value)
-
-async function _tryAutoUpload() {
-  if (!isSynced.value || !(tauri.isTauri.value || tauri.isBrowserLocal.value)) return
-  const id = _draftId()
-  if (!id) return
-
-  // Only upload if we don't already have a server article ID.
-  const draft = await tauri.getDraft({ id })
-  if (!draft || typeof draft !== 'object' || 'error' in draft) return
-  const d = draft as { server_article_id?: string | null }
-  if (d.server_article_id) return  // already synced
-
-  // Load git HEAD for the upload.
-  const history = await tauri.gitHistory({ article_id: id })
-  if (!history || typeof history !== 'object' || 'error' in history || !Array.isArray(history) || history.length === 0) return
-  _lh.value = history[0].hash
-
-  // Also load existing sync meta (may be stale from DB).
-  if (d.server_article_id) _sid.value = d.server_article_id
-  if ((d as any).server_commit_hash) _sch.value = (d as any).server_commit_hash
-
-  await autoUpload()
-}
 
 const currentDraftId = ref<string | undefined>(
   isEdit.value ? (editId.value as string | undefined) : undefined
@@ -386,7 +355,20 @@ async function saveDraft() {
     if (!ok) return
     commitMsg.value = ''
     markSaved()
-    _tryAutoUpload()  // L4: silent backup to server (fire-and-forget)
+    // Push to server if online and editing an existing article.
+    if (isSynced.value && editId.value) {
+      try {
+        await articleStore.updateArticle(editId.value, {
+          title: title.value,
+          content: content.value,
+          commit_message: msg,
+          publish: false,
+        })
+      } catch (e: any) {
+        console.warn('Push to server failed:', e)
+        // Don't block — local save succeeded, push will retry later
+      }
+    }
     return
   }
 
@@ -439,29 +421,9 @@ async function handleSaveDraft() {
     return
   }
   await saveDraft()
-  if (!userStore.viewer) return
-  if (!editId.value) return  // can't save unsaved article to backend
-  if (!commitMsg.value.trim()) {
-    errorMsg.value = 'Commit message is required'
-    return
-  }
-  submitting.value = true
-  errorMsg.value = ''
-  successMsg.value = ''
-  try {
-    await articleStore.updateArticle(editId.value, {
-      title: title.value,
-      content: content.value,
-      commit_message: '',
-      publish: false,
-    })
-    savedMsg.value = true
-    setTimeout(() => { savedMsg.value = false }, 2000)
-  } catch (e: any) {
-    errorMsg.value = e.response?.data?.detail || 'Save failed'
-  } finally {
-    submitting.value = false
-  }
+  // saveDraft() already handles server push for both Tauri and Web modes.
+  savedMsg.value = true
+  setTimeout(() => { savedMsg.value = false }, 2000)
 }
 
 function handlePublish() {
@@ -507,18 +469,8 @@ async function handleSubmitToPool() {
       result = await articleStore.updateArticle(editId.value!, body)
       successMsg.value = 'Article updated and submitted to pool!'
     } else if (currentDraftId.value) {
-      // Already saved as draft — update it with publish:true instead of creating a duplicate.
-      // In Tauri/local mode, currentDraftId is a local draft ID. Resolve the server
-      // article ID from the draft's auto-upload metadata so we don't 404.
-      let serverId: string | undefined
-      if (tauri.isTauri.value || tauri.isBrowserLocal.value) {
-        const draft = await tauri.getDraft({ id: currentDraftId.value })
-        if (draft && typeof draft === 'object' && !('error' in draft)) {
-          serverId = (draft as any).server_article_id || undefined
-        }
-      }
-      const publishId = serverId || currentDraftId.value
-      result = await articleStore.updateArticle(publishId, body)
+      // UUID unification: currentDraftId IS the server UUID — no fallback needed.
+      result = await articleStore.updateArticle(currentDraftId.value, body)
       successMsg.value = 'Article submitted to pool!'
       remove(DRAFT_KEY.value)
       setTimeout(() => {

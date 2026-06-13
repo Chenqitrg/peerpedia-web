@@ -33,6 +33,20 @@ async fn resolve_account(state: &AppState, token: &str) -> Result<String, AppErr
     local_auth::verify_session(&conn, token)
 }
 
+async fn resolve_account_id(
+    state: &AppState,
+    token: &Option<String>,
+    account_id: &str,
+) -> Result<String, AppError> {
+    if let Some(ref token) = token {
+        resolve_account(state, token).await
+    } else if !account_id.is_empty() {
+        Ok(account_id.to_string())
+    } else {
+        Err(AppError::AuthFailed("Authentication required".into()))
+    }
+}
+
 // ── Auth commands ──────────────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
@@ -133,8 +147,6 @@ pub async fn save_draft(
         &params.title,
         &params.content,
         &params.format,
-        None,
-        None,
     )
 }
 
@@ -569,51 +581,48 @@ pub async fn cache_article_full(
 
 // ── Article sync command ────────────────────────────────────────────────
 
+// ── Pending ops commands ─────────────────────────────────────────────────
+
 #[derive(Debug, Deserialize)]
-pub struct SetServerArticleIdParams {
-    pub draft_id: String,
-    pub server_article_id: String,
-    pub server_commit_hash: String,
+pub struct PendingOpsParams {
     pub token: Option<String>,
     #[serde(default)]
     pub account_id: String,
 }
 
 #[tauri::command]
-pub async fn set_server_article_id(
+pub async fn get_pending_ops(
     state: State<'_, AppState>,
-    params: SetServerArticleIdParams,
-) -> Result<OkResponse, AppError> {
-    let account_id = if let Some(ref token) = params.token {
-        resolve_account(&state, token).await?
-    } else if !params.account_id.is_empty() {
-        params.account_id.clone()
-    } else {
-        return Err(AppError::AuthFailed("Authentication required".into()));
-    };
-
+    params: PendingOpsParams,
+) -> Result<Vec<local_store::PendingOp>, AppError> {
+    let account_id = resolve_account_id(&state, &params.token, &params.account_id).await?;
     let conn = lock_db(&state).await?;
-    let mut draft = local_store::get_draft(&conn, &params.draft_id)?;
-    if draft.account_id != account_id {
-        return Err(AppError::AuthFailed(
-            "Draft belongs to another account".into(),
-        ));
-    }
+    local_store::get_pending_ops(&conn, &account_id)
+}
 
-    draft.server_article_id = Some(params.server_article_id);
-    draft.server_commit_hash = Some(params.server_commit_hash);
+#[derive(Debug, Deserialize)]
+pub struct PendingResolveParams {
+    pub id: String,
+    pub token: Option<String>,
+}
 
-    local_store::save_draft(
-        &conn,
-        Some(&draft.id),
-        &draft.account_id,
-        &draft.title,
-        &draft.content,
-        &draft.format,
-        draft.server_article_id.as_deref(),
-        draft.server_commit_hash.as_deref(),
-    )?;
+#[tauri::command]
+pub async fn clear_pending(
+    state: State<'_, AppState>,
+    params: PendingResolveParams,
+) -> Result<OkResponse, AppError> {
+    let conn = lock_db(&state).await?;
+    local_store::clear_pending(&conn, &params.id)?;
+    Ok(OkResponse { ok: true })
+}
 
+#[tauri::command]
+pub async fn set_pending_delete(
+    state: State<'_, AppState>,
+    params: PendingResolveParams,
+) -> Result<OkResponse, AppError> {
+    let conn = lock_db(&state).await?;
+    local_store::set_pending_delete(&conn, &params.id)?;
     Ok(OkResponse { ok: true })
 }
 
