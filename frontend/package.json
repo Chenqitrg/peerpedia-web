@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:full": "cd .. && .venv/bin/python -m uvicorn peerpedia_api.main:app --port 8080 --reload & npx tauri dev; kill %1 2>/dev/null",
+    "dev:web": "cd .. && .venv/bin/python -m uvicorn peerpedia_api.main:app --port 8080 --reload & vite --host; kill %1 2>/dev/null",
     "build": "vue-tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
