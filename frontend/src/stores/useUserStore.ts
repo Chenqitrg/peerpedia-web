@@ -121,6 +121,7 @@ export const useUserStore = defineStore('user', () => {
       // User doesn't exist on server yet — try apiRegister immediately.
       try {
         const { user: serverUser, token: t } = await apiRegister({
+          id: acctWithToken.id,
           username,
           password,
           email: acctWithToken.email || `${username}@peerpedia.local`,

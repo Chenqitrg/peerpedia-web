@@ -59,6 +59,7 @@ def api_register(body: RegisterRequest, db: Session = Depends(get_db)):
         username=body.username,
         password_hash=hash_password(body.password),
         email=body.email,
+        id=body.id,
     )
     token = create_token(u.id)
     return AuthResponse(user=_user_to_profile(u, db), token=token)

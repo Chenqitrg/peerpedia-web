@@ -157,7 +157,7 @@ Local and server each hold a complete git history. There is no single "source of
 
 ### 2. One UUID, Everywhere · 一个 ID，贯穿始终
 
-The client generates article UUIDs. The server accepts them as-is. No ID mapping table. No `server_article_id`. The same UUID identifies an article in local SQLite, the local git repo, and the server database. Mapping is the root of all sync evil.
+The client generates UUIDs — for articles and user accounts. The server accepts them as-is. No ID mapping table. No `server_article_id`. The same UUID identifies an entity in local SQLite, the local git repo, and the server database. Mapping is the root of all sync evil.
 
 ### 3. Save = Commit + Push (Online) · 保存在线即推送
 
@@ -345,6 +345,8 @@ Every article is an independent Git repository. Fork, edit, merge, rollback — 
 | **C** | Completeness · 完整性 | Is the work self-contained? |
 | **P** | Pedagogy · 可读性 | Well-written and accessible? |
 | **I** | Impact · 影响力 | How significant for the field? |
+
+Authors submit a self-review with all five dimensions when publishing to the sedimentation pool. Draft saves do not include scores. Community reviews use the same five dimensions for peer evaluation.
 
 ### Sedimentation Pool · 沉淀池
 

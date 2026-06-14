@@ -265,7 +265,7 @@ class TestChineseSearch:
 
     def test_chinese_article_titles_in_list(self, client):
         """Verify Chinese articles appear in the article list."""
-        resp = client.get("/api/v1/articles")
+        resp = client.get("/api/v1/articles?size=300")
         assert resp.status_code == 200
         titles = [a["title"] for a in resp.json()["articles"]]
         chinese = [t for t in titles if any('一' <= c <= '鿿' for c in t)]

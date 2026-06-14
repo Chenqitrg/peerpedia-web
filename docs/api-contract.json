@@ -247,7 +247,7 @@
           "articles"
         ],
         "summary": "Api Create Article",
-        "description": "Create a new article. Accepts optional client-generated UUID in the id field. Articles start as draft — use POST /articles/{id}/publish to enter the sedimentation pool.",
+        "description": "Create a new article. Accepts optional client-generated UUID in the id field. Articles start as draft by default. Set publish=true to enter the sedimentation pool immediately — requires self_review with all five dimension scores. Draft saves (publish=false or omitted) do not include self_review.",
         "operationId": "api_create_article_api_v1_articles_post",
         "requestBody": {
           "required": true,
@@ -269,6 +269,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Bad Request — publish=true requires self_review with all five dimension scores"
           },
           "409": {
             "description": "Conflict — article with this client-generated UUID already exists"
@@ -348,7 +351,7 @@
           "articles"
         ],
         "summary": "Api Update Article",
-        "description": "Edit an article: update content, commit to git. Set publish=true to re-enter the sedimentation pool.",
+        "description": "Edit an article: update content, commit to git. Set publish=true to enter/re-enter the sedimentation pool — requires self_review with all five dimension scores. Draft edits (publish=false or omitted) do not include self_review.",
         "operationId": "api_update_article_api_v1_articles__article_id__put",
         "parameters": [
           {
@@ -381,6 +384,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Bad Request — publish=true requires self_review with all five dimension scores"
           },
           "422": {
             "description": "Validation Error",
@@ -2722,6 +2728,8 @@
             "title": "Commit Message"
           },
           "self_review": {
+            "title": "Self Review",
+            "description": "Five-dimension scores required when publish is true. Omit for draft saves.",
             "anyOf": [
               {
                 "$ref": "#/components/schemas/FiveDimScoresIn"
@@ -2925,6 +2933,19 @@
       },
       "RegisterRequest": {
         "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id",
+            "description": "Client-generated UUID. Server accepts as-is. Omit for auto-generation (backward compat)."
+          },
           "username": {
             "type": "string",
             "title": "Username"

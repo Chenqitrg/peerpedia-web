@@ -74,7 +74,17 @@ const articleBodyRef = ref<HTMLElement | null>(null)
 const articleTabId = tabStore.ensureTab('article', route.fullPath)
 useArticleTab(articleTabId, computed(() => article.value?.title), articleBodyRef)
 
-const isOwnArticle = computed(() => article.value?.is_own_article ?? false)
+const isOwnArticle = computed(() => {
+  if (article.value?.is_own_article) return true
+  // Check both server identity (viewer.id) and local identity (localAccount.id).
+  // After server sync, viewer.id is the server UUID but local drafts use the
+  // local account UUID — the two IDs differ until the draft is synced.
+  const viewerId = userStore.viewer?.id
+  const localId = userStore.localAccount?.id
+  if ((viewerId && articleAuthorIds.value.includes(viewerId)) ||
+      (localId && articleAuthorIds.value.includes(localId))) return true
+  return false
+})
 
 function handleDeleted() {
   router.push(`/user/${userStore.viewer?.id}`)
@@ -149,6 +159,7 @@ const sortedReviews = computed(() => {
 
 function buildArticleFromDraft(draft: { id: string; account_id: string; title: string; content: string; format: string; updated_at: string }): ArticleDetail {
   const viewerId = userStore.viewer?.id
+  const localId = userStore.localAccount?.id
   return {
     id: draft.id,
     title: draft.title || 'Untitled',
@@ -167,7 +178,7 @@ function buildArticleFromDraft(draft: { id: string; account_id: string; title: s
     sink_duration_days: null,
     review_count: 0,
     is_bookmarked: false,
-    is_own_article: viewerId === draft.account_id,
+    is_own_article: viewerId === draft.account_id || localId === draft.account_id,
     created_at: draft.updated_at,
     updated_at: draft.updated_at,
   }
