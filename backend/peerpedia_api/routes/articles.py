@@ -10,8 +10,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import git
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse, PlainTextResponse, Response
 from peerpedia_core.config.params import params
 from peerpedia_core.storage.db.crud_article import (
     count_articles,
@@ -34,10 +34,14 @@ from peerpedia_core.storage.db.crud_review import (
 from peerpedia_core.storage.db.crud_user import get_user
 from peerpedia_core.storage.db.models import User
 from peerpedia_core.storage.git_backend import (
+    apply_bundle,
     commit_article,
+    create_bundle,
+    get_article_lock,
     get_commit_history,
     get_diff_between,
     init_article_repo,
+    MergeConflictError,
 )
 from peerpedia_core.workflow.scoring import compute_article_score_for_commit
 from sqlalchemy.orm import Session
@@ -626,3 +630,138 @@ def api_download_repo(article_id: str):
         media_type="application/gzip",
         filename=f"{article_id}.tar.gz",
     )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Bundle Sync Endpoints (Phase B — git-first network model)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _refresh_db_from_git(article_id: str, rp: Path) -> None:
+    """Best-effort DB cache refresh from article.json and reviews in git.
+
+    Parses article.json for metadata fields, scans reviews/ for scores,
+    and updates the articles table cache. Failures are logged — git is truth.
+    """
+    import json
+    import logging
+    logger = logging.getLogger(__name__)
+
+    article_json = rp / "article.json"
+    if not article_json.exists():
+        return  # nothing to refresh yet
+
+    try:
+        _data = json.loads(article_json.read_text())
+    except (json.JSONDecodeError, OSError):
+        logger.warning("Failed to parse article.json for %s", article_id)
+        return
+
+    # DB refresh deferred — Phase C implements full article.json→DB sync.
+    # For now, just validate the file is readable.
+    logger.debug("article.json validated for %s", article_id)
+
+
+@router.get("/{article_id}/head")
+def api_get_head(article_id: str):
+    """Return the current HEAD commit hash for an article's git repo."""
+    rp = repo_path(article_id)
+    if not (rp / ".git").is_dir():
+        raise HTTPException(status_code=404, detail="Article repo not found")
+
+    import git as gitmod
+    repo = gitmod.Repo(rp)
+    if not repo.head.is_valid():
+        raise HTTPException(status_code=404, detail="No commits in repo")
+
+    return {"hash": repo.head.commit.hexsha}
+
+
+@router.get("/{article_id}/bundle")
+def api_get_bundle(article_id: str, since: str):
+    """Return an incremental git bundle from `since` to HEAD.
+
+    The client pulls this to get server-side commits (reviews, platform
+    updates) before pushing its own content.
+    """
+    rp = repo_path(article_id)
+    if not (rp / ".git").is_dir():
+        raise HTTPException(status_code=404, detail="Article repo not found")
+
+    import git as gitmod
+    repo = gitmod.Repo(rp)
+    if not repo.head.is_valid():
+        raise HTTPException(status_code=404, detail="No commits in repo")
+
+    try:
+        bundle_bytes = create_bundle(rp, since)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    from fastapi.responses import Response
+    return Response(
+        content=bundle_bytes,
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": f"attachment; filename={article_id}.bundle",
+        },
+    )
+
+
+@router.post("/{article_id}/sync")
+async def api_sync_article(
+    article_id: str,
+    file: UploadFile = File(...),
+):
+    """Receive an incremental git bundle and fast-forward merge.
+
+    Client uploads a bundle file (multipart). Server fetches objects,
+    ff-only merges, and updates DB cache from article.json/reviews.
+    Returns 409 if history diverged.
+    """
+    rp = repo_path(article_id)
+    if not (rp / ".git").is_dir():
+        raise HTTPException(status_code=404, detail="Article repo not found")
+
+    import logging
+    logger = logging.getLogger(__name__)
+
+    lock = get_article_lock(article_id)
+    acquired = lock.acquire(timeout=30)
+    if not acquired:
+        raise HTTPException(status_code=503, detail="Article busy — retry later")
+
+    try:
+        bundle_bytes = await file.read()
+
+        try:
+            _new_head = apply_bundle(rp, bundle_bytes)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Article repo not found")
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        except MergeConflictError:
+            # Return current HEAD so client can re-pull and retry
+            import git as gitmod
+            repo = gitmod.Repo(rp)
+            current_head = repo.head.commit.hexsha if repo.head.is_valid() else None
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "Fast-forward merge failed — history diverged",
+                    "server_head": current_head,
+                },
+            )
+
+        # Try to update DB cache — best-effort, git is truth
+        try:
+            _refresh_db_from_git(article_id, rp)
+        except Exception:
+            logger.warning("DB cache refresh failed for article %s", article_id)
+
+        import git as gitmod
+        repo = gitmod.Repo(rp)
+        head_hash = repo.head.commit.hexsha if repo.head.is_valid() else None
+        return {"head": head_hash}
+    finally:
+        lock.release()
