@@ -532,6 +532,131 @@ pub fn git_rollback(
     )
 }
 
+// ── Bundle Sync ──────────────────────────────────────────────────────────
+
+/// Create an incremental git bundle from `since_hash` to HEAD.
+/// Returns the bundle file bytes (for uploading to server).
+pub fn git_bundle_create(article_id: &str, since_hash: &str) -> Result<Vec<u8>, AppError> {
+    let rp = repo_path(article_id)?;
+    if !rp.join(".git").is_dir() {
+        return Err(AppError::NotFound(format!(
+            "Git repo not found for article '{}'",
+            article_id
+        )));
+    }
+
+    // Verify since_hash is an ancestor of HEAD
+    let ancestor_check = Command::new("git")
+        .args([
+            "-C",
+            rp.to_str().unwrap_or("."),
+            "merge-base",
+            "--is-ancestor",
+            since_hash,
+            "HEAD",
+        ])
+        .output()
+        .map_err(|e| AppError::IoError(format!("git merge-base failed: {}", e)))?;
+
+    if !ancestor_check.status.success() {
+        return Err(AppError::IoError(format!(
+            "since_hash {} is not an ancestor of HEAD",
+            &since_hash[..8.min(since_hash.len())]
+        )));
+    }
+
+    let tmp_path = std::env::temp_dir().join(format!("peerpedia-bundle-{}.bundle", article_id));
+
+    let output = Command::new("git")
+        .args([
+            "-C",
+            rp.to_str().unwrap_or("."),
+            "bundle",
+            "create",
+            tmp_path.to_str().unwrap_or("/tmp/bundle"),
+            &format!("{}..HEAD", since_hash),
+        ])
+        .output()
+        .map_err(|e| AppError::IoError(format!("git bundle create failed: {}", e)))?;
+
+    if !output.status.success() {
+        let _ = std::fs::remove_file(&tmp_path);
+        return Err(AppError::IoError(format!(
+            "git bundle create failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )));
+    }
+
+    let buf = std::fs::read(&tmp_path)
+        .map_err(|e| AppError::IoError(format!("Failed to read bundle: {}", e)))?;
+    let _ = std::fs::remove_file(&tmp_path);
+    Ok(buf)
+}
+
+/// Apply a git bundle to the local repo (pull server-side commits).
+/// Fetches objects from the bundle and fast-forward merges.
+/// Returns the new HEAD commit hash.
+pub fn git_bundle_apply(article_id: &str, bundle_bytes: &[u8]) -> Result<String, AppError> {
+    let rp = repo_path(article_id)?;
+    if !rp.join(".git").is_dir() {
+        return Err(AppError::NotFound(format!(
+            "Git repo not found for article '{}'",
+            article_id
+        )));
+    }
+
+    let tmp_path = std::env::temp_dir().join(format!("peerpedia-apply-{}.bundle", article_id));
+    std::fs::write(&tmp_path, bundle_bytes)
+        .map_err(|e| AppError::IoError(format!("Failed to write bundle: {}", e)))?;
+
+    // Fetch objects from bundle
+    let fetch = Command::new("git")
+        .args([
+            "-C",
+            rp.to_str().unwrap_or("."),
+            "fetch",
+            tmp_path.to_str().unwrap_or("/tmp/bundle"),
+            "HEAD",
+        ])
+        .output()
+        .map_err(|e| AppError::IoError(format!("git fetch bundle failed: {}", e)))?;
+
+    if !fetch.status.success() {
+        let _ = std::fs::remove_file(&tmp_path);
+        return Err(AppError::IoError(format!(
+            "git fetch bundle failed: {}",
+            String::from_utf8_lossy(&fetch.stderr)
+        )));
+    }
+
+    // Fast-forward merge to FETCH_HEAD
+    let merge = Command::new("git")
+        .args([
+            "-C",
+            rp.to_str().unwrap_or("."),
+            "merge",
+            "FETCH_HEAD",
+            "--ff-only",
+        ])
+        .output()
+        .map_err(|e| AppError::IoError(format!("git merge failed: {}", e)))?;
+
+    let _ = std::fs::remove_file(&tmp_path);
+
+    if !merge.status.success() {
+        // Abort merge if in progress
+        let _ = Command::new("git")
+            .args(["-C", rp.to_str().unwrap_or("."), "merge", "--abort"])
+            .output();
+        return Err(AppError::IoError(format!(
+            "Fast-forward merge failed — history may have diverged: {}",
+            String::from_utf8_lossy(&merge.stderr)
+        )));
+    }
+
+    get_head_hash(&rp)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
