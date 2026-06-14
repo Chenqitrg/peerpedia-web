@@ -227,6 +227,7 @@ def api_create_article(
         init_article_repo(a.id)
     ext = ".typ" if body.format == "typst" else ".md"
     (rp / f"article{ext}").write_text(body.content)
+    # @deprecated Phase B: server-side commit replaced by bundle apply.
     # Only create server commit if repo was just initialized (no existing
     # commits from local gitInit). Author identity: name = display, email = UUID.
     commit_msg = body.commit_message or "Initial submission"
@@ -313,6 +314,7 @@ def api_update_article(
     if body.categories is not None:
         a.categories = body.categories
 
+    # @deprecated Phase B: content updates via bundle /sync, not server-side commit.
     commit_hash = commit_article(rp, commit_msg, author, f"{author}@peerpedia")
 
     # Rebuild authors from git history (incremental scan when marker exists)
@@ -475,6 +477,7 @@ def api_rollback(
     repo = git.Repo(rp)
     repo.commit(hash)
     repo.git.checkout(hash, "--", ".")
+    # @deprecated Phase B: rollback via revert commit in bundle, not server-side.
     new_hash = commit_article(rp, f"Rollback to {hash[:8]}", "System", "system@peerpedia")
 
     article = get_article(db, article_id)
