@@ -321,6 +321,7 @@ export interface LoginPayload {
 }
 
 export interface RegisterPayload {
+  id?: string  // client-generated UUID (mirrors server RegisterRequest.id)
   username: string
   password: string
   email: string

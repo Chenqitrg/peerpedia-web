@@ -135,6 +135,38 @@ class TestCreateArticle:
         assert data["status"] == "draft"
         assert data["score"] is None
 
+    def test_create_publish_without_self_review_rejected(self, client, seed_user):
+        """Publishing without self_review must be rejected with 400."""
+        resp = client.post("/api/v1/articles", json={
+            "authors": [seed_user],
+            "title": "Publish without review",
+            "content": "# Test",
+            "format": "markdown",
+            "publish": True,
+        })
+        assert resp.status_code == 400
+        assert "self_review is required" in resp.json()["detail"]
+
+    def test_update_publish_without_self_review_rejected(self, client, auth_user_id):
+        """Updating with publish=true but no self_review must be rejected."""
+        # Create a draft first (auth_user_id is the implicit require_user override)
+        resp = client.post("/api/v1/articles", json={
+            "authors": [auth_user_id],
+            "title": "Draft to publish",
+            "content": "# Test",
+            "format": "markdown",
+        })
+        assert resp.status_code == 201
+        article_id = resp.json()["id"]
+
+        # Try to publish via update without self_review
+        resp2 = client.put(f"/api/v1/articles/{article_id}", json={
+            "content": "# Updated",
+            "publish": True,
+        })
+        assert resp2.status_code == 400
+        assert "self_review is required" in resp2.json()["detail"]
+
     def test_create_with_all_metadata(self, client, seed_user):
         """Create article with categories, keywords, abstract, contributions."""
         body = {

@@ -4,12 +4,15 @@
 """Authentication schemas."""
 import re
 
+from typing import Optional
+
 from pydantic import BaseModel, field_validator
 
 from peerpedia_api.schemas.user import UserProfile
 
 
 class RegisterRequest(BaseModel):
+    id: Optional[str] = None  # client-generated UUID, mirrors ArticleCreate.id
     username: str
     password: str
     email: str

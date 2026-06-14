@@ -216,6 +216,11 @@ def api_create_article(
         status="draft",
         **kwargs,
     )
+
+    # Validate publish-time requirements before any disk operations.
+    if body.publish and body.self_review is None:
+        raise HTTPException(status_code=400, detail="self_review is required when publishing")
+
     rp = repo_path(a.id)
     is_new_repo = not (rp / ".git").is_dir()
     if is_new_repo:
@@ -280,6 +285,10 @@ def api_update_article(
     rp = repo_path(article_id)
     if not (rp / ".git").is_dir():
         raise HTTPException(status_code=400, detail="Article repo not found")
+
+    # Validate publish-time requirements before any disk operations.
+    if body.publish and not body.self_review:
+        raise HTTPException(status_code=400, detail="self_review is required when publishing")
 
     author_ids = get_author_ids(db, article_id)
     author = author_ids[0] if author_ids else "unknown"

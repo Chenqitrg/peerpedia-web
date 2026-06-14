@@ -32,6 +32,7 @@ def create_user(
     username: str | None = None,
     password_hash: str = "",
     email: str = "",
+    id: str | None = None,
 ) -> User:
     if username is None or username == "":
         username = _new_username()
@@ -43,6 +44,8 @@ def create_user(
         affiliation=affiliation,
         anonymous_name=anonymous_name or _generate_anonymous_name(),
     )
+    if id is not None:
+        u.id = id
     session.add(u)
     session.commit()
     return u

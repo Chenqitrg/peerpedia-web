@@ -408,7 +408,6 @@ async function saveDraft() {
               content: content.value,
               format: format.value,
               commit_message: msg,
-              self_review: { ...scores.value },
             })
             _pushedToServer.value = true
           } else {
