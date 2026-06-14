@@ -259,6 +259,14 @@ export function useTauri() {
       return _invoke<string>('export_article', params as unknown as Record<string, unknown>)
     },
 
+    // Bundle Sync (Phase C)
+    async gitBundleCreate(params: { article_id: string; since_hash: string }) {
+      return _invoke<number[]>('git_bundle_create', params as unknown as Record<string, unknown>)
+    },
+    async gitBundleApply(params: { article_id: string; bundle_bytes: number[] }) {
+      return _invoke<string>('git_bundle_apply', params as unknown as Record<string, unknown>)
+    },
+
     // Pending operations (offline queue)
     async getPendingOps(params: PendingOpsParams) {
       return _invoke<PendingOp[]>('get_pending_ops', params as unknown as Record<string, unknown>)
