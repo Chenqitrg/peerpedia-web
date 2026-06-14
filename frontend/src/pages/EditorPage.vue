@@ -506,6 +506,14 @@ async function handleSubmitToPool() {
   errorMsg.value = ''
   successMsg.value = ''
 
+  // Phase C: sync content via bundle first, then mark published on server.
+  const aid = editId.value || currentDraftId.value
+  if (aid && (tauri.isTauri.value || tauri.isBrowserLocal.value)) {
+    const accountId = userStore.viewer?.id || 'local'
+    const authorName = userStore.viewer?.name || userStore.viewer?.username || 'local'
+    await autoSync.pushRepo(aid, authorName, accountId, 'publish')
+  }
+
   try {
     const body = {
       title: title.value,
