@@ -339,7 +339,7 @@ def api_update_article(
                 db,
                 article_id=a.id,
                 commit_hash=commit_hash,
-                reviewer_id=author,
+                reviewer_id=author_ids[0],
                 scope="pool",
                 scores=body.self_review.model_dump(),
                 contributions=contributions,
