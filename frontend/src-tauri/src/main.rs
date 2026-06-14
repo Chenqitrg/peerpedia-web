@@ -45,6 +45,8 @@ fn main() {
             commands::git_diff,
             commands::git_rollback,
             commands::git_reset_hard,
+            commands::git_bundle_create,
+            commands::git_bundle_apply,
             commands::invalidate_article_cache,
             commands::search_drafts,
             commands::search_cached_articles,

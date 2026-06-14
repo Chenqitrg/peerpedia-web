@@ -469,6 +469,38 @@ pub async fn git_commit(params: GitCommitParams) -> Result<local_git::GitCommitR
     .map_err(|e| AppError::IoError(format!("git_commit panicked: {}", e)))?
 }
 
+// ── Bundle Sync Commands (Phase B) ──────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct GitBundleCreateParams {
+    pub article_id: String,
+    pub since_hash: String,
+}
+
+#[tauri::command]
+pub async fn git_bundle_create(params: GitBundleCreateParams) -> Result<Vec<u8>, AppError> {
+    let article_id = params.article_id;
+    let since_hash = params.since_hash;
+    tokio::task::spawn_blocking(move || local_git::git_bundle_create(&article_id, &since_hash))
+        .await
+        .map_err(|e| AppError::IoError(format!("git_bundle_create panicked: {}", e)))?
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GitBundleApplyParams {
+    pub article_id: String,
+    pub bundle_bytes: Vec<u8>,
+}
+
+#[tauri::command]
+pub async fn git_bundle_apply(params: GitBundleApplyParams) -> Result<String, AppError> {
+    let article_id = params.article_id;
+    let bundle_bytes = params.bundle_bytes;
+    tokio::task::spawn_blocking(move || local_git::git_bundle_apply(&article_id, &bundle_bytes))
+        .await
+        .map_err(|e| AppError::IoError(format!("git_bundle_apply panicked: {}", e)))?
+}
+
 #[derive(Debug, Deserialize)]
 pub struct GitHistoryParams {
     pub article_id: String,
