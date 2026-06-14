@@ -721,6 +721,7 @@ mod tests {
             "Overwritten",
             "hacked",
             "markdown",
+            "",
         );
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), AppError::AuthFailed(_)));
