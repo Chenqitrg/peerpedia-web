@@ -218,6 +218,31 @@ fn apply_migration(conn: &Connection, version: i32) -> Result<(), AppError> {
             // Rebuild FTS index on the new table.
             tx.execute_batch("INSERT INTO drafts_fts(drafts_fts) VALUES('rebuild');")?;
         }
+        10 => {
+            // v9 dropped/recreated the drafts table, which DESTROYED the
+            // FTS triggers. Re-create them so INSERT/UPDATE/DELETE sync the
+            // FTS index again.
+            tx.execute_batch(
+                "CREATE TRIGGER IF NOT EXISTS drafts_ai AFTER INSERT ON drafts BEGIN
+                    INSERT INTO drafts_fts(rowid, title, content)
+                    VALUES(new.rowid, new.title, new.content);
+                END;
+
+                CREATE TRIGGER IF NOT EXISTS drafts_ad AFTER DELETE ON drafts BEGIN
+                    INSERT INTO drafts_fts(drafts_fts, rowid, title, content)
+                    VALUES('delete', old.rowid, old.title, old.content);
+                END;
+
+                CREATE TRIGGER IF NOT EXISTS drafts_au AFTER UPDATE ON drafts BEGIN
+                    INSERT INTO drafts_fts(drafts_fts, rowid, title, content)
+                    VALUES('delete', old.rowid, old.title, old.content);
+                    INSERT INTO drafts_fts(rowid, title, content)
+                    VALUES(new.rowid, new.title, new.content);
+                END;
+
+                INSERT INTO drafts_fts(drafts_fts) VALUES('rebuild');",
+            )?;
+        }
         _ => {
             // Unknown migration — rollback and report.
             return Err(AppError::DatabaseError(format!(
