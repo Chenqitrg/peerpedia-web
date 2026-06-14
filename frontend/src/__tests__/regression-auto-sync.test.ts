@@ -14,6 +14,8 @@
  *   R4 — /sync/conflicts route removed
  *   R5 — ReconnectDialog and SyncConflictsPage deleted
  *   R6 — TabDrawer always visible (no v-if on pendingConflictCount)
+ *   R9 — auto-sync uses stored commit_message instead of hardcoded string
+ *   R10 — fallback to default when no commit_message stored
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -238,6 +240,36 @@ describe('Regression: auto-sync', () => {
   })
 
   // ── R8: 4xx discard removes pending without retry ─────────────────
+
+  // ── R9: auto-sync uses stored commit_message ─────────────────────
+
+  it('R9: pushOne uses stored commit_message from draft', async () => {
+    pendingStore.set('a1', { id: 'a1', title: 'My Draft', op_type: 'push' })
+    draftStore.set('a1', { title: 'My Draft', content: '# Hello', format: 'md', commit_message: 'Fix equation 3' })
+    mockIsSynced.value = true
+
+    const { flush } = useAutoSync()
+    const result = await flush()
+
+    expect(result.synced).toBe(1)
+    expect(apiCreated.length).toBe(1)
+    expect(apiCreated[0].commit_message).toBe('Fix equation 3')
+  })
+
+  // ── R10: fallback when no commit_message stored ──────────────────
+
+  it('R10: pushOne falls back to default when no commit_message', async () => {
+    pendingStore.set('a1', { id: 'a1', title: 'My Draft', op_type: 'push' })
+    draftStore.set('a1', { title: 'My Draft', content: '# Hello', format: 'md', commit_message: '' })
+    mockIsSynced.value = true
+
+    const { flush } = useAutoSync()
+    const result = await flush()
+
+    expect(result.synced).toBe(1)
+    expect(apiCreated.length).toBe(1)
+    expect(apiCreated[0].commit_message).toBe('Auto-sync from offline edits')
+  })
 
   it('R8: 4xx push error discards pending op', async () => {
     const { createArticle } = await import('../api/articles')

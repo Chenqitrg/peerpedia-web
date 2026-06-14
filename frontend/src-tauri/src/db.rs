@@ -17,7 +17,7 @@ use crate::error::AppError;
 use rusqlite::Connection;
 use std::path::PathBuf;
 
-const CURRENT_SCHEMA_VERSION: i32 = 10;
+const CURRENT_SCHEMA_VERSION: i32 = 11;
 
 /// Resolve the database path: ~/.peerpedia/peerpedia.db
 fn get_db_path() -> Result<PathBuf, AppError> {
@@ -256,6 +256,14 @@ fn apply_migration(conn: &Connection, version: i32) -> Result<(), AppError> {
                 [],
             )?;
             tx.execute("INSERT INTO drafts_fts(drafts_fts) VALUES('rebuild')", [])?;
+        }
+        11 => {
+            // Add commit_message column for preserving user's original commit
+            // message through offline→online sync.
+            let _ = tx.execute(
+                "ALTER TABLE drafts ADD COLUMN commit_message TEXT NOT NULL DEFAULT ''",
+                [],
+            );
         }
         _ => {
             // Unknown migration — rollback and report.

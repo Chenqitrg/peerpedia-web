@@ -38,6 +38,7 @@ export function useDraftPersistence() {
     content: string,
     format: string,
     draftId?: string,
+    commitMessage?: string,
   ): Promise<PersistenceResult> {
     // In Tauri/dev-mock mode, always save to local mock storage first.
     if (tauri.isTauri.value || tauri.isBrowserLocal.value) {
@@ -47,6 +48,7 @@ export function useDraftPersistence() {
         title,
         content,
         format,
+        commit_message: commitMessage || '',
       })
 
       if (!result) return { error: 'Tauri unavailable' }

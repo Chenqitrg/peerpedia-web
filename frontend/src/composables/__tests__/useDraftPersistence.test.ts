@@ -72,6 +72,7 @@ describe('useDraftPersistence', () => {
         title: 'My Draft',
         content: '# Hello',
         format: 'markdown',
+        commit_message: '',
       })
       expect(result).toHaveProperty('id', 'draft-1')
       expect(result).not.toHaveProperty('error')

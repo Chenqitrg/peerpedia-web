@@ -325,7 +325,7 @@ async function persistToGit(accountId: string, authorName: string, authorId: str
   if (!existingId) {
     // New draft — persistence entry first to get an ID.
     const result = await draftPersistence.save(
-      accountId, title.value, content.value, format.value, undefined,
+      accountId, title.value, content.value, format.value, undefined, msg,
     )
     if (!result || !result.id) { errorMsg.value = 'Failed to create draft'; return false }
     currentDraftId.value = result.id
@@ -366,7 +366,7 @@ async function persistToGit(accountId: string, authorName: string, authorId: str
   }
 
   // Update the DB index.
-  await draftPersistence.save(accountId, title.value, content.value, format.value, existingId)
+  await draftPersistence.save(accountId, title.value, content.value, format.value, existingId, msg)
   return true
 }
 

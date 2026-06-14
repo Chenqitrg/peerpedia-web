@@ -59,14 +59,15 @@ export function useAutoSync() {
       return { pushed: false, discard: true }
     }
 
-    const d = draft as { title: string; content?: string; format?: string }
+    const d = draft as { title: string; content?: string; format?: string; commit_message?: string }
     const fmt = d.format === 'typst' ? 'typst' as const : 'markdown' as const
+    const msg = d.commit_message || 'Auto-sync from offline edits'
     const payload = {
       id: op.id,
       title: d.title || op.title || 'Untitled',
       content: d.content || '',
       format: fmt,
-      commit_message: 'Auto-sync from offline edits',
+      commit_message: msg,
     }
 
     try {
@@ -78,7 +79,7 @@ export function useAutoSync() {
           await updateArticle(op.id, {
             title: d.title || op.title || 'Untitled',
             content: d.content || '',
-            commit_message: 'Auto-sync from offline edits',
+            commit_message: msg,
             publish: false,
           })
           return { pushed: true, discard: false }

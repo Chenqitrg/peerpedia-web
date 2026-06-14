@@ -125,6 +125,8 @@ pub struct SaveDraftParams {
     pub content: String,
     #[serde(default)]
     pub format: String,
+    #[serde(default)]
+    pub commit_message: String,
 }
 
 #[tauri::command]
@@ -150,6 +152,7 @@ pub async fn save_draft(
         &params.title,
         &params.content,
         &params.format,
+        &params.commit_message,
     )
 }
 

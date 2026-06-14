@@ -25,6 +25,7 @@ export interface SaveDraftParams {
   title?: string
   content?: string
   format?: string
+  commit_message?: string
 }
 
 export interface ListDraftsParams {
@@ -166,6 +167,7 @@ export interface Draft {
   content: string
   format: string
   updated_at: string
+  commit_message?: string
   pending_push?: boolean
   pending_delete?: boolean
   offline_since?: string | null
