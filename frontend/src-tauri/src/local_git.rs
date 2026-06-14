@@ -58,7 +58,7 @@ pub struct GitCommitResult {
 }
 
 /// Initialize a git repo for a new article. Creates the directory, writes
-/// the initial content file, and makes the first commit.
+/// the initial content file + article.json, and makes the first commit.
 pub fn git_init(
     article_id: &str,
     content: &str,
@@ -77,6 +77,21 @@ pub fn git_init(
     let ext = if format == "typst" { ".typ" } else { ".md" };
     let file_path = rp.join(format!("article{}", ext));
     std::fs::write(&file_path, content)?;
+
+    // Write initial article.json (Phase C)
+    let meta = serde_json::json!({
+        "title": "",
+        "abstract": "",
+        "keywords": [],
+        "categories": [],
+        "format": format,
+        "status": "draft",
+        "self_review": null
+    });
+    std::fs::write(
+        rp.join("article.json"),
+        serde_json::to_string_pretty(&meta).unwrap_or_default(),
+    )?;
 
     // git add + commit — author_id is UUID, author_name is display
     run_git(&rp, &["add", "-A"])?;
