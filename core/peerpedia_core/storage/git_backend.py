@@ -9,10 +9,10 @@ Every article is an independent git repository stored under
 This is the immutable storage format — the git object format IS the protocol.
 """
 
-from pathlib import Path
-from typing import Optional
 import tempfile
 import threading
+from pathlib import Path
+from typing import Optional
 from weakref import WeakValueDictionary
 
 DEFAULT_ARTICLES_DIR = Path.home() / ".peerpedia" / "articles"

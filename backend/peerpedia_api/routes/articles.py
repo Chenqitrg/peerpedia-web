@@ -34,6 +34,7 @@ from peerpedia_core.storage.db.crud_review import (
 from peerpedia_core.storage.db.crud_user import get_user
 from peerpedia_core.storage.db.models import User
 from peerpedia_core.storage.git_backend import (
+    MergeConflictError,
     apply_bundle,
     commit_article,
     create_bundle,
@@ -41,7 +42,6 @@ from peerpedia_core.storage.git_backend import (
     get_commit_history,
     get_diff_between,
     init_article_repo,
-    MergeConflictError,
 )
 from peerpedia_core.workflow.scoring import compute_article_score_for_commit
 from sqlalchemy.orm import Session
@@ -258,6 +258,9 @@ def api_create_article(
                 _refresh_db_from_git(a.id, rp)
             except Exception:
                 logger.warning("Bundle extraction ok but DB refresh failed for %s", a.id)
+
+            repo = git.Repo(rp)
+            commit_hash = repo.head.commit.hexsha if repo.head.is_valid() else None
         except tarfile.ReadError as e:
             raise HTTPException(status_code=422, detail=f"Invalid tar.gz: {e}")
         finally:
@@ -739,7 +742,6 @@ def api_get_bundle(article_id: str, since: str):
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
-    from fastapi.responses import Response
     return Response(
         content=bundle_bytes,
         media_type="application/octet-stream",

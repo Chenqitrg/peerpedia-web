@@ -171,12 +171,13 @@ class TestBundleSync:
 
     def test_create_and_apply_bundle_preserves_hash(self, articles_dir):
         """S1+S2: Full bundle preserves commit hash when applied to empty repo."""
+        import git as gitmod
+
         from peerpedia_core.storage.git_backend import (
             apply_bundle,
             commit_article,
             init_article_repo,
         )
-        import git as gitmod
 
         # Client: create repo with two commits
         client_rp = init_article_repo("client-article", articles_dir)
@@ -220,7 +221,7 @@ class TestBundleSync:
         (rp / "article.md").write_text("v1")
         h1 = commit_article(rp, "first", "Author", "author@test.com")
         (rp / "article.md").write_text("v2")
-        h2 = commit_article(rp, "second", "Author", "author@test.com")
+        commit_article(rp, "second", "Author", "author@test.com")
 
         bundle = create_bundle(rp, h1)  # since first commit
         assert isinstance(bundle, bytes)
@@ -259,13 +260,14 @@ class TestBundleSync:
 
     def test_apply_bundle_divergent_history(self, articles_dir):
         """apply_bundle with divergent history raises MergeConflictError."""
+        import git as gitmod
+
         from peerpedia_core.storage.git_backend import (
             MergeConflictError,
             apply_bundle,
             commit_article,
             init_article_repo,
         )
-        import git as gitmod
 
         # Server has commit A → B
         server_rp = init_article_repo("server-div", articles_dir)

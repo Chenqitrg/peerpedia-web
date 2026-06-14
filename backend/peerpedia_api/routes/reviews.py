@@ -147,6 +147,7 @@ def _write_thread_reply_to_git(
     review_dir.mkdir(parents=True, exist_ok=True)
 
     is_self = sender.id in (getattr(article, 'author_ids', None) or [])
+    _ = is_self  # used for future display logic
     if article.status == "sedimentation":
         display_name = "Anonymous Contributor"
         author_email = "anonymous@peerpedia"
