@@ -85,6 +85,8 @@ After:   client generates UUID → server accepts it    (0 mapping bugs)
 - Invalid UUID → 422. Duplicate UUID → 409. These are the only two error states.
 - Authors are **always** derived from the JWT token (`current_user`), never from the client request body. The client UUID is trusted for identity, never for authorship.
 
+The same UUID unification applies to user accounts. `POST /api/v1/auth/register` accepts an optional `id` field — the client passes the local account UUID, and the server uses it as the primary key. One UUID per user, consistent across local SQLite and the server database. Omit for auto-generation (backward compat for web-mode registration).
+
 ### 2.3-ter Online/Offline Architecture (2026-06-14)
 
 **Eight design rules governing every save, delete, and sync operation.**
@@ -172,6 +174,7 @@ Publish → POST /articles/{id}/publish → enters sedimentation pool
 **Design principles:**
 - No manual Upload button — backup is automatic and silent
 - Draft ≠ published — articles on the server stay private until explicitly published
+- Draft saves do not include `self_review` (five-dimension scores). Only publishing to the sedimentation pool requires `self_review` with all five dimensions (originality, rigor, completeness, pedagogy, impact). Server returns 400 if `publish: true` is set without `self_review`.
 - Conflict resolution IS sync — no separate Push/Pull, just compare hashes
 - Follow uses server as sole source of truth (REST API). Offline: follow button is disabled (grayed + tooltip). Following list + feed article metadata cached locally via article_cache for offline browsing. Bookmark requires server connection — offline shows disabled state, not silent failure.
 
