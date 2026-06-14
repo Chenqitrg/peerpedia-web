@@ -291,7 +291,7 @@ def api_update_article(
         raise HTTPException(status_code=400, detail="self_review is required when publishing")
 
     author_ids = get_author_ids(db, article_id)
-    author = author_ids[0] if author_ids else "unknown"
+    author_name = current_user.name or current_user.username  # display name, not UUID
     commit_msg = body.commit_message or "Edit article"
 
     if body.content is not None:
@@ -313,7 +313,7 @@ def api_update_article(
     if body.categories is not None:
         a.categories = body.categories
 
-    commit_hash = commit_article(rp, commit_msg, author, f"{author}@peerpedia")
+    commit_hash = commit_article(rp, commit_msg, author_name, f"{current_user.id}@peerpedia")
 
     # Rebuild authors from git history (incremental scan when marker exists)
     from peerpedia_core.storage.db.crud_article import (
