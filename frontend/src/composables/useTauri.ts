@@ -266,6 +266,9 @@ export function useTauri() {
     async gitBundleApply(params: { article_id: string; bundle_bytes: number[] }) {
       return _invoke<string>('git_bundle_apply', params as unknown as Record<string, unknown>)
     },
+    async gitUpdateMeta(params: { article_id: string; json_str: string; commit_message: string; author: string; author_id: string }) {
+      return _invoke<{ hash: string; message: string }>('git_update_meta', params as unknown as Record<string, unknown>)
+    },
 
     // Pending operations (offline queue)
     async getPendingOps(params: PendingOpsParams) {

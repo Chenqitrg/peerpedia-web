@@ -255,7 +255,7 @@ def api_create_article(
                 )
             # Parse article.json from extracted repo for metadata sync
             try:
-                _refresh_db_from_git(a.id, rp)
+                _refresh_db_from_git(a.id, rp, db)
             except Exception:
                 logger.warning("Bundle extraction ok but DB refresh failed for %s", a.id)
 
@@ -681,11 +681,12 @@ def api_download_repo(article_id: str):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def _refresh_db_from_git(article_id: str, rp: Path) -> None:
+def _refresh_db_from_git(article_id: str, rp: Path, db: "Session | None" = None) -> None:
     """Best-effort DB cache refresh from article.json and reviews in git.
 
-    Parses article.json for metadata fields, scans reviews/ for scores,
-    and updates the articles table cache. Failures are logged — git is truth.
+    Syncs title, abstract, status, and keywords from article.json to the
+    articles DB cache. Also triggers sink_start if status changed to 'pool'
+    and the DB hasn't recorded it yet. Failures are logged — git is truth.
     """
     import json
     import logging
@@ -693,17 +694,65 @@ def _refresh_db_from_git(article_id: str, rp: Path) -> None:
 
     article_json = rp / "article.json"
     if not article_json.exists():
-        return  # nothing to refresh yet
+        return
 
     try:
-        _data = json.loads(article_json.read_text())
+        data = json.loads(article_json.read_text())
     except (json.JSONDecodeError, OSError):
         logger.warning("Failed to parse article.json for %s", article_id)
         return
 
-    # DB refresh deferred — Phase C implements full article.json→DB sync.
-    # For now, just validate the file is readable.
-    logger.debug("article.json validated for %s", article_id)
+    if db is None:
+        logger.debug("No DB session for %s — skipping DB sync", article_id)
+        return
+
+    try:
+        from peerpedia_core.storage.db.crud_article import (
+            get_article,
+            set_sink_start,
+        )
+        from peerpedia_core.config.params import params
+
+        a = get_article(db, article_id)
+        if a is None:
+            return
+
+        updated = False
+
+        # Sync title
+        if data.get("title") and a.title != data["title"]:
+            a.title = data["title"]
+            updated = True
+
+        # Sync abstract
+        if "abstract" in data and a.abstract != data["abstract"]:
+            a.abstract = data["abstract"]
+            updated = True
+
+        # Sync status — trigger sink on pool transition
+        new_status = data.get("status")
+        if new_status and new_status != a.status:
+            a.status = new_status
+            updated = True
+            if new_status == "pool":
+                sink_days = params.sink.new_article_default_days
+                set_sink_start(db, article_id, sink_days)
+
+        # Sync keywords
+        if data.get("keywords") and a.keywords != data["keywords"]:
+            a.keywords = data["keywords"]
+            updated = True
+
+        # Sync categories
+        if data.get("categories") and a.categories != data["categories"]:
+            a.categories = data["categories"]
+            updated = True
+
+        if updated:
+            db.commit()
+            logger.info("DB synced from article.json for %s (status=%s)", article_id, new_status or a.status)
+    except Exception:
+        logger.exception("DB sync failed for %s — git is truth, continuing", article_id)
 
 
 @router.get("/{article_id}/head")
@@ -797,8 +846,9 @@ async def api_sync_article(
             )
 
         # Try to update DB cache — best-effort, git is truth
+        # DB session not available in sync endpoint — DB will catch up on next read
         try:
-            _refresh_db_from_git(article_id, rp)
+            _refresh_db_from_git(article_id, rp, None)
         except Exception:
             logger.warning("DB cache refresh failed for article %s", article_id)
 

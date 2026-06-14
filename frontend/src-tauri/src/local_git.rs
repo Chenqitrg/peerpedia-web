@@ -672,6 +672,81 @@ pub fn git_bundle_apply(article_id: &str, bundle_bytes: &[u8]) -> Result<String,
     get_head_hash(&rp)
 }
 
+// ── Metadata ─────────────────────────────────────────────────────────────
+
+/// Update article.json metadata fields and commit.
+/// `json_str` is a JSON string with fields to merge into the existing article.json.
+/// If article.json doesn't exist, creates it with defaults first.
+pub fn git_update_meta(
+    article_id: &str,
+    json_str: &str,
+    commit_message: &str,
+    author_name: &str,
+    author_id: &str,
+) -> Result<GitCommitResult, AppError> {
+    let rp = repo_path(article_id)?;
+    if !rp.join(".git").is_dir() {
+        return Err(AppError::NotFound(format!(
+            "Git repo not found for article '{}'",
+            article_id
+        )));
+    }
+
+    let meta_path = rp.join("article.json");
+
+    // Read existing or create default
+    let mut meta: serde_json::Value = if meta_path.exists() {
+        let existing = std::fs::read_to_string(&meta_path)?;
+        serde_json::from_str(&existing).unwrap_or(serde_json::json!({}))
+    } else {
+        serde_json::json!({
+            "title": "",
+            "abstract": "",
+            "keywords": [],
+            "categories": [],
+            "format": "markdown",
+            "status": "draft",
+            "self_review": null
+        })
+    };
+
+    // Merge new fields
+    if let Ok(update) = serde_json::from_str::<serde_json::Value>(json_str) {
+        if let Some(obj) = update.as_object() {
+            for (k, v) in obj {
+                meta[k] = v.clone();
+            }
+        }
+    }
+
+    std::fs::write(
+        &meta_path,
+        serde_json::to_string_pretty(&meta).unwrap_or_default(),
+    )?;
+
+    // git add + commit
+    run_git(&rp, &["add", "-A"])?;
+    let author_email = format!("{}@peerpedia", author_id);
+    run_git(
+        &rp,
+        &[
+            "-c",
+            &format!("user.name={}", author_name),
+            "-c",
+            &format!("user.email={}", author_email),
+            "commit",
+            "-m",
+            commit_message,
+        ],
+    )?;
+
+    let hash = get_head_hash(&rp)?;
+    Ok(GitCommitResult {
+        hash,
+        message: commit_message.to_string(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

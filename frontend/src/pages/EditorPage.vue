@@ -502,12 +502,36 @@ async function handleSubmitToPool() {
   errorMsg.value = ''
   successMsg.value = ''
 
-  // Phase C: sync content via bundle first, then mark published on server.
+  // Guard: server JWT required to publish.
+  if (!userStore.token) {
+    errorMsg.value = 'Your account needs to sync with the server before publishing.'
+    submitting.value = false
+    return
+  }
+
+  const accountId = userStore.viewer?.id || 'local'
+  const authorName = userStore.viewer?.name || userStore.viewer?.username || 'local'
   const aid = editId.value || currentDraftId.value
+
+  // S5: Tauri mode — update article.json status → commit → bundle push.
   if (aid && (tauri.isTauri.value || tauri.isBrowserLocal.value)) {
-    const accountId = userStore.viewer?.id || 'local'
-    const authorName = userStore.viewer?.name || userStore.viewer?.username || 'local'
-    await autoSync.pushRepo(aid, authorName, accountId, 'publish')
+    const meta = JSON.stringify({
+      status: 'pool',
+      self_review: { ...scores.value },
+    })
+    try {
+      await tauri.gitUpdateMeta({
+        article_id: aid,
+        json_str: meta,
+        commit_message: '[publish]',
+        author: authorName,
+        author_id: accountId,
+      })
+      const pushRes = await autoSync.pushRepo(aid, authorName, accountId, '[publish]')
+      if (pushRes.head) commitHash.value = pushRes.head
+    } catch (e: any) {
+      console.warn('Publish bundle push failed:', e)
+    }
   }
 
   try {
@@ -516,18 +540,11 @@ async function handleSubmitToPool() {
       abstract: abstract.value || title.value,
       content: content.value,
       format: format.value,
-      commit_message: '',
+      commit_message: '[publish]',
       self_review: { ...scores.value },
       publish: true,
       keywords: keywords.value ? keywords.value.split(',').map((k: string) => k.trim()).filter(Boolean) : [],
       categories: categories.value ? categories.value.split(',').map((c: string) => c.trim()).filter(Boolean) : [],
-    }
-
-    // Guard: server JWT required to publish. Local-only accounts must sync first.
-    if (!userStore.token) {
-      errorMsg.value = 'Your account needs to sync with the server before publishing. Please try again in a moment.'
-      submitting.value = false
-      return
     }
 
     let result: { id: string }
@@ -535,7 +552,6 @@ async function handleSubmitToPool() {
       result = await articleStore.updateArticle(editId.value!, body)
       successMsg.value = 'Article updated and submitted to pool!'
     } else if (currentDraftId.value) {
-      // UUID unification: currentDraftId IS the server UUID — no fallback needed.
       result = await articleStore.updateArticle(currentDraftId.value, body)
       successMsg.value = 'Article submitted to pool!'
       remove(DRAFT_KEY.value)

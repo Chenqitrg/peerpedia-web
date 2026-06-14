@@ -502,6 +502,31 @@ pub async fn git_bundle_apply(params: GitBundleApplyParams) -> Result<String, Ap
 }
 
 #[derive(Debug, Deserialize)]
+pub struct GitUpdateMetaParams {
+    pub article_id: String,
+    pub json_str: String,
+    pub commit_message: String,
+    pub author: String,
+    pub author_id: String,
+}
+
+#[tauri::command]
+pub async fn git_update_meta(
+    params: GitUpdateMetaParams,
+) -> Result<local_git::GitCommitResult, AppError> {
+    let article_id = params.article_id;
+    let json_str = params.json_str;
+    let commit_message = params.commit_message;
+    let author = params.author;
+    let author_id = params.author_id;
+    tokio::task::spawn_blocking(move || {
+        local_git::git_update_meta(&article_id, &json_str, &commit_message, &author, &author_id)
+    })
+    .await
+    .map_err(|e| AppError::IoError(format!("git_update_meta panicked: {}", e)))?
+}
+
+#[derive(Debug, Deserialize)]
 pub struct GitHistoryParams {
     pub article_id: String,
 }
