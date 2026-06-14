@@ -13,7 +13,12 @@ from peerpedia_core.storage.db.crud_review import (
     update_review_scores,
 )
 from peerpedia_core.storage.db.models import User
-from peerpedia_core.storage.git_backend import DEFAULT_ARTICLES_DIR, get_commit_history
+from peerpedia_core.storage.git_backend import (
+    DEFAULT_ARTICLES_DIR,
+    commit_article,
+    get_article_lock,
+    get_commit_history,
+)
 from peerpedia_core.workflow.scoring import compute_article_score_for_commit
 from sqlalchemy.orm import Session
 
@@ -25,6 +30,72 @@ from peerpedia_api.schemas.review import (
 )
 
 router = APIRouter(prefix="/articles/{article_id}/reviews", tags=["reviews"])
+
+
+def _write_review_to_git(
+    article_id: str,
+    reviewer_id: str,
+    scores: dict,
+    content: str,
+    reviewer_user: User,
+    article,
+    is_update: bool,
+) -> None:
+    """Write review scores.json and .md to git repo, then commit.
+
+    Best-effort: failures are logged but don't block the review submission.
+    """
+    import json
+    import logging
+    from datetime import datetime, timezone
+
+    logger = logging.getLogger(__name__)
+    rp = DEFAULT_ARTICLES_DIR / article_id
+    if not (rp / ".git").is_dir():
+        logger.warning("No git repo for article %s — skipping review file write", article_id)
+        return
+
+    review_dir = rp / "reviews" / reviewer_id
+    review_dir.mkdir(parents=True, exist_ok=True)
+
+    # Determine reviewer display identity
+    is_self = reviewer_id in (getattr(article, 'authors', None) or [])
+    if is_self:
+        display_name = reviewer_user.name
+        author_email = f"{reviewer_id}@peerpedia"
+    elif article.status == "sedimentation":
+        display_name = "Anonymous Contributor"
+        author_email = "anonymous@peerpedia"
+    else:
+        display_name = reviewer_user.name
+        author_email = f"{reviewer_id}@peerpedia"
+
+    try:
+        # Write scores.json
+        (review_dir / "scores.json").write_text(json.dumps(scores, indent=2))
+
+        # Write review .md with timestamp
+        ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
+        md_content = f"{reviewer_id}\n\n{content or '(scores only)'}"
+        (review_dir / f"{ts}.md").write_text(md_content)
+
+        # Commit
+        lock = get_article_lock(article_id)
+        acquired = lock.acquire(timeout=10)
+        if not acquired:
+            logger.warning("Could not acquire lock for article %s — skipping commit", article_id)
+            return
+        try:
+            commit_article(
+                rp,
+                f"Review by {display_name}",
+                display_name,
+                author_email,
+            )
+        finally:
+            lock.release()
+    except Exception:
+        logger.exception("Failed to write review files for article %s", article_id)
 
 
 def _build_review_out(r, user_map: dict[str, User], article_authors: list[str]) -> ReviewOut:
@@ -107,6 +178,13 @@ def submit_review(article_id: str, body: ReviewCreate,
     article_author_ids = get_author_ids(db, article_id)
     for author_id in article_author_ids:
         compute_author_reputation(db, author_id)
+
+    # Phase B: write review files to git repo
+    _write_review_to_git(
+        article_id, r.reviewer_id, body.scores, body.content,
+        current_user, article, existing is not None,
+    )
+
     user_map = _batch_load_reviewers(db, [r])
     return _build_review_out(r, user_map, article_author_ids)
 
