@@ -5,15 +5,23 @@ import { ref, computed, type Ref, type ComputedRef } from 'vue'
 import { useTauri } from './useTauri'
 import { useNetworkStatus } from './useNetworkStatus'
 import { useUserStore } from '../stores/useUserStore'
-import { createArticle, updateArticle, deleteArticle } from '../api/articles'
+import {
+  createArticle,
+  deleteArticle,
+  getArticleHead,
+  getArticleBundle,
+  syncArticle,
+} from '../api/articles'
 import type { PendingOp } from './useTauriTypes'
 
 function isTauriError(v: unknown): v is { error: string } {
   return typeof v === 'object' && v !== null && 'error' in v
 }
 
-/** HTTP status codes that indicate the op should be discarded (won't succeed on retry). */
+/** HTTP status codes that indicate the op should be discarded (won't succeed on retry).
+ *  Excludes 401 (token expired — re-auth may fix) and 429 (rate limit — backoff and retry). */
 function isDiscardable(status: number): boolean {
+  if (status === 401 || status === 429) return false
   return status >= 400 && status < 500
 }
 
@@ -48,51 +56,114 @@ export function useAutoSync() {
   }
 
   /**
-   * Push a single draft to the server.
-   * Tries POST (create) first; falls back to PUT (update) on 409.
-   * Returns { pushed: true } on success, { pushed: false, discard: true } on 4xx,
-   * throws on network error.
+   * Push local commits to server via git bundle.
+   *
+   * 1. GET server HEAD hash
+   * 2. If server has commits we don't: pull bundle → apply locally
+   * 3. Create incremental bundle from server HEAD to local HEAD
+   * 4. POST bundle to /sync
+   * 5. On 409 (ff-only fail): pull + retry once
+   *
+   * For first-ever push (server has no article yet): upload the full
+   * repo as a tar.gz via createArticle({repo_bundle}).
    */
-  async function pushOne(op: PendingOp): Promise<{ pushed: boolean; discard: boolean }> {
-    const draft = await tauri.getDraft({ id: op.id })
-    if (!draft || isTauriError(draft)) {
-      return { pushed: false, discard: true }
-    }
-
-    const d = draft as { title: string; content?: string; format?: string }
-    const fmt = d.format === 'typst' ? 'typst' as const : 'markdown' as const
-    const payload = {
-      id: op.id,
-      title: d.title || op.title || 'Untitled',
-      content: d.content || '',
-      format: fmt,
-      commit_message: 'Auto-sync from offline edits',
-    }
-
+  async function pushRepo(
+    articleId: string,
+    authorName: string,
+    authorId: string,
+    msg: string,
+  ): Promise<{ pushed: boolean; head: string | null }> {
+    // 1. Get local HEAD
+    let history: any
     try {
-      await createArticle(payload)
-      return { pushed: true, discard: false }
-    } catch (e: any) {
-      if (e?.response?.status === 409 || e?.response?.status === 422) {
-        try {
-          await updateArticle(op.id, {
-            title: d.title || op.title || 'Untitled',
-            content: d.content || '',
-            commit_message: 'Auto-sync from offline edits',
-            publish: false,
-          })
-          return { pushed: true, discard: false }
-        } catch (e2: any) {
-          if (isDiscardable(e2?.response?.status || 0)) {
-            return { pushed: false, discard: true }
+      history = await tauri.gitHistory({ article_id: articleId })
+    } catch {
+      return { pushed: false, head: null }
+    }
+    if (!history || isTauriError(history) || !Array.isArray(history) || history.length === 0) {
+      return { pushed: false, head: null }
+    }
+    let localHead: string = history[0].hash
+
+    // 2. Pull server bundle if server has commits we don't have
+    try {
+      const serverHead = await getArticleHead(articleId)
+      if (serverHead.hash && serverHead.hash !== localHead) {
+        const bundle = await getArticleBundle(articleId, localHead)
+        if (bundle && bundle.byteLength > 0) {
+          const bytes = Array.from(new Uint8Array(bundle))
+          await tauri.gitBundleApply({ article_id: articleId, bundle_bytes: bytes })
+          const updatedHistory = await tauri.gitHistory({ article_id: articleId })
+          if (updatedHistory && !isTauriError(updatedHistory) && Array.isArray(updatedHistory) && updatedHistory.length > 0) {
+            localHead = updatedHistory[0].hash
           }
-          throw e2
         }
       }
-      if (isDiscardable(e?.response?.status || 0)) {
-        return { pushed: false, discard: true }
+    } catch {
+      // Server might not have the article yet (first push) — that's fine
+    }
+
+    // 3. Create incremental bundle.  If the server doesn't have the article
+    //    (getArticleHead returns no hash), do the first push via repo_bundle.
+    let bundleBytes: number[]
+    try {
+      const serverHeadRes = await getArticleHead(articleId).catch(() => ({ hash: '' }))
+      if (serverHeadRes.hash) {
+        const raw = await tauri.gitBundleCreate({
+          article_id: articleId,
+          since_hash: serverHeadRes.hash,
+        })
+        if (!raw || isTauriError(raw) || !Array.isArray(raw)) {
+          return { pushed: false, head: null }
+        }
+        bundleBytes = raw
+      } else {
+        // First push — upload full repo as tar.gz bundle
+        const raw = await tauri.exportArticle({ article_id: articleId })
+        const base64 = (raw && !isTauriError(raw)) ? String(raw) : ''
+        if (!base64) return { pushed: false, head: null }
+        await createArticle({
+          id: articleId,
+          title: '',
+          content: '',
+          format: 'markdown',
+          commit_message: msg,
+          repo_bundle: base64,
+        })
+        return { pushed: true, head: localHead }
       }
-      throw e
+    } catch {
+      return { pushed: false, head: null }
+    }
+
+    // 4. POST bundle to /sync
+    try {
+      const blob = new Blob([new Uint8Array(bundleBytes)], { type: 'application/octet-stream' })
+      const result = await syncArticle(articleId, blob)
+      return { pushed: true, head: result.head }
+    } catch (e: any) {
+      if (e?.response?.status === 409) {
+        // ff-only failed — pull + retry once
+        try {
+          const { hash } = await getArticleHead(articleId)
+          const bundle = await getArticleBundle(articleId, localHead)
+          if (bundle && bundle.byteLength > 0) {
+            const bytes = Array.from(new Uint8Array(bundle))
+            await tauri.gitBundleApply({ article_id: articleId, bundle_bytes: bytes })
+          }
+          const retryRaw = await tauri.gitBundleCreate({ article_id: articleId, since_hash: hash })
+          if (!retryRaw || isTauriError(retryRaw) || !Array.isArray(retryRaw)) {
+            return { pushed: false, head: null }
+          }
+          bundleBytes = retryRaw
+          const blob = new Blob([new Uint8Array(bundleBytes)], { type: 'application/octet-stream' })
+          const retry = await syncArticle(articleId, blob)
+          return { pushed: true, head: retry.head }
+        } catch {
+          return { pushed: false, head: null }
+        }
+      }
+      return { pushed: false, head: null }
     }
   }
 
@@ -115,9 +186,11 @@ export function useAutoSync() {
   }
 
   /**
-   * Flush all pending ops to the server.
+   * Flush all pending ops to the server via git bundle.
    * Called when isSynced becomes true (reconnect).
-   * Guarded against re-entry via module-level flushing ref.
+   *
+   * Bundle-only — no REST degradation. If a push fails, the pending
+   * op stays in the queue and will be retried on the next reconnect.
    */
   async function flush(): Promise<{ synced: number; failed: number }> {
     if (flushing.value || !isSynced.value) return { synced: 0, failed: 0 }
@@ -133,15 +206,22 @@ export function useAutoSync() {
 
       for (const op of ops) {
         try {
-          let result: { pushed: boolean; discard: boolean }
           if (op.op_type === 'delete') {
-            result = await deleteOne(op)
+            const r = await deleteOne(op)
+            if (r.pushed) synced++
+            else if (r.discard) { /* gone — clear it */ }
+            else failed++
+            try { await tauri.clearPending({ id: op.id }) } catch { /* best-effort */ }
           } else {
-            result = await pushOne(op)
+            const res = await pushRepo(op.id, 'PeerPedia', 'local', 'Auto-sync')
+            if (res.pushed) {
+              synced++
+              try { await tauri.clearPending({ id: op.id }) } catch { /* best-effort */ }
+            } else {
+              failed++
+              // Pending op stays in queue for next retry.
+            }
           }
-
-          if (result.pushed) synced++
-          try { await tauri.clearPending({ id: op.id }) } catch { /* best-effort */ }
         } catch {
           failed++
         }
@@ -167,5 +247,6 @@ export function useAutoSync() {
     flush,
     refresh,
     loadPendingOps,
+    pushRepo,
   }
 }

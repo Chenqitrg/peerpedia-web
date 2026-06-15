@@ -13,7 +13,12 @@ from peerpedia_core.storage.db.crud_review import (
     update_review_scores,
 )
 from peerpedia_core.storage.db.models import User
-from peerpedia_core.storage.git_backend import DEFAULT_ARTICLES_DIR, get_commit_history
+from peerpedia_core.storage.git_backend import (
+    DEFAULT_ARTICLES_DIR,
+    commit_article,
+    get_article_lock,
+    get_commit_history,
+)
 from peerpedia_core.workflow.scoring import compute_article_score_for_commit
 from sqlalchemy.orm import Session
 
@@ -25,6 +30,70 @@ from peerpedia_api.schemas.review import (
 )
 
 router = APIRouter(prefix="/articles/{article_id}/reviews", tags=["reviews"])
+
+
+def _write_review_to_git_blocking(
+    article_id: str,
+    reviewer_id: str,
+    scores: dict,
+    content: str,
+    reviewer_user: User,
+    author_ids: list[str],
+    article_status: str,
+) -> None:
+    """Write review scores.json and .md to git repo, then commit.
+
+    Blocking: raises HTTPException on failure so DB stays consistent.
+    Call this BEFORE DB commit.
+    """
+    import json
+    import logging
+    from datetime import datetime, timezone
+
+    logger = logging.getLogger(__name__)
+    rp = DEFAULT_ARTICLES_DIR / article_id
+    if not (rp / ".git").is_dir():
+        logger.warning("No git repo for article %s — skipping review file write", article_id)
+        return
+
+    review_dir = rp / "reviews" / reviewer_id
+    review_dir.mkdir(parents=True, exist_ok=True)
+
+    # Determine reviewer display identity
+    is_self = reviewer_id in author_ids
+    if is_self:
+        display_name = reviewer_user.name
+        author_email = f"{reviewer_id}@peerpedia"
+    elif article_status == "sedimentation":
+        display_name = "Anonymous Contributor"
+        author_email = "anonymous@peerpedia"
+    else:
+        display_name = reviewer_user.name
+        author_email = f"{reviewer_id}@peerpedia"
+
+    # Commit — blocking, raises on failure. File writes AND git commit
+    # are inside the lock for atomicity — no other writer can interleave.
+    lock = get_article_lock(article_id)
+    acquired = lock.acquire(timeout=10)
+    if not acquired:
+        raise HTTPException(status_code=503, detail="Article busy — retry later")
+    try:
+        # Write scores.json
+        (review_dir / "scores.json").write_text(json.dumps(scores, indent=2))
+
+        # Write review .md with timestamp
+        ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
+        md_content = f"{reviewer_id}\n\n{content or '(scores only)'}"
+        (review_dir / f"{ts}.md").write_text(md_content)
+
+        commit_article(
+            rp,
+            f"Review by {display_name}",
+            display_name,
+            author_email,
+        )
+    finally:
+        lock.release()
 
 
 def _build_review_out(r, user_map: dict[str, User], article_authors: list[str]) -> ReviewOut:
@@ -54,6 +123,52 @@ def _batch_load_reviewers(db: Session, reviews) -> dict[str, User]:
         return {}
     users = db.query(User).filter(User.id.in_(ids)).all()
     return {u.id: u for u in users}
+
+
+def _write_thread_reply_to_git(
+    article_id: str,
+    review_owner_uuid: str,
+    sender: User,
+    content: str,
+    article,
+) -> None:
+    """Write a thread reply .md to the review's git directory and commit.
+
+    Blocking: raises HTTPException on failure so DB stays consistent.
+    Call this BEFORE DB commit.
+    """
+    import logging
+    from datetime import datetime, timezone
+
+    logger = logging.getLogger(__name__)
+    rp = DEFAULT_ARTICLES_DIR / article_id
+    if not (rp / ".git").is_dir():
+        logger.warning("No git repo for article %s — skipping thread reply write", article_id)
+        return
+
+    review_dir = rp / "reviews" / review_owner_uuid
+    review_dir.mkdir(parents=True, exist_ok=True)
+
+    if article.status == "sedimentation":
+        display_name = "Anonymous Contributor"
+        author_email = "anonymous@peerpedia"
+    else:
+        display_name = sender.name or sender.username
+        author_email = f"{sender.id}@peerpedia"
+
+    # Write .md reply and commit — all inside the lock for atomicity.
+    lock = get_article_lock(article_id)
+    acquired = lock.acquire(timeout=10)
+    if not acquired:
+        raise HTTPException(status_code=503, detail="Article busy — retry later")
+    try:
+        ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
+        md_content = f"{sender.id}\n\n{content}"
+        (review_dir / f"{ts}.md").write_text(md_content)
+
+        commit_article(rp, f"Reply by {display_name}", display_name, author_email)
+    finally:
+        lock.release()
 
 
 @router.get("", response_model=list[ReviewOut])
@@ -86,12 +201,25 @@ def submit_review(article_id: str, body: ReviewCreate,
             )
     existing = get_review_by_user_scope(db, article_id, current_user.id,
                                         body.scope.value, commit_hash=body.commit_hash)
+
+    # Compute author list before git write (needed for identity resolution).
+    article_author_ids = get_author_ids(db, article_id)
+
+    # Git-first: write review files to git BEFORE any DB mutation.
+    # If git fails (lock timeout, I/O error), the request aborts with an error
+    # and the DB stays clean — no orphaned review records. Git is source of truth.
+    _write_review_to_git_blocking(
+        article_id, current_user.id, body.scores, body.content,
+        current_user, article_author_ids, article.status,
+    )
+
     if existing:
         r = update_review_scores(db, existing.id, body.scores)
     else:
         r = create_review(db, article_id=article_id, commit_hash=body.commit_hash,
                            reviewer_id=current_user.id, scope=body.scope.value,
                            scores=body.scores)
+
     # Compute per-commit score and cache latest commit's score on the article
     rp = DEFAULT_ARTICLES_DIR / article_id
     if (rp / ".git").is_dir():
@@ -104,9 +232,9 @@ def submit_review(article_id: str, body: ReviewCreate,
                 db.commit()
     # Update reputation for all authors of the reviewed article
     from peerpedia_core.workflow.reputation import compute_author_reputation
-    article_author_ids = get_author_ids(db, article_id)
     for author_id in article_author_ids:
         compute_author_reputation(db, author_id)
+
     user_map = _batch_load_reviewers(db, [r])
     return _build_review_out(r, user_map, article_author_ids)
 
@@ -123,7 +251,9 @@ def post_thread_message(article_id: str, review_id: str, body: ThreadMessageCrea
 
     # Permission: only article authors + the review's reviewer can reply
     article = get_article(db, article_id)
-    is_author = article is not None and current_user.id in get_author_ids(db, article_id)
+    if article is None:
+        raise HTTPException(status_code=404, detail="Article not found")
+    is_author = current_user.id in get_author_ids(db, article_id)
     is_reviewer = r.reviewer_id == current_user.id
     if not (is_author or is_reviewer):
         raise HTTPException(
@@ -131,8 +261,15 @@ def post_thread_message(article_id: str, review_id: str, body: ThreadMessageCrea
             detail="Only the article author and reviewer can participate in this thread",
         )
 
+    # Git-first: write reply to git BEFORE DB. If git fails, the DB stays clean.
+    _write_thread_reply_to_git(
+        article_id, r.reviewer_id, current_user, body.content,
+        article,
+    )
+
     from peerpedia_core.types.messages import ThreadMessage
     msg = ThreadMessage(author_id=current_user.id, content=body.content,
                         author_name=current_user.name)
     add_thread_message(db, review_id, msg.to_dict())
+
     return {"status": "ok", "message": msg.to_dict()}

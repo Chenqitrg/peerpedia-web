@@ -9,10 +9,17 @@ Every article is an independent git repository stored under
 This is the immutable storage format — the git object format IS the protocol.
 """
 
+import tempfile
+import threading
 from pathlib import Path
 from typing import Optional
 
 DEFAULT_ARTICLES_DIR = Path.home() / ".peerpedia" / "articles"
+
+# Per-article git operation locks. Plain dict (not WeakValueDictionary — locks
+# must survive GC). Guarded by a module-level lock for thread-safe get/create.
+_locks_dict: dict[str, threading.Lock] = {}
+_locks_guard = threading.Lock()
 
 
 def init_article_repo(
@@ -192,16 +199,19 @@ def get_diff_between(
 
     unified_diff = "\n".join(diff_parts)
 
-    # Compute stats from the diff index
+    # Compute stats from the diff text (unified diff format).
     total_insertions = 0
     total_deletions = 0
     diff_files = {}
     for d in diff_index:
         fname = d.a_path or d.b_path or ""
         if fname:
-            insertions = d.diff.decode("utf-8", errors="replace").count("\n") if d.diff else 0
-            diff_files[fname] = {"insertions": insertions, "deletions": 0}
-            total_insertions += insertions
+            diff_text = d.diff.decode("utf-8", errors="replace") if d.diff else ""
+            ins = sum(1 for line in diff_text.split("\n") if line.startswith("+") and not line.startswith("+++"))
+            dels = sum(1 for line in diff_text.split("\n") if line.startswith("-") and not line.startswith("---"))
+            diff_files[fname] = {"insertions": ins, "deletions": dels}
+            total_insertions += ins
+            total_deletions += dels
 
     return {
         "commit_hash": c2.hexsha,
@@ -280,3 +290,103 @@ def merge_git_repos(target: Path, fork: Path, author_name: str) -> str:
             pass
 
     return merge_hash
+
+
+# ── Bundle Sync ─────────────────────────────────────────────────────────────
+
+
+def apply_bundle(repo_path: Path, bundle_bytes: bytes) -> str:
+    """Fetch objects from a git bundle and fast-forward merge.
+
+    Writes bundle to a temp file, fetches into the target repo, and merges
+    with --ff-only. Returns the new HEAD commit hash.
+
+    Raises:
+        FileNotFoundError: if repo_path/.git doesn't exist.
+        ValueError: if the bundle is empty or malformed.
+        MergeConflictError: if --ff-only fails (history diverged).
+    """
+    import git
+
+    if not (repo_path / ".git").is_dir():
+        raise FileNotFoundError(f"Git repo not found: {repo_path}")
+
+    repo = git.Repo(repo_path)
+
+    with tempfile.NamedTemporaryFile(suffix=".bundle", delete=True) as f:
+        f.write(bundle_bytes)
+        f.flush()
+
+        # Verify bundle validity
+        try:
+            repo.git.bundle("verify", f.name)
+        except git.GitCommandError as e:
+            raise ValueError(f"Invalid bundle: {e}") from e
+
+        # Fetch objects from bundle
+        try:
+            repo.git.fetch(f.name, "HEAD")
+        except git.GitCommandError as e:
+            raise ValueError(f"Bundle fetch failed: {e}") from e
+
+    # Fast-forward merge to FETCH_HEAD
+    try:
+        repo.git.merge("FETCH_HEAD", "--ff-only")
+    except git.GitCommandError as e:
+        # Abort merge if in progress
+        try:
+            repo.git.merge("--abort")
+        except git.GitCommandError:
+            pass
+        raise MergeConflictError(f"Fast-forward merge failed: {e}") from e
+
+    return repo.head.commit.hexsha
+
+
+def create_bundle(repo_path: Path, since_hash: str) -> bytes:
+    """Create an incremental git bundle from since_hash to HEAD.
+
+    Returns the bundle file bytes. The caller can stream this directly
+    as an HTTP response.
+
+    Raises:
+        FileNotFoundError: if repo_path/.git doesn't exist.
+        ValueError: if since_hash is not an ancestor of HEAD.
+    """
+    import git
+
+    if not (repo_path / ".git").is_dir():
+        raise FileNotFoundError(f"Git repo not found: {repo_path}")
+
+    repo = git.Repo(repo_path)
+
+    # Verify since_hash is an ancestor
+    try:
+        repo.git.merge_base("--is-ancestor", since_hash, "HEAD")
+    except git.GitCommandError:
+        raise ValueError(
+            f"since_hash {since_hash[:8]} is not an ancestor of HEAD"
+        )
+
+    with tempfile.NamedTemporaryFile(suffix=".bundle", delete=False) as f:
+        bundle_path = f.name
+
+    try:
+        repo.git.bundle("create", bundle_path, f"{since_hash}..HEAD")
+        return Path(bundle_path).read_bytes()
+    finally:
+        Path(bundle_path).unlink(missing_ok=True)
+
+
+def get_article_lock(article_id: str) -> threading.Lock:
+    """Get or create a per-article threading.Lock for git operation serialization.
+
+    Guards the dict with _locks_guard to prevent races during lock creation.
+    The lock persists indefinitely (no GC risk like WeakValueDictionary).
+    """
+    with _locks_guard:
+        lock = _locks_dict.get(article_id)
+        if lock is None:
+            lock = threading.Lock()
+            _locks_dict[article_id] = lock
+    return lock
