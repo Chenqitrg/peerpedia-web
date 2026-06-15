@@ -1595,10 +1595,12 @@ class TestBundleSyncEndpoints:
         import json
         import uuid
 
-        from peerpedia_core.storage.db.engine import get_session
         from peerpedia_core.storage.db.crud_article import get_article, get_author_ids
+        from peerpedia_core.storage.db.engine import get_session
         from peerpedia_core.storage.git_backend import (
-            commit_article, create_bundle, init_article_repo,
+            commit_article,
+            create_bundle,
+            init_article_repo,
         )
 
         # Simulate Tauri first push: Git repo exists on disk but no DB record
