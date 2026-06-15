@@ -829,6 +829,11 @@ async def api_sync_article(
     import logging
     logger = logging.getLogger(__name__)
 
+    # Size guard: academic articles with git history rarely exceed 50MB
+    MAX_BUNDLE_BYTES = 50 * 1024 * 1024
+    if file.size is not None and file.size > MAX_BUNDLE_BYTES:
+        raise HTTPException(status_code=413, detail="Bundle too large — max 50MB")
+
     lock = get_article_lock(article_id)
     acquired = lock.acquire(timeout=30)
     if not acquired:
@@ -836,6 +841,8 @@ async def api_sync_article(
 
     try:
         bundle_bytes = await file.read()
+        if len(bundle_bytes) > MAX_BUNDLE_BYTES:
+            raise HTTPException(status_code=413, detail="Bundle too large — max 50MB")
 
         try:
             _new_head = apply_bundle(rp, bundle_bytes)

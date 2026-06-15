@@ -132,7 +132,7 @@ export function useAutoSync() {
     if (!history || isTauriError(history) || !Array.isArray(history) || history.length === 0) {
       return { pushed: false, head: null }
     }
-    const localHead: string = history[0].hash
+    let localHead: string = history[0].hash
 
     // 2. Pull server bundle if server has commits we don't have
     try {
@@ -143,6 +143,11 @@ export function useAutoSync() {
         if (bundle && bundle.byteLength > 0) {
           const bytes = Array.from(new Uint8Array(bundle))
           await tauri.gitBundleApply({ article_id: articleId, bundle_bytes: bytes })
+          // Re-read local HEAD after pull — it changed
+          const updatedHistory = await tauri.gitHistory({ article_id: articleId })
+          if (updatedHistory && !isTauriError(updatedHistory) && Array.isArray(updatedHistory) && updatedHistory.length > 0) {
+            localHead = updatedHistory[0].hash
+          }
         }
       }
     } catch {

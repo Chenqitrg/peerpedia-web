@@ -32,18 +32,18 @@ from peerpedia_api.schemas.review import (
 router = APIRouter(prefix="/articles/{article_id}/reviews", tags=["reviews"])
 
 
-def _write_review_to_git(
+def _write_review_to_git_blocking(
     article_id: str,
     reviewer_id: str,
     scores: dict,
     content: str,
     reviewer_user: User,
     article,
-    is_update: bool,
 ) -> None:
     """Write review scores.json and .md to git repo, then commit.
 
-    Best-effort: failures are logged but don't block the review submission.
+    Blocking: raises HTTPException on failure so DB stays consistent.
+    Call this BEFORE DB commit.
     """
     import json
     import logging
@@ -70,32 +70,28 @@ def _write_review_to_git(
         display_name = reviewer_user.name
         author_email = f"{reviewer_id}@peerpedia"
 
+    # Write scores.json
+    (review_dir / "scores.json").write_text(json.dumps(scores, indent=2))
+
+    # Write review .md with timestamp
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
+    md_content = f"{reviewer_id}\n\n{content or '(scores only)'}"
+    (review_dir / f"{ts}.md").write_text(md_content)
+
+    # Commit — blocking, raises on failure
+    lock = get_article_lock(article_id)
+    acquired = lock.acquire(timeout=10)
+    if not acquired:
+        raise HTTPException(status_code=503, detail="Article busy — retry later")
     try:
-        # Write scores.json
-        (review_dir / "scores.json").write_text(json.dumps(scores, indent=2))
-
-        # Write review .md with timestamp
-        ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
-        md_content = f"{reviewer_id}\n\n{content or '(scores only)'}"
-        (review_dir / f"{ts}.md").write_text(md_content)
-
-        # Commit
-        lock = get_article_lock(article_id)
-        acquired = lock.acquire(timeout=10)
-        if not acquired:
-            logger.warning("Could not acquire lock for article %s — skipping commit", article_id)
-            return
-        try:
-            commit_article(
-                rp,
-                f"Review by {display_name}",
-                display_name,
-                author_email,
-            )
-        finally:
-            lock.release()
-    except Exception:
-        logger.exception("Failed to write review files for article %s", article_id)
+        commit_article(
+            rp,
+            f"Review by {display_name}",
+            display_name,
+            author_email,
+        )
+    finally:
+        lock.release()
 
 
 def _build_review_out(r, user_map: dict[str, User], article_authors: list[str]) -> ReviewOut:
@@ -206,6 +202,14 @@ def submit_review(article_id: str, body: ReviewCreate,
         r = create_review(db, article_id=article_id, commit_hash=body.commit_hash,
                            reviewer_id=current_user.id, scope=body.scope.value,
                            scores=body.scores)
+
+    # I4 fix: write to git BEFORE DB commit. If git fails, return error
+    # so DB stays consistent with "git is source of truth."
+    _write_review_to_git_blocking(
+        article_id, r.reviewer_id, body.scores, body.content,
+        current_user, article,
+    )
+
     # Compute per-commit score and cache latest commit's score on the article
     rp = DEFAULT_ARTICLES_DIR / article_id
     if (rp / ".git").is_dir():
@@ -221,12 +225,6 @@ def submit_review(article_id: str, body: ReviewCreate,
     article_author_ids = get_author_ids(db, article_id)
     for author_id in article_author_ids:
         compute_author_reputation(db, author_id)
-
-    # Phase B: write review files to git repo
-    _write_review_to_git(
-        article_id, r.reviewer_id, body.scores, body.content,
-        current_user, article, existing is not None,
-    )
 
     user_map = _batch_load_reviewers(db, [r])
     return _build_review_out(r, user_map, article_author_ids)
