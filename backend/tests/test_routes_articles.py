@@ -1893,8 +1893,6 @@ class TestRefreshDbFromGit:
         Verifies that get_articles_by_author / list_articles with author_id
         correctly joins ArticleAuthor and returns articles for the author.
         """
-        from peerpedia_core.storage.db.engine import get_session
-        from peerpedia_core.storage.db.models import Article, ArticleAuthor
 
         # Create an article by the auth user
         create_body = {
@@ -1978,6 +1976,7 @@ class TestAuthorArticleLink:
         """
         import json
         import uuid as _uuid
+
         from peerpedia_core.storage.db.engine import get_session
         from peerpedia_core.storage.db.models import User
         from peerpedia_core.storage.git_backend import commit_article, init_article_repo
@@ -2000,12 +1999,12 @@ class TestAuthorArticleLink:
         # Simulate sync auto-create: create article with empty authors, then rebuild
         from peerpedia_core.storage.db.crud_article import (
             create_article,
-            get_authors_from_git,
             get_author_ids,
+            get_authors_from_git,
             rebuild_article_authors,
         )
         s2 = get_session(db_engine)
-        a = create_article(s2, authors=[], id=aid, status="draft")
+        create_article(s2, authors=[], id=aid, status="draft")
         s2.commit()
 
         # Rebuild authors from git — this is what the sync endpoint does
@@ -2047,15 +2046,16 @@ class TestAuthorArticleLink:
         """
         import json
         import uuid as _uuid
-        from peerpedia_core.storage.db.engine import get_session
-        from peerpedia_core.storage.db.models import Article, ArticleAuthor, User
-        from peerpedia_core.storage.git_backend import commit_article, init_article_repo
+
         from peerpedia_core.storage.db.crud_article import (
             create_article,
-            get_authors_from_git,
             get_author_ids,
+            get_authors_from_git,
             rebuild_article_authors,
         )
+        from peerpedia_core.storage.db.engine import get_session
+        from peerpedia_core.storage.db.models import User
+        from peerpedia_core.storage.git_backend import commit_article, init_article_repo
 
         s = get_session(db_engine)
         # Two authors
@@ -2074,7 +2074,7 @@ class TestAuthorArticleLink:
         (rp / "article.json").write_text(json.dumps({"status": "draft"}))
 
         s2 = get_session(db_engine)
-        a = create_article(s2, authors=[uid1], id=aid, status="draft")
+        create_article(s2, authors=[uid1], id=aid, status="draft")
         s2.commit()
 
         # u2 adds a co-author commit → simulates what bundle sync brings
@@ -2104,14 +2104,15 @@ class TestAuthorArticleLink:
         """
         import json
         import uuid as _uuid
-        from peerpedia_core.storage.db.engine import get_session
-        from peerpedia_core.storage.db.models import User
-        from peerpedia_core.storage.git_backend import commit_article, init_article_repo
+
         from peerpedia_core.storage.db.crud_article import (
             create_article,
             get_author_ids,
             repair_orphan_article_authors,
         )
+        from peerpedia_core.storage.db.engine import get_session
+        from peerpedia_core.storage.db.models import User
+        from peerpedia_core.storage.git_backend import commit_article, init_article_repo
 
         s = get_session(db_engine)
         u = User(username="repair_test_u", password_hash="", name="RepairAuthor", anonymous_name="ra")
@@ -2129,7 +2130,7 @@ class TestAuthorArticleLink:
 
         # Create article with empty authors (simulating the broken state)
         s2 = get_session(db_engine)
-        a = create_article(s2, authors=[], id=aid, status="draft")
+        create_article(s2, authors=[], id=aid, status="draft")
         s2.commit()
         # Verify it has no authors
         assert get_author_ids(s2, aid) == []
