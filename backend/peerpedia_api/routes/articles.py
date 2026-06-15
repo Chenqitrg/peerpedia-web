@@ -71,6 +71,11 @@ from peerpedia_api.policies.articles import (
     require_self_review_for_publish,
     visible_statuses_for_user,
 )
+from peerpedia_api.policies.repo import (
+    ensure_inside,
+    reject_symlinks,
+    safe_extract_tar,
+)
 from peerpedia_api.schemas.article import (
     ArticleCreate,
     ArticleDetail,
@@ -276,7 +281,7 @@ def api_create_article(
 
         try:
             with tarfile.open(tar_path, "r:gz") as tar:
-                tar.extractall(path=rp.parent)
+                safe_extract_tar(tar, rp.parent)
             # Verify extraction produced a git repo
             if not (rp / ".git").is_dir():
                 raise HTTPException(
@@ -289,14 +294,12 @@ def api_create_article(
             except Exception:
                 logger.warning("Bundle extraction ok but DB refresh failed for %s", a.id)
 
-            # Rebuild authors from the imported git history
+            # Only grant the uploading user permission — external git
+            # history authors are untrusted (Phase 2c: anti-spoofing).
             from peerpedia_core.storage.db.crud_article import (
-                get_authors_from_git,
-                rebuild_article_authors,
+                replace_article_authors,
             )
-            git_authors = get_authors_from_git(rp, db)
-            if git_authors:
-                rebuild_article_authors(db, a.id, git_authors | {current_user.id})
+            replace_article_authors(db, a.id, {current_user.id})
 
             repo = git.Repo(rp)
             commit_hash = repo.head.commit.hexsha if repo.head.is_valid() else None
@@ -506,7 +509,9 @@ def api_fork_article(
     dst = repo_path(fork_id)
 
     if (src / ".git").is_dir():
-        shutil.copytree(src, dst, symlinks=True)
+        reject_symlinks(src)
+        shutil.copytree(src, dst, symlinks=False)
+        reject_symlinks(dst)
     else:
         init_article_repo(fork_id)
 
@@ -630,9 +635,11 @@ def api_get_source(
 ):
     assert_can_read_article(db, article_id, current_user)
     rp = repo_path(article_id)
+    reject_symlinks(rp)
     for ext in [".md", ".typ"]:
         f = rp / f"article{ext}"
         if f.exists():
+            ensure_inside(rp, f)
             fmt = "markdown" if ext == ".md" else "typst"
             return ArticleSourceResponse(content=f.read_text(), format=fmt)
     raise HTTPException(status_code=404, detail="Source file not found")
@@ -646,6 +653,7 @@ def api_download_source(
 ):
     assert_can_read_article(db, article_id, current_user)
     rp = repo_path(article_id)
+    reject_symlinks(rp)
     for ext in [".md", ".typ"]:
         f = rp / f"article{ext}"
         if f.exists():
@@ -666,6 +674,7 @@ def api_download_pdf(
     """Compile article to PDF and return as downloadable file."""
     assert_can_read_article(db, article_id, current_user)
     rp = repo_path(article_id)
+    reject_symlinks(rp)
     for ext in [".typ", ".md"]:
         f = rp / f"article{ext}"
         if f.exists():
@@ -719,6 +728,7 @@ def api_download_repo(
     """
     assert_can_download_repo(db, article_id, current_user)
     rp = repo_path(article_id)
+    reject_symlinks(rp)
     if not (rp / ".git").is_dir():
         raise HTTPException(status_code=404, detail="Git repo not found")
 
