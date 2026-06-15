@@ -510,3 +510,118 @@ class TestReviewErrorPaths:
             json={"content": ""},
             headers=auth_header(seeded["author_id"]))
         assert resp.status_code == 422
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Review git-write (Phase C — reviews written to git repo)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestReviewGitWrite:
+    """Verify reviews are written to the article's git repository."""
+
+    @pytest.fixture
+    def article_client(self, db_engine):
+        """A client with require_user override, for creating articles with repos."""
+        from peerpedia_api import deps
+        from peerpedia_api.main import app
+        from peerpedia_core.storage.db.engine import get_session
+        from peerpedia_core.storage.db.models import User
+
+        def override_db():
+            session = get_session(db_engine)
+            try:
+                yield session
+            finally:
+                session.close()
+
+        s = get_session(db_engine)
+        author = User(username="git_rev_author", password_hash="",
+                      name="GitRevAuthor", anonymous_name="anon_git_rev", affiliation="U")
+        reviewer = User(username="git_rev_reviewer", password_hash="",
+                        name="GitRevReviewer", anonymous_name="anon_git_rev2", affiliation="U")
+        s.add_all([author, reviewer])
+        s.commit()
+        author_id = author.id
+        reviewer_id = reviewer.id
+        author_obj = s.get(User, author_id)
+        s.close()
+
+        app.dependency_overrides[deps.get_db] = override_db
+        app.dependency_overrides[deps.require_user] = lambda: author_obj
+
+        from fastapi.testclient import TestClient
+        c = TestClient(app)
+        yield c, author_id, reviewer_id
+        app.dependency_overrides.clear()
+
+    def test_review_writes_files_to_git(self, article_client, db_engine):
+        """Submitting a review creates scores.json and .md in the git repo."""
+        import json
+
+        from peerpedia_core.storage.git_backend import DEFAULT_ARTICLES_DIR
+
+        client, author_id, reviewer_id = article_client
+
+        # Create article via API — this creates the git repo
+        create_body = {
+            "authors": [author_id],
+            "content": "# Review Test\n\nContent.",
+            "format": "markdown",
+            "self_review": {"originality": 4, "rigor": 3, "completeness": 4,
+                            "pedagogy": 3, "impact": 3},
+        }
+        resp = client.post("/api/v1/articles", json=create_body)
+        assert resp.status_code == 201
+        article_id = resp.json()["id"]
+
+        rp = DEFAULT_ARTICLES_DIR / article_id
+        assert (rp / ".git").is_dir()
+
+        # Submit a review (as the reviewer)
+        from peerpedia_api import deps
+        from peerpedia_core.storage.db.engine import get_session
+        from peerpedia_core.storage.db.models import User
+
+        s = get_session(db_engine)
+        reviewer_obj = s.get(User, reviewer_id)
+        # Keep s open — reviewer_obj must stay attached to a session
+
+        # Get the actual commit hash from the article's git repo
+        import git as gitmod
+        commit_hash = gitmod.Repo(rp).head.commit.hexsha
+
+        app = client.app
+        old = app.dependency_overrides.get(deps.require_user)
+        try:
+            app.dependency_overrides[deps.require_user] = lambda: reviewer_obj
+            review_body = {
+                "article_id": article_id,
+                "commit_hash": commit_hash,
+                "scope": "pool",
+                "scores": {"originality": 5, "rigor": 4, "completeness": 4,
+                           "pedagogy": 4, "impact": 5},
+                "content": "Excellent work.",
+            }
+            resp2 = client.post(
+                f"/api/v1/articles/{article_id}/reviews",
+                json=review_body,
+            )
+            assert resp2.status_code == 201, f"Got {resp2.status_code}: {resp2.text}"
+        finally:
+            app.dependency_overrides[deps.require_user] = old
+
+        # Verify git files were written
+        review_dir = rp / "reviews" / reviewer_id
+        assert review_dir.is_dir()
+        assert (review_dir / "scores.json").exists()
+        scores = json.loads((review_dir / "scores.json").read_text())
+        assert scores["originality"] == 5
+        assert scores["impact"] == 5
+
+        # Verify .md file exists
+        md_files = list(review_dir.glob("*.md"))
+        assert len(md_files) >= 1
+        md_content = md_files[0].read_text()
+        assert reviewer_id in md_content
+        assert "Excellent work." in md_content

@@ -200,6 +200,85 @@ class TestCreateArticle:
         resp = client.post("/api/v1/articles", json=body)
         assert resp.status_code == 201
 
+    def test_create_with_repo_bundle(self, client, auth_user_id):
+        """Create article via repo_bundle (Phase B — client sends full git repo as tar.gz)."""
+        import base64
+        import io
+        import json
+        import shutil
+        import tarfile
+        import tempfile
+        import uuid
+        from pathlib import Path
+
+        from peerpedia_core.storage.git_backend import commit_article, init_article_repo
+
+        # Use a client-generated UUID so the tar directory name matches
+        article_uuid = str(uuid.uuid4())
+
+        tmp = tempfile.mkdtemp()
+        try:
+            src_rp = Path(tmp) / article_uuid
+            init_article_repo(article_uuid, base_dir=Path(tmp))
+            (src_rp / "article.md").write_text("# Bundle Article\n\nContent.")
+            (src_rp / "article.json").write_text(json.dumps({
+                "title": "Bundle Article",
+                "abstract": "Created via tar.gz bundle",
+                "keywords": ["bundle", "test"],
+                "categories": ["testing"],
+                "status": "draft",
+            }))
+            commit_article(src_rp, "initial", "Author", f"{auth_user_id}@peerpedia")
+
+            # Tar.gz the repo — extractall(path=rp.parent) expects article_uuid/ dir
+            tar_buf = io.BytesIO()
+            with tarfile.open(fileobj=tar_buf, mode="w:gz") as tar:
+                tar.add(str(src_rp), arcname=article_uuid)
+            tar_buf.seek(0)
+            b64 = base64.b64encode(tar_buf.read()).decode()
+
+            body = {"authors": [auth_user_id], "repo_bundle": b64, "id": article_uuid}
+            resp = client.post("/api/v1/articles", json=body)
+            assert resp.status_code == 201
+            data = resp.json()
+            assert data["id"] == article_uuid
+            assert data["status"] == "draft"
+            assert data["title"] == "Bundle Article"
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_create_repo_bundle_bad_base64(self, client, auth_user_id):
+        """repo_bundle with invalid base64 returns 422."""
+        body = {
+            "authors": [auth_user_id],
+            "repo_bundle": "!!! not valid base64 !!!",
+        }
+        resp = client.post("/api/v1/articles", json=body)
+        assert resp.status_code == 422
+
+    def test_create_repo_bundle_not_a_repo(self, client, auth_user_id):
+        """repo_bundle tar.gz without a .git directory returns 422."""
+        import base64
+        import io
+        import tarfile
+
+        # Build a tar.gz with just a file, no .git
+        tar_buf = io.BytesIO()
+        with tarfile.open(fileobj=tar_buf, mode="w:gz") as tar:
+            info = tarfile.TarInfo(name="some-dir/not-a-repo.txt")
+            info.size = 0
+            tar.addfile(info)
+
+        tar_buf.seek(0)
+        b64 = base64.b64encode(tar_buf.read()).decode()
+
+        body = {
+            "authors": [auth_user_id],
+            "repo_bundle": b64,
+        }
+        resp = client.post("/api/v1/articles", json=body)
+        assert resp.status_code == 422
+
 
 class TestUpdateArticle:
     def test_update_content_flow(self, client, seed_user, auth_user_id):
@@ -1379,3 +1458,214 @@ class TestBundleSyncEndpoints:
         finally:
             if old is not None:
                 app.dependency_overrides[deps.require_user] = old
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# _refresh_db_from_git — DB cache sync from article.json
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestRefreshDbFromGit:
+    """Test the _refresh_db_from_git helper used by bundle sync paths."""
+
+    def test_syncs_title_abstract_keywords(self, client, auth_user_id, db_engine):
+        """_refresh_db_from_git copies title/abstract/keywords from article.json to DB."""
+        import json
+
+        from peerpedia_api.routes.articles import _refresh_db_from_git
+        from peerpedia_core.storage.db.engine import get_session
+        from peerpedia_core.storage.db.models import Article, ArticleAuthor
+        from peerpedia_core.storage.git_backend import (
+            commit_article,
+            init_article_repo,
+        )
+
+        # Create article in DB with repo
+        s = get_session(db_engine)
+        a = Article(title="Old Title", abstract="Old Abstract",
+                    keywords=["old"], categories=["old-cat"], status="draft")
+        s.add(a)
+        s.flush()
+        s.add(ArticleAuthor(article_id=a.id, author_id=auth_user_id, position=0))
+        s.commit()
+        aid = a.id
+        s.close()
+
+        rp = init_article_repo(aid)
+        (rp / "article.md").write_text("# Content")
+        commit_article(rp, "init", "A", f"{auth_user_id}@peerpedia")
+
+        # Write article.json with new values
+        meta = {
+            "title": "New Title",
+            "abstract": "New Abstract",
+            "keywords": ["new", "kw"],
+            "categories": ["new-cat"],
+            "status": "draft",
+        }
+        (rp / "article.json").write_text(json.dumps(meta))
+
+        # Sync
+        s2 = get_session(db_engine)
+        _refresh_db_from_git(aid, rp, s2)
+        s2.close()
+
+        # Verify DB was updated
+        s3 = get_session(db_engine)
+        from peerpedia_core.storage.db.crud_article import get_article
+        updated = get_article(s3, aid)
+        assert updated.title == "New Title"
+        assert updated.abstract == "New Abstract"
+        assert updated.keywords == ["new", "kw"]
+        assert updated.categories == ["new-cat"]
+        s3.close()
+
+    def test_clears_keywords_to_empty(self, client, auth_user_id, db_engine):
+        """_refresh_db_from_git can clear keywords to empty list."""
+        import json
+
+        from peerpedia_api.routes.articles import _refresh_db_from_git
+        from peerpedia_core.storage.db.engine import get_session
+        from peerpedia_core.storage.db.models import Article, ArticleAuthor
+        from peerpedia_core.storage.git_backend import (
+            commit_article,
+            init_article_repo,
+        )
+
+        s = get_session(db_engine)
+        a = Article(keywords=["old", "kw"], status="draft")
+        s.add(a)
+        s.flush()
+        s.add(ArticleAuthor(article_id=a.id, author_id=auth_user_id, position=0))
+        s.commit()
+        aid = a.id
+        s.close()
+
+        rp = init_article_repo(aid)
+        (rp / "article.md").write_text("# C")
+        commit_article(rp, "init", "A", f"{auth_user_id}@peerpedia")
+        (rp / "article.json").write_text(json.dumps({"keywords": [], "status": "draft"}))
+
+        s2 = get_session(db_engine)
+        _refresh_db_from_git(aid, rp, s2)
+        s2.close()
+
+        s3 = get_session(db_engine)
+        from peerpedia_core.storage.db.crud_article import get_article
+        assert get_article(s3, aid).keywords == []
+        s3.close()
+
+    def test_no_article_json_is_noop(self, client, auth_user_id, db_engine):
+        """_refresh_db_from_git returns early when article.json doesn't exist."""
+        from peerpedia_api.routes.articles import _refresh_db_from_git
+        from peerpedia_core.storage.db.engine import get_session
+        from peerpedia_core.storage.db.models import Article, ArticleAuthor
+        from peerpedia_core.storage.git_backend import commit_article, init_article_repo
+
+        s = get_session(db_engine)
+        a = Article(status="draft")
+        s.add(a)
+        s.flush()
+        s.add(ArticleAuthor(article_id=a.id, author_id=auth_user_id, position=0))
+        s.commit()
+        aid = a.id
+        s.close()
+
+        rp = init_article_repo(aid)
+        (rp / "article.md").write_text("# C")
+        commit_article(rp, "init", "A", f"{auth_user_id}@peerpedia")
+
+        s2 = get_session(db_engine)
+        _refresh_db_from_git(aid, rp, s2)  # no article.json → no-op
+        s2.close()
+
+    def test_no_db_session_skips_sync(self, client, auth_user_id, db_engine):
+        """_refresh_db_from_git with db=None returns early."""
+        import json
+
+        from peerpedia_api.routes.articles import _refresh_db_from_git
+        from peerpedia_core.storage.db.engine import get_session
+        from peerpedia_core.storage.db.models import Article, ArticleAuthor
+        from peerpedia_core.storage.git_backend import commit_article, init_article_repo
+
+        s = get_session(db_engine)
+        a = Article(status="draft")
+        s.add(a)
+        s.flush()
+        s.add(ArticleAuthor(article_id=a.id, author_id=auth_user_id, position=0))
+        s.commit()
+        aid = a.id
+        s.close()
+
+        rp = init_article_repo(aid)
+        (rp / "article.md").write_text("# C")
+        commit_article(rp, "init", "A", f"{auth_user_id}@peerpedia")
+        (rp / "article.json").write_text(json.dumps({"title": "X", "status": "draft"}))
+
+        # db=None → should not raise
+        _refresh_db_from_git(aid, rp, None)
+
+    def test_bad_json_logs_warning(self, client, auth_user_id, db_engine, caplog):
+        """_refresh_db_from_git logs a warning for unparseable article.json."""
+        from peerpedia_api.routes.articles import _refresh_db_from_git
+        from peerpedia_core.storage.db.engine import get_session
+        from peerpedia_core.storage.db.models import Article, ArticleAuthor
+        from peerpedia_core.storage.git_backend import commit_article, init_article_repo
+
+        s = get_session(db_engine)
+        a = Article(status="draft")
+        s.add(a)
+        s.flush()
+        s.add(ArticleAuthor(article_id=a.id, author_id=auth_user_id, position=0))
+        s.commit()
+        aid = a.id
+        s.close()
+
+        rp = init_article_repo(aid)
+        (rp / "article.md").write_text("# C")
+        commit_article(rp, "init", "A", f"{auth_user_id}@peerpedia")
+        (rp / "article.json").write_text("not valid json {{{")
+
+        s2 = get_session(db_engine)
+        _refresh_db_from_git(aid, rp, s2)
+        s2.close()
+
+        assert any("Failed to parse article.json" in r.message for r in caplog.records)
+
+    def test_status_pool_triggers_sink(self, client, auth_user_id, db_engine):
+        """_refresh_db_from_git triggers sink_start when status changes to pool."""
+        import json
+
+        from peerpedia_api.routes.articles import _refresh_db_from_git
+        from peerpedia_core.storage.db.engine import get_session
+        from peerpedia_core.storage.db.models import Article, ArticleAuthor
+        from peerpedia_core.storage.git_backend import commit_article, init_article_repo
+
+        s = get_session(db_engine)
+        a = Article(status="draft")
+        s.add(a)
+        s.flush()
+        s.add(ArticleAuthor(article_id=a.id, author_id=auth_user_id, position=0))
+        s.commit()
+        aid = a.id
+        s.close()
+
+        rp = init_article_repo(aid)
+        (rp / "article.md").write_text("# C")
+        commit_article(rp, "init", "A", f"{auth_user_id}@peerpedia")
+        (rp / "article.json").write_text(json.dumps({
+            "title": "Publishing", "status": "pool",
+            "self_review": {"originality": 5, "rigor": 4, "completeness": 4,
+                            "pedagogy": 3, "impact": 4},
+        }))
+
+        s2 = get_session(db_engine)
+        _refresh_db_from_git(aid, rp, s2)
+        s2.close()
+
+        s3 = get_session(db_engine)
+        from peerpedia_core.storage.db.crud_article import get_article
+        updated = get_article(s3, aid)
+        assert updated.status in ("pool", "sedimentation")  # auto-publish may have advanced
+        assert updated.sink_start is not None  # sink was triggered
+        s3.close()
