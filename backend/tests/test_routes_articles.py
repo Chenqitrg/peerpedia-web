@@ -279,6 +279,36 @@ class TestCreateArticle:
         resp = client.post("/api/v1/articles", json=body)
         assert resp.status_code == 422
 
+    def test_create_repo_bundle_corrupt_tar(self, client, auth_user_id):
+        """repo_bundle with corrupt tar.gz returns 422."""
+        import base64
+
+        # Valid base64 but not a valid gzip stream
+        b64 = base64.b64encode(b"not a tar gz file").decode()
+        body = {
+            "authors": [auth_user_id],
+            "repo_bundle": b64,
+        }
+        resp = client.post("/api/v1/articles", json=body)
+        assert resp.status_code == 422
+
+    def test_create_with_publish(self, client, auth_user_id):
+        """Create article with publish=true enters the sedimentation pool."""
+        body = {
+            "authors": [auth_user_id],
+            "content": "# Publish Test\n\nContent.",
+            "format": "markdown",
+            "publish": True,
+            "self_review": {"originality": 5, "rigor": 4, "completeness": 4,
+                            "pedagogy": 3, "impact": 4},
+        }
+        resp = client.post("/api/v1/articles", json=body)
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["id"]
+        # Article should be in pool or already progressed to sedimentation
+        assert data["status"] in ("pool", "sedimentation")
+
 
 class TestUpdateArticle:
     def test_update_content_flow(self, client, seed_user, auth_user_id):
@@ -1337,6 +1367,25 @@ class TestBundleSyncEndpoints:
         # A hash that doesn't exist in the repo
         resp = client.get(f"/api/v1/articles/{article_id}/bundle?since={'0' * 40}")
         assert resp.status_code == 422
+
+    def test_get_bundle_empty_repo(self, client, auth_user_id, db_engine):
+        """GET /bundle for article with empty repo (no commits) returns 404."""
+        from peerpedia_core.storage.db.engine import get_session
+        from peerpedia_core.storage.db.models import Article, ArticleAuthor
+        from peerpedia_core.storage.git_backend import init_article_repo
+
+        s = get_session(db_engine)
+        a = Article(status="draft")
+        s.add(a)
+        s.flush()
+        s.add(ArticleAuthor(article_id=a.id, author_id=auth_user_id, position=0))
+        s.commit()
+        aid = a.id
+        s.close()
+
+        init_article_repo(aid)
+        resp = client.get(f"/api/v1/articles/{aid}/bundle?since={'0' * 40}")
+        assert resp.status_code == 404
 
     def test_get_bundle_requires_auth(self, client, article_with_repo):
         """GET /bundle returns 401 without authentication."""
