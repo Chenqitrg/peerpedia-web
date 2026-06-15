@@ -1127,3 +1127,255 @@ class TestArticleNotFound:
     def test_download_nonexistent_article_source(self, client):
         resp = client.get("/api/v1/articles/nonexistent-id/download/source")
         assert resp.status_code == 404
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Bundle Sync Endpoints (Phase B — git-first network model)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestBundleSyncEndpoints:
+    """Tests for GET /head, GET /bundle?since=, POST /sync."""
+
+    @pytest.fixture
+    def article_with_repo(self, client, auth_user_id, db_engine):
+        """Create an article with a git repo and return (article_id, head_hash).
+
+        Uses auth_user_id so the article is owned by the client's implicit auth user.
+        """
+        from peerpedia_core.storage.db.engine import get_session
+        from peerpedia_core.storage.git_backend import (
+            DEFAULT_ARTICLES_DIR,
+            commit_article,
+        )
+
+        # Create article via API — auth_user_id matches the client's require_user override
+        body = {
+            "authors": [auth_user_id],
+            "content": "# Test Bundle\n\nInitial content.",
+            "format": "markdown",
+            "self_review": {"originality": 4, "rigor": 3, "completeness": 4,
+                            "pedagogy": 3, "impact": 3},
+        }
+        resp = client.post("/api/v1/articles", json=body)
+        assert resp.status_code == 201
+        article_id = resp.json()["id"]
+
+        rp = DEFAULT_ARTICLES_DIR / article_id
+        assert (rp / ".git").is_dir()
+
+        # Make a second commit so we have something to bundle
+        (rp / "article.md").write_text("# Test Bundle\n\nUpdated content.")
+        h2 = commit_article(rp, "second commit", "Author", f"{auth_user_id}@peerpedia")
+        assert h2
+
+        # Rebuild authors in DB so get_author_ids works for auth checks
+        s = get_session(db_engine)
+        from peerpedia_core.storage.db.crud_article import rebuild_article_authors
+        rebuild_article_authors(s, article_id, {auth_user_id})
+        s.close()
+
+        return article_id, h2
+
+    # ── GET /{id}/head ──────────────────────────────────────────────────
+
+    def test_get_head_returns_hash(self, client, article_with_repo):
+        """GET /head returns the current HEAD commit hash."""
+        article_id, head_hash = article_with_repo
+        resp = client.get(f"/api/v1/articles/{article_id}/head")
+        assert resp.status_code == 200
+        assert resp.json()["hash"] == head_hash
+
+    def test_get_head_nonexistent_article(self, client):
+        """GET /head for non-existent article returns 404."""
+        resp = client.get("/api/v1/articles/nonexistent/head")
+        assert resp.status_code == 404
+
+    def test_get_head_no_repo(self, client, seed_user, db_engine):
+        """GET /head for article with no git repo returns 404."""
+        from peerpedia_core.storage.db.engine import get_session
+        from peerpedia_core.storage.db.models import Article, ArticleAuthor
+
+        s = get_session(db_engine)
+        a = Article(status="draft")
+        s.add(a)
+        s.flush()
+        s.add(ArticleAuthor(article_id=a.id, author_id=seed_user, position=0))
+        s.commit()
+        aid = a.id
+        s.close()
+
+        resp = client.get(f"/api/v1/articles/{aid}/head")
+        assert resp.status_code == 404
+
+    # ── GET /{id}/bundle?since= ─────────────────────────────────────────
+
+    def test_get_bundle_returns_octet_stream(self, client, article_with_repo):
+        """GET /bundle returns incremental bundle as octet-stream."""
+        import git as gitmod
+        from peerpedia_core.storage.git_backend import DEFAULT_ARTICLES_DIR
+
+        article_id, _ = article_with_repo
+        rp = DEFAULT_ARTICLES_DIR / article_id
+        repo = gitmod.Repo(rp)
+
+        # Get the first commit hash (since point)
+        commits = list(repo.iter_commits())
+        first_hash = commits[-1].hexsha  # oldest commit
+
+        resp = client.get(f"/api/v1/articles/{article_id}/bundle?since={first_hash}")
+        assert resp.status_code == 200
+        assert resp.headers["content-type"] == "application/octet-stream"
+        assert len(resp.content) > 0
+
+    def test_get_bundle_nonexistent_article(self, client):
+        """GET /bundle for non-existent article returns 404."""
+        resp = client.get("/api/v1/articles/nonexistent/bundle?since=0000000000000000000000000000000000000000")
+        assert resp.status_code == 404
+
+    def test_get_bundle_bad_since_hash(self, client, article_with_repo):
+        """GET /bundle with non-ancestor since returns 422."""
+        article_id, _ = article_with_repo
+        # A hash that doesn't exist in the repo
+        resp = client.get(f"/api/v1/articles/{article_id}/bundle?since={'0' * 40}")
+        assert resp.status_code == 422
+
+    def test_get_bundle_requires_auth(self, client, article_with_repo):
+        """GET /bundle returns 401 without authentication."""
+        from peerpedia_api import deps
+
+        article_id, _ = article_with_repo
+        app = client.app
+        old = app.dependency_overrides.get(deps.require_user)
+        try:
+            app.dependency_overrides.pop(deps.require_user, None)
+            resp = client.get(f"/api/v1/articles/{article_id}/bundle?since={'0' * 40}")
+            assert resp.status_code == 401
+        finally:
+            if old is not None:
+                app.dependency_overrides[deps.require_user] = old
+
+    # ── POST /{id}/sync ─────────────────────────────────────────────────
+
+    def test_sync_applies_bundle_and_returns_head(self, client, article_with_repo):
+        """POST /sync applies an incremental bundle and returns new HEAD."""
+        from peerpedia_core.storage.git_backend import (
+            DEFAULT_ARTICLES_DIR,
+            commit_article,
+            create_bundle,
+        )
+
+        article_id, current_head = article_with_repo
+        rp = DEFAULT_ARTICLES_DIR / article_id
+
+        # Create a new commit on the repo
+        (rp / "article.md").write_text("# Test Bundle\n\nThird content.")
+        h3 = commit_article(rp, "third commit", "Author", "author@peerpedia.com")
+        assert h3
+        assert h3 != current_head
+
+        # Create incremental bundle from current_head to h3
+        bundle_bytes = create_bundle(rp, current_head)
+        assert len(bundle_bytes) > 0
+
+        # POST the bundle
+        resp = client.post(
+            f"/api/v1/articles/{article_id}/sync",
+            files={"file": ("bundle", bundle_bytes, "application/octet-stream")},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["head"] == h3
+
+    def test_sync_nonexistent_article(self, client):
+        """POST /sync for non-existent article returns 404."""
+        resp = client.post(
+            "/api/v1/articles/nonexistent/sync",
+            files={"file": ("bundle", b"garbage", "application/octet-stream")},
+        )
+        assert resp.status_code == 404
+
+    def test_sync_without_repo(self, client, auth_user_id, db_engine):
+        """POST /sync for article without git repo returns 404."""
+        from peerpedia_core.storage.db.engine import get_session
+        from peerpedia_core.storage.db.models import Article, ArticleAuthor
+
+        s = get_session(db_engine)
+        a = Article(status="draft")
+        s.add(a)
+        s.flush()
+        s.add(ArticleAuthor(article_id=a.id, author_id=auth_user_id, position=0))
+        s.commit()
+        aid = a.id
+        s.close()
+
+        resp = client.post(
+            f"/api/v1/articles/{aid}/sync",
+            files={"file": ("bundle", b"bundle", "application/octet-stream")},
+        )
+        assert resp.status_code == 404
+
+    def test_sync_invalid_bundle(self, client, article_with_repo):
+        """POST /sync with corrupt bundle returns 422."""
+        article_id, _ = article_with_repo
+        resp = client.post(
+            f"/api/v1/articles/{article_id}/sync",
+            files={"file": ("bundle", b"not a valid git bundle", "application/octet-stream")},
+        )
+        assert resp.status_code == 422
+
+    def test_sync_empty_bundle_rejected(self, client, article_with_repo):
+        """POST /sync with empty bundle bytes returns 422 (invalid bundle)."""
+        article_id, _ = article_with_repo
+        resp = client.post(
+            f"/api/v1/articles/{article_id}/sync",
+            files={"file": ("bundle", b"", "application/octet-stream")},
+        )
+        assert resp.status_code == 422
+
+    def test_sync_requires_auth(self, client, article_with_repo):
+        """POST /sync returns 401 without authentication."""
+        from peerpedia_api import deps
+
+        article_id, _ = article_with_repo
+        app = client.app
+        old = app.dependency_overrides.get(deps.require_user)
+        try:
+            app.dependency_overrides.pop(deps.require_user, None)
+            resp = client.post(
+                f"/api/v1/articles/{article_id}/sync",
+                files={"file": ("bundle", b"x", "application/octet-stream")},
+            )
+            assert resp.status_code == 401
+        finally:
+            if old is not None:
+                app.dependency_overrides[deps.require_user] = old
+
+    def test_sync_non_author_forbidden(self, client, article_with_repo, db_engine):
+        """POST /sync from non-author returns 403."""
+        from peerpedia_api import deps
+        from peerpedia_core.storage.db.engine import get_session
+        from peerpedia_core.storage.db.models import User
+
+        article_id, _ = article_with_repo
+
+        # Create a different user who is NOT an author
+        s = get_session(db_engine)
+        other = User(username="not_an_author", password_hash="",
+                     name="Other", anonymous_name="anon_other", affiliation="U")
+        s.add(other)
+        s.commit()
+        other_obj = s.get(User, other.id)
+        s.close()
+
+        app = client.app
+        old = app.dependency_overrides.get(deps.require_user)
+        try:
+            app.dependency_overrides[deps.require_user] = lambda: other_obj
+            resp = client.post(
+                f"/api/v1/articles/{article_id}/sync",
+                files={"file": ("bundle", b"x", "application/octet-stream")},
+            )
+            assert resp.status_code == 403
+        finally:
+            if old is not None:
+                app.dependency_overrides[deps.require_user] = old
