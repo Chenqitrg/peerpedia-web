@@ -79,6 +79,7 @@ core/peerpedia_core/
 │  ~/.peerpedia/articles/{id}/                            │
 │                                                         │
 │  ★ 文章内容（article.md / article.typ）                  │
+│  ★ 文章元数据（article.json：标题、摘要、状态）             │
 │  ★ 评审数据（reviews/{id}/scores.json + thread.md）       │
 │  ★ 文章分数（从 reviews 聚合得出，存在 scores.json）      │
 │  ★ 完整历史（git log）                                   │
@@ -89,7 +90,7 @@ core/peerpedia_core/
 │                    SQLite DB                            │
 │                                                         │
 │  users —— 用户账号、信誉分            ← 只在 DB          │
-│  articles —— 文章元数据、score 缓存    ← 内容在 Git       │
+│  articles —— 元数据 + score 缓存       ← 权威在 Git       │
 │  article_authors —— 作者关联          ← 从 Git 重建      │
 │  reviews —— 评审缓存                  ← 源文件在 Git     │
 │  follows —— 关注关系                  ← 只在 DB          │
@@ -100,9 +101,9 @@ core/peerpedia_core/
 ```
 
 核心规则：
-- **Git 是事实来源（Source of Truth）**——文章内容、评审、分数、历史的权威版本在 Git
-- **DB 是索引/缓存**——用于快速查询、排序、过滤，可以从 Git 重建
-- **users/follows/bookmarks 是纯 DB 数据**——没有 Git 对应物
+- **Git 是事实来源（Source of Truth）**——文章内容、元数据、评审、分数的权威版本在 Git
+- **DB 是索引/缓存**——用于快速查询、排序、过滤。articles/reviews/article_authors 都可以从 Git 重建
+- **只有 users/follows/bookmarks/citations/merge_proposals 是纯 DB 数据**——没有 Git 对应物
 
 ```
 
