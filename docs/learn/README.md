@@ -15,7 +15,7 @@
 | [06-compiler.md](06-compiler.md) | Typst/Markdown 编译管线——公式保护顺序、双后端 |
 | [07-sync-network.md](07-sync-network.md) | 同步与网络模型——bundle sync 协议、离线队列、冲突策略 |
 | [08-auth-identity.md](08-auth-identity.md) | 认证与身份——双 ID 问题、JWT vs 本地 auth、桥接层 |
-| [decisions.md](decisions.md) | 架构决策记录（ADR）——8 条关键决策及其原因 |
+| [decisions.md](decisions.md) | → 链接到 [../decisions/decisions.md](../decisions/decisions.md) |
 
 ## 不是文档
 
