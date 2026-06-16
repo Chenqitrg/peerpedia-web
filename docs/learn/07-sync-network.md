@@ -9,59 +9,49 @@
 ## 依赖关系（观察者 + 状态机模式）
 
 ```
-                    ┌─────────────────────┐
-                    │  browser events     │  ← online / offline 事件
-                    │  GET /health        │  ← 服务器心跳（10s 超时）
-                    └──────────┬──────────┘
-                               │
-                               ▼
-                    ┌─────────────────────┐
-                    │  useNetworkStatus   │  ← 单例：全局连接状态
-                    │  idle → connecting  │
-                    │      → synced       │
-                    └──────────┬──────────┘
-                               │ isSynced (watch)
-            ┌──────────────────┼──────────────────┐
-            ▼                  ▼                  ▼
-   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-   │  useOffline  │  │ useAutoSync  │  │ SyncButton   │
-   │  (能力门控)  │  │ (离线队列)   │  │   .vue       │
-   │             │  │             │  │ (状态指示器) │
-   │ canRead()   │  │ pendingOps[]│  │              │
-   │ canWrite()  │  │ flush()     │  │ Wifi 图标    │
-   │             │  │ pushRepo()  │  │ 红色徽章     │
-   │ 按 feature  │  │ deleteOne() │  │              │
-   │ 矩阵判断    │  │             │  │              │
-   └──────┬───────┘  └──────┬──────┘  └──────────────┘
-          │                 │
-          ▼                 ▼
-   ┌──────────────┐  ┌──────────────────────────────┐
-   │ 页面/组件    │  │  useArticleSync (per-article) │
-   │ 调 canRead() │  │                              │
-   │ 决定渲染什么  │  │ 比较本地 HEAD vs 服务器 HEAD  │
-   └──────────────┘  │ → synced | upload | conflict  │
-                     └──────────────┬───────────────┘
-                                    │
-                     ┌──────────────┴──────────────┐
-                     ▼                             ▼
-           ┌──────────────┐              ┌──────────────┐
-           │  local_git.rs│              │ git_backend  │
-           │ git bundle   │  ← HTTP →   │   .py        │
-           │ create/apply │              │ apply_bundle │
-           └──────────────┘              │ create_bundle│
-                                         └──────────────┘
-        ┌──────────────────────────────────────┐
-        │          Tauri (本地)                 │
-        │  local_store.rs: pending_push 标志    │
-        │  local_store.rs: pending_delete 标志  │
-        └──────────────────────────────────────┘
+   ┌─────────────────────┐
+   │  browser events     │  ← online / offline 事件
+   │  GET /health        │  ← 服务器心跳（10s 超时）
+   └──────────┬──────────┘
+              │ 触发
+              ▼
+   ┌─────────────────────┐
+   │  useNetworkStatus   │  ← 单例：唯一连接状态来源
+   │  idle → connecting  │
+   │       → synced      │
+   └──────────┬──────────┘
+              │ 读取 isSynced
+     ┌────────┼────────┐
+     ▼        ▼        ▼
+   ┌──────┐┌──────┐┌──────────┐
+   │useOff││useAut││SyncButton│
+   │line  ││oSync ││.vue      │
+   │      ││      ││          │
+   │canR/W││flush ││WiFi 图标  │
+   │能力  ││离线队 ││红色徽章  │
+   │门控  ││列刷新 ││          │
+   └──────┘└──┬───┘└──────────┘
+              │ 调 pushRepo
+              ▼
+   ┌────────────────────────────────┐
+   │  useArticleSync (per-article)  │
+   │  比较 本地 HEAD vs 服务器 HEAD  │
+   │  → synced | upload | conflict  │
+   └────────────┬───────────────────┘
+                │ 调 git bundle 操作
+                ▼
+   ┌────────────────────────────────────┐
+   │  local_git.rs  ←─ HTTP ──►  git_backend.py  │
+   │  git bundle create/apply     apply_bundle   │
+   └────────────────────────────────────────────┘
 ```
 
-关键规则：
-- **useNetworkStatus 是唯一事实来源**——所有组件通过它判断在线/离线，不自己 ping
-- **useAutoSync 是唯一刷新入口**——App.vue 的 watch 触发，没有人手动调 flush()
-- **useOffline 不检测网络**——它只读 `isSynced`，做能力判断
-- **bundle 是唯一同步协议**——不用 REST 传文件内容
+箭头约定：`A ──► B` = A 依赖 B。
+
+- **useNetworkStatus 被所有人依赖**——它是连接状态的唯一事实来源
+- **useAutoSync 依赖 useNetworkStatus**——监听到 synced 后才刷新
+- **useAutoSync 依赖 local_git + git_backend**——bundle 是唯一同步协议
+- **useOffline 只读 isSynced，不自己做网络检测**
 
 ## 架构概述
 

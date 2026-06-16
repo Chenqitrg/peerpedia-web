@@ -9,52 +9,51 @@
 ## 依赖关系（Pipeline 模式）
 
 ```
-                         ┌──────────────┐
-                         │   caller     │  ← backend route 或 Tauri IPC
-                         │  调 compile()│
-                         └──────┬───────┘
-                                │
-                                ▼
-                     ┌─────────────────────┐
-                     │  detect_format()    │  ← 根据扩展名判断：.typ → typst, .md → markdown
-                     └─────────┬───────────┘
-                               │
-                               ▼
-                     ┌─────────────────────┐
-                     │extract_frontmatter()│  ← 解析 YAML 元数据（不依赖 PyYAML）
-                     │ 返回 dict            │
-                     └─────────┬───────────┘
-                               │
-                ┌──────────────┴──────────────┐
-                ▼                             ▼
-     ┌──────────────────┐          ┌──────────────────┐
-     │  TypstBackend    │          │ MarkdownBackend  │
-     │  (外部进程)       │          │  (Python 库)     │
-     │                  │          │                  │
-     │ subprocess.run() │          │ 1. protect_math  │
-     │   ↓              │          │ 2. render_       │
-     │ typst compile    │          │    markdown()    │
-     │   ↓              │          │ 3. restore_math  │
-     │ 返回 PDF/SVG/PNG │          │ 4. 嵌入 KaTeX    │
-     └────────┬─────────┘          └────────┬─────────┘
-              │                             │
-              └──────────┬──────────────────┘
-                         ▼
-                ┌─────────────────┐
-                │  CompileResult  │  ← 统一返回类型
-                │  success        │
-                │  format         │
-                │  output_path    │
-                │  html_content   │
-                │  error          │
-                └─────────────────┘
+   ┌──────────────┐
+   │   caller     │  ← backend route 或 Tauri IPC
+   │  调 compile()│
+   └──────┬───────┘
+          │ 依赖
+          ▼
+   ┌─────────────────────┐
+   │  detect_format()    │  ← 根据扩展名 .typ → typst, .md → markdown
+   └─────────┬───────────┘
+             │ 依赖
+             ▼
+   ┌─────────────────────┐
+   │extract_frontmatter()│  ← 解析 YAML 元数据
+   └─────────┬───────────┘
+             │ 依赖
+             ▼
+   ┌─────────────────────┐
+   │  CompilerBackend    │  ← 抽象基类，两个实现
+   └─────────┬───────────┘
+             │
+      ┌──────┴──────┐
+      ▼             ▼
+   ┌──────┐    ┌──────────────┐
+   │Typst │    │  Markdown    │
+   │Back- │    │  Backend     │
+   │end   │    │              │
+   │      │    │1.protect_math│  ← 顺序不可颠倒！
+   │subpr-│    │2.render_md() │
+   │ocess │    │3.restore_math│
+   │typst │    │4.嵌入 KaTeX  │
+   └──┬───┘    └──────┬───────┘
+      │               │
+      └───────┬───────┘
+              │ 返回
+              ▼
+   ┌─────────────────┐
+   │  CompileResult  │  ← 统一返回：success, format, output_path, html, error
+   └─────────────────┘
 ```
 
-关键规则：
-- **detect → extract → compile 是单向流水线**——前一步的输出是后一步的输入
-- **两个后端完全独立**——Typst 走子进程，Markdown 走 Python 库，不共享代码路径
-- **math protect → render → restore 顺序不可颠倒**——这是 lessons-learned #6
-- **CompileResult 是统一的出口**——调用方不需要知道是哪个后端编译的
+箭头约定：`A ──► B` = A 依赖 B（A 调 B）。自上而下是调用顺序。
+
+- **四个阶段是单向链**：detect → extract → compile → result
+- **两个后端互不依赖**：Typst 走子进程，Markdown 走 Python 库
+- **Markdown 的三步顺序不可颠倒**：protect → render → restore（lessons-learned #6）
 
 ## 架构
 

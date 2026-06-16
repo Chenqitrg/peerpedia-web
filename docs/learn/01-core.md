@@ -36,42 +36,40 @@ core/peerpedia_core/
 ## 依赖关系（分层架构）
 
 ```
-                    ┌─────────────┐
-                    │   config/   │  ← 所有可调参数（params 单例）
-                    │  params.py  │
-                    └──────┬──────┘
-                           │ 被所有层读取
-        ┌──────────────────┼──────────────────┐
-        ▼                  ▼                  ▼
-┌───────────────┐  ┌───────────────┐  ┌───────────────┐
-│    types/     │  │   storage/    │  │   workflow/   │
-│  数据类型定义  │  │  数据持久化    │  │  业务逻辑      │
-│               │  │               │  │               │
-│ FiveDimScores │  │ ┌───────────┐ │  │ scoring ──────┤──┐
-│ Reputation... │  │ │    db/    │ │  │ sedimentation  │  │
-└───────────────┘  │ │ models.py │ │  │ reputation ───┤  │
-                   │ │ crud_*.py │◄├──┤               │  │
-                   │ └───────────┘ │  └───────────────┘  │
-                   │ ┌───────────┐ │         │           │
-                   │ │git_backend│◄├─────────┘           │
-                   │ │   .py     │ │    workflow 依赖     │
-                   │ └───────────┘ │    storage 的 CRUD   │
-                   │ ┌───────────┐ │   和 Git 操作        │
-                   │ │ compiler  │ │                     │
-                   │ │   .py     │ │                     │
-                   │ └───────────┘ │                     │
-                   └───────────────┘                     │
-                        ▲                               │
-                        └───────────────────────────────┘
-                        storage 层内部：db、git、compiler
-                        三者互相独立，不互相依赖
+        ┌───────────────────┐
+        │  backend/routes/  │  ← HTTP 层（不在 core 里，但依赖 core）
+        └────────┬──────────┘
+                 │ 调用
+                 ▼
+   ┌─────────────────────────────┐
+   │         workflow/           │  ← 业务逻辑层
+   │  scoring  sedimentation     │
+   │  reputation                 │
+   └────────────┬────────────────┘
+                │ 依赖（调 CRUD、调 Git）
+                ▼
+   ┌─────────────────────────────┐
+   │         storage/            │  ← 数据持久化层
+   │  ┌──────┐ ┌──────┐ ┌─────┐ │
+   │  │ db/  │ │ git_ │ │comp-│ │  ← 三个子模块互不依赖
+   │  │models│ │backend│ │iler │ │
+   │  │crud_*│ │.py   │ │.py  │ │
+   │  └──────┘ └──────┘ └─────┘ │
+   └────────────┬────────────────┘
+                │ 依赖（读配置、用类型）
+                ▼
+   ┌─────────────────────────────┐
+   │  config/params.py           │  ← 所有可调参数（单例）
+   │  types/scores.py            │  ← 纯数据类型（无外部依赖）
+   └─────────────────────────────┘
 ```
 
-核心规则：
-- **config 在最顶层**——所有模块通过 `params` 单例读配置，不直接依赖环境变量
-- **storage 层内部互相独立**——`git_backend` 不调 `db`，`db` 不调 `compiler`
-- **workflow 依赖 storage**——scoring/sedimentation/reputation 调 CRUD 和 Git
-- **types 是纯数据**——没有外部依赖，被所有层 import
+箭头约定：`上层 ──► 下层` = 上层依赖下层（上层 import 下层、上层调下层）。
+
+- **backend 依赖 core**：路由调 workflow 和 storage
+- **workflow 依赖 storage**：scoring/sedimentation/reputation 调 CRUD 和 Git
+- **storage 内部互不依赖**：db、git_backend、compiler 各自独立
+- **config/types 在最底层**：被所有层依赖，自身无外部依赖
 
 ## 7 个实体 + 1 个 join table
 

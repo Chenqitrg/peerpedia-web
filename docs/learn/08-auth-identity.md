@@ -9,52 +9,57 @@
 ## 依赖关系（双塔 + 桥接模式）
 
 ```
-                         ┌──────────────────────────────────┐
-                         │         用户 "alice"              │
-                         └────────┬──────────────┬──────────┘
-                                  │              │
-                    Tauri 桌面端   │              │   Web 浏览器
-                ┌─────────────────┘              └─────────────────┐
-                ▼                                                  ▼
-   ┌────────────────────────┐                    ┌────────────────────────┐
-   │     local_auth.rs      │                    │    deps.py + auth.py   │
-   │                        │                    │                        │
-   │ ┌──────────────────┐   │                    │ ┌──────────────────┐   │
-   │ │  本地 bcrypt 认证 │   │                    │ │ JWT HS256 认证   │   │
-   │ │  UUID session    │   │                    │ │ 24h 过期         │   │
-   │ └────────┬─────────┘   │                    │ └────────┬─────────┘   │
-   │          │             │                    │          │             │
-   │          ▼             │                    │          ▼             │
-   │  local_accounts 表     │                    │    users 表            │
-   │  sessions 表           │                    │    (服务器 SQLite)     │
-   │  (本地 SQLite)         │                    │                        │
-   └────────────┬───────────┘                    └────────────┬───────────┘
-                │                                             │
-                │ 本地 UUID: "aaaa-bbbb"                      │ 服务器 UUID: "xxxx-yyyy"
-                │                                             │
-                └─────────────────┬───────────────────────────┘
-                                  │
-                                  │ 问题：两端 ID 不同！
-                                  │
-                    ┌─────────────┴─────────────┐
-                    │   useUserStore.ts         │  ← 桥接层
-                    │                           │
-                    │ trySyncServerAuth()       │  ← 用本地凭据在服务器注册/登录
-                    │   ↓                       │
-                    │ 如果服务器不存在该用户     │
-                    │   → POST /auth/register   │
-                    │ 如果存在                   │
-                    │   → POST /auth/login      │
-                    │   ↓                       │
-                    │ 保存服务器 JWT + UUID     │  ← 前端用服务器 UUID 调 API
-                    │ 本地 Git 仍用本地 UUID    │  ← commit email = 本地 UUID@peerpedia
-                    └───────────────────────────┘
+   用户 "alice"
+        │
+        ├── Tauri 桌面 ──────────────┐
+        │                            │
+        ▼                            ▼
+   ┌──────────────┐          ┌──────────────┐
+   │ local_auth   │          │ deps.py +    │
+   │   .rs        │          │ auth.py      │
+   │              │          │              │
+   │ bcrypt 本地  │          │ JWT HS256    │
+   │ UUID session │          │ 24h 过期     │
+   └──────┬───────┘          └──────┬───────┘
+          │                         │
+          ▼                         ▼
+   ┌──────────────┐          ┌──────────────┐
+   │local_accounts│          │   users 表   │
+   │sessions 表   │          │(服务器 SQLite)│
+   │(本地 SQLite) │          └──────────────┘
+   └──────────────┘
+          │                         │
+          │ 本地 UUID: aaaa-bbbb    │ 服务器 UUID: xxxx-yyyy
+          │                         │
+          └───────────┬─────────────┘
+                      │ 两端 ID 不同！
+                      │
+                      ▼
+            ┌──────────────────────┐
+            │  useUserStore.ts     │  ← 桥接层
+            │                      │
+            │ trySyncServerAuth()  │  用本地凭据在服务器注册/登录
+            │   ↓                  │
+            │ 服务器不存在 → POST  │
+            │  /auth/register      │
+            │ 服务器存在   → POST  │
+            │  /auth/login         │
+            │   ↓                  │
+            │ 保存服务器 JWT+UUID  │  前端用服务器 UUID 调 API
+            │                      │
+            │ 问题：Git commit 里  │
+            │ 还是本地 UUID        │  commit email = aaaa@peerpedia
+            │ rebuild_article_     │  email.split("@")[0] → aaaa
+            │ authors 用 email     │  但服务器 users 里是 xxxx
+            │ 前缀匹配 user_id     │  → 匹配不上 → 作者关联断裂
+            └──────────────────────┘
 ```
 
-关键规则（也是关键问题）：
-- **两个塔各自独立**——Tauri 的 local_auth 和 FastAPI 的 deps.py 互不知道对方存在
-- **桥接层只解决前端问题**——`useUserStore` 让前端能用服务器 UUID 调 API，但 Git commit 里的 email 前缀仍是本地 UUID
-- **rebuild_article_authors 在断桥上**——它用 `email.split("@")[0]` 提取 user_id，如果 email 前缀对不上服务器 UUID，作者关联就断了
+箭头约定：`A ──► B` = A 依赖 B。
+
+- **两套认证系统各自独立**——local_auth 和 deps.py 互不知道对方存在
+- **useUserStore 是唯一桥接点**——负责将本地凭据映射到服务器 JWT
+- **桥接只解决了前端 API 调用**——Git commit email 仍然是本地 UUID，服务器端 rebuild_article_authors 用 `email.split("@")[0]` 匹配 user_id 时会断裂
 
 ## 认证模式对比
 
