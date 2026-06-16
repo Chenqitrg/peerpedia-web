@@ -6,6 +6,68 @@
 
 **存元数据。** 文章内容在 Git，评分、关系、用户信息在 SQLite。
 
+## ER 图（7 实体 + 1 Join Table）
+
+```
+                         ┌──────────────┐
+                         │    users     │
+                         │──────────────│
+                         │ id (PK)      │
+                         │ username (UQ)│
+                         │ password_hash│
+                         │ name         │
+                         │ email        │
+                         │ affiliation  │
+                         │ reputation   │◄──── JSON: ReputationScores
+                         │ expertise    │
+                         └──────┬───────┘
+                                │
+            ┌───────────────────┼───────────────────┐
+            │ 1:N               │ 1:N               │ 1:N
+            ▼                   ▼                   ▼
+   ┌────────────────┐  ┌──────────────┐  ┌──────────────┐
+   │ article_authors│  │   follows    │  │   reviews    │
+   │────────────────│  │──────────────│  │──────────────│
+   │ article_id (PK)│  │ follower(PK) │  │ id (PK)      │
+   │ author_id (PK) │  │ followed(PK) │  │ article_id   │──┐
+   │ position       │  │ created_at   │  │ reviewer_id  │  │
+   └───────┬────────┘  └──────────────┘  │ commit_hash  │  │
+           │                             │ scope        │  │
+           │ N:1                         │ scores (JSON)│  │
+           ▼                             │ thread (JSON)│  │
+   ┌──────────────┐                      │ contributions│  │
+   │   articles   │                      └──────────────┘  │
+   │──────────────│                                         │
+   │ id (PK)      │◄────────────────────────────────────────┘
+   │ title        │                      ┌──────────────┐
+   │ abstract     │──────────────────────│  citations   │
+   │ status       │     N:M              │──────────────│
+   │ score (JSON) │     from_article ────│ from_id (PK) │
+   │ compiled_*   │     to_article   ────│ to_id (PK)   │
+   │ sink_*       │                      │ fwd_prob     │
+   │ forked_from  │                      │ back_prob    │
+   │ fork_count   │                      └──────────────┘
+   └──────┬───────┘
+          │ 1:N
+          ▼
+   ┌──────────────┐         ┌──────────────┐
+   │  bookmarks   │         │merge_proposals│
+   │──────────────│         │──────────────│
+   │ user_id (PK) │         │ id (PK)      │
+   │ article_id(PK)│        │ fork_id      │
+   └──────────────┘         │ target_id    │
+                            │ proposer_id  │
+                            │ status       │
+                            │ thread (JSON)│
+                            └──────────────┘
+```
+
+关键约束：
+- **article_authors 是独立的 join table**（不是 JSON 字段）——支持按作者查文章、按文章查作者
+- **reviews 唯一约束**：`(article_id, reviewer_id, scope, commit_hash)`——同一 reviewer 对同一 commit 只能评一次
+- **JSON 列有 3 个**：`articles.score`、`reviews.thread`、`merge_proposals.thread`
+- **compiled_* 字段是缓存**——不是一个独立的编译结果表
+
 ## Schema 全景
 
 ```

@@ -6,6 +6,56 @@
 
 **把作者写的源码变成读者能看的渲染结果。** 支持两种格式：Typst（学术排版）和 Markdown（通用写作）。
 
+## 依赖关系（Pipeline 模式）
+
+```
+                         ┌──────────────┐
+                         │   caller     │  ← backend route 或 Tauri IPC
+                         │  调 compile()│
+                         └──────┬───────┘
+                                │
+                                ▼
+                     ┌─────────────────────┐
+                     │  detect_format()    │  ← 根据扩展名判断：.typ → typst, .md → markdown
+                     └─────────┬───────────┘
+                               │
+                               ▼
+                     ┌─────────────────────┐
+                     │extract_frontmatter()│  ← 解析 YAML 元数据（不依赖 PyYAML）
+                     │ 返回 dict            │
+                     └─────────┬───────────┘
+                               │
+                ┌──────────────┴──────────────┐
+                ▼                             ▼
+     ┌──────────────────┐          ┌──────────────────┐
+     │  TypstBackend    │          │ MarkdownBackend  │
+     │  (外部进程)       │          │  (Python 库)     │
+     │                  │          │                  │
+     │ subprocess.run() │          │ 1. protect_math  │
+     │   ↓              │          │ 2. render_       │
+     │ typst compile    │          │    markdown()    │
+     │   ↓              │          │ 3. restore_math  │
+     │ 返回 PDF/SVG/PNG │          │ 4. 嵌入 KaTeX    │
+     └────────┬─────────┘          └────────┬─────────┘
+              │                             │
+              └──────────┬──────────────────┘
+                         ▼
+                ┌─────────────────┐
+                │  CompileResult  │  ← 统一返回类型
+                │  success        │
+                │  format         │
+                │  output_path    │
+                │  html_content   │
+                │  error          │
+                └─────────────────┘
+```
+
+关键规则：
+- **detect → extract → compile 是单向流水线**——前一步的输出是后一步的输入
+- **两个后端完全独立**——Typst 走子进程，Markdown 走 Python 库，不共享代码路径
+- **math protect → render → restore 顺序不可颠倒**——这是 lessons-learned #6
+- **CompileResult 是统一的出口**——调用方不需要知道是哪个后端编译的
+
 ## 架构
 
 ```

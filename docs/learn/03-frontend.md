@@ -6,6 +6,66 @@
 
 **把 core 的数据变成用户能看、能写的界面。** 不存业务规则，不直接操作 DB。
 
+## 依赖关系（组件树 + Store/Composable 网格）
+
+```
+                         ┌──────────────────────┐
+                         │      App.vue         │  ← 根：布局 + keep-alive + 路由出口
+                         │  NavBar + TabDrawer  │
+                         │  + AuthModal         │
+                         └──────────┬───────────┘
+                                    │ <router-view>
+                ┌───────────────────┼───────────────────┐
+                ▼                   ▼                   ▼
+        ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
+        │  HomePage    │   │ EditorPage   │   │ ArticlePage  │
+        │  动态 feed   │   │  编辑器      │   │  文章详情    │
+        └──────────────┘   └──────┬───────┘   └──────────────┘
+                                  │
+                  ┌───────────────┼───────────────┐
+                  ▼               ▼               ▼
+          ┌──────────┐   ┌──────────────┐  ┌──────────┐
+          │ keep-alive│  │ useDraft...  │  │CodeEditor│
+          │ TabStore  │  │ useCommit... │  │ .vue     │
+          └──────────┘  │ useSplitPane │  └──────────┘
+                        └──────────────┘
+
+    ┌─────────────────────────────────────────────────────────┐
+    │                    Pinia Stores（状态层）                 │
+    │  useUserStore ◄──────────────────────── useTabStore     │
+    │  (双模式认证)       stores 之间不互相依赖  (标签管理)      │
+    │  useArticleStore ─────────────────────── useReviewStore  │
+    └────────────────────────┬────────────────────────────────┘
+                             │ 被 pages 和 composables 消费
+    ┌────────────────────────┼────────────────────────────────┐
+    │              Composables（横切关注点层）                  │
+    │                                                        │
+    │  useNetworkStatus ──┬── useAutoSync ─── useArticleSync │
+    │  (单例)             │     (单例)           (per-article) │
+    │                     ├── useOffline                      │
+    │                     │   (能力门控)                       │
+    │                     └── SyncButton.vue                  │
+    │                                                        │
+    │  useTauri ──────────── useUserStore（桌面桥接）          │
+    │  useDraftPersistence ─ EditorPage（草稿自动保存）        │
+    │  useCommitFlow ─────── EditorPage（保存工作流）          │
+    │  useTabIntegration ── EditorPage + ArticlePage（标签绑定）│
+    └────────────────────────────────────────────────────────┘
+                             │
+                             ▼
+    ┌─────────────────────────────────────────────────────────┐
+    │                  api/（HTTP 客户端层）                    │
+    │  client.ts → 13 个模块 → 每个对应一组后端端点              │
+    │  pages 不直接调 fetch——通过 api/*.ts                     │
+    └─────────────────────────────────────────────────────────┘
+```
+
+关键规则：
+- **App.vue 是唯一根组件**——NavBar、TabDrawer、AuthModal 都是它的子组件
+- **Stores 之间不互相依赖**——每个 store 独立，pages 组合多个 store
+- **Composables 分两类**：单例（全局状态，如网络检测）和 per-instance（页面级，如草稿保存）
+- **Pages 不直接调 fetch**——必须通过 `api/` 模块
+
 ## 模块地图
 
 ```
