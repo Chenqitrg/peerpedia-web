@@ -3,79 +3,86 @@
 > 生效版本: `phase-1a-policy-foundation` (2026-06-17)  
 > 策略来源: `core/peerpedia_core/policies/articles.py`
 
-PeerPedia 有三层文章可见性：**draft**（草稿）→ **sedimentation**（沉淀池）→ **published**（已发布）。
-权限在所有三层上检查；写操作始终是仅限作者的。
+## 文章状态
 
-## 文章状态（Article Statuses）
+| 状态 | 含义 |
+|------|------|
+| `draft` | 作者编辑中，仅作者可见 |
+| `sedimentation` | 在沉淀池中等待社区评审，公开可读 |
+| `published` | 已通过沉淀池，公开可读，可分叉，可下载 repo |
 
-| 状态 | 含义 | 可见性 |
-|------|------|--------|
-| `draft` | 作者编辑中的草稿 | 仅作者（+ 认证用户可通过作者筛选查看自己的） |
-| `sedimentation` | 在沉淀池中等待社区评审 | 所有人（含未认证） |
-| `published` | 已通过沉淀池，存档 | 所有人（含未认证） |
+## 调用者身份
 
-## 操作权限矩阵
+| 身份 | 含义 |
+|------|------|
+| **未认证** | 未携带 token，`current_user = None`。PeerPedia 没有"匿名用户"——未认证就是没登录。 |
+| **已认证** | 持有有效 token。可进一步根据是否文章作者拆分权限。 |
 
-行 = 操作，列 = 调用者身份。✅ = 允许，❌ = 拒绝。
+## 读操作
 
-### 读操作
+| 操作 | 路由 | 未认证可读状态 | 已认证可读状态 |
+|------|------|---------------|---------------|
+| 查看文章详情 | `GET /articles/{id}` | `sedimentation, published` | `draft`（仅自己的）, `sedimentation, published` |
+| 列出文章 | `GET /articles` | `sedimentation, published` | `draft`（仅自己的）, `sedimentation, published` |
+| 查看源码 | `GET /articles/{id}/source` | `sedimentation, published` | `draft`（仅自己的）, `sedimentation, published` |
+| 下载源码 | `GET /articles/{id}/download/source` | `sedimentation, published` | `draft`（仅自己的）, `sedimentation, published` |
+| 下载 PDF | `GET /articles/{id}/download/pdf` | `sedimentation, published` | `draft`（仅自己的）, `sedimentation, published` |
+| 下载 git repo | `GET /articles/{id}/download/repo` | `published` | `published`；作者额外可下载 `draft, sedimentation` |
+| 查看 diff | `GET /articles/{id}/diff/{a}/{b}` | `sedimentation, published` | `draft`（仅自己的）, `sedimentation, published` |
+| 查看历史 | `GET /articles/{id}/history` | `sedimentation, published` | `draft`（仅自己的）, `sedimentation, published` |
+| 查看 HEAD | `GET /articles/{id}/head` | `sedimentation, published` | `draft`（仅自己的）, `sedimentation, published` |
 
-| 操作 | 路由 | 匿名 | 认证（非作者） | 作者 |
-|------|------|------|---------------|------|
-| 查看文章详情 | `GET /articles/{id}` | ✅ 仅 sedimentation/published | ✅ 同上 | ✅ 含 draft |
-| 列出文章 | `GET /articles` | ✅ 仅 sedimentation/published | ✅ 含自己 draft | ✅ 含自己 draft |
-| 查看文章源码 | `GET /articles/{id}/source` | ✅ 同上 | ✅ 同上 | ✅ 含 draft |
-| 下载源码文件 | `GET /articles/{id}/download/source` | ✅ 同上 | ✅ 同上 | ✅ 含 draft |
-| 下载编译 PDF | `GET /articles/{id}/download/pdf` | ✅ 同上 | ✅ 同上 | ✅ 含 draft |
-| 下载完整 git 仓库 | `GET /articles/{id}/download/repo` | ✅ 仅 published | ✅ 仅 published | ✅ 含 draft/sedimentation |
-| 查看文章 diff | `GET /articles/{id}/diff/{a}/{b}` | ✅ 同上 | ✅ 同上 | ✅ 含 draft |
-| 查看文章历史 | `GET /articles/{id}/history` | ✅ 同上 | ✅ 同上 | ✅ 含 draft |
-| 查看 HEAD | `GET /articles/{id}/head` | ✅ 同上 | ✅ 同上 | ✅ 含 draft |
+## 写操作
 
-### 写操作
+所有写操作要求已认证 + 是文章作者。未认证请求一律返回 401/403。
 
-| 操作 | 路由 | 匿名 | 认证（非作者） | 作者 |
-|------|------|------|---------------|------|
-| 创建文章 | `POST /articles` | ❌ | ✅ | ✅ |
-| 编辑文章 | `PUT /articles/{id}` | ❌ | ❌ | ✅ |
-| 删除文章 | `DELETE /articles/{id}` | ❌ | ❌ | ✅ |
-| 回滚到历史提交 | `POST /articles/{id}/rollback/{hash}` | ❌ | ❌ | ✅ |
-| 延长沉淀期 | `PUT /articles/{id}/sink-extension` | ❌ | ❌ | ✅ |
-| 同步 (bundle) | `POST /articles/{id}/sync` | ❌ | ❌ | ✅ |
+| 操作 | 路由 | 允许状态 |
+|------|------|----------|
+| 编辑文章 | `PUT /articles/{id}` | 任意（作者可编辑任何状态的文章） |
+| 删除文章 | `DELETE /articles/{id}` | 任意 |
+| 回滚 | `POST /articles/{id}/rollback/{hash}` | 任意 |
+| 延长沉淀期 | `PUT /articles/{id}/sink-extension` | 任意 |
+| 同步 bundle | `POST /articles/{id}/sync` | 任意 |
 
-### 生命周期操作
+## 生命周期操作
 
-| 操作 | 路由 | 匿名 | 认证（非作者） | 作者 | 额外条件 |
-|------|------|------|---------------|------|----------|
-| 发布到沉淀池 | `POST /articles/{id}/publish` | ❌ | ❌ | ✅ | HEAD commit 必须有 pool-scoped 自审记录 |
-| 分叉文章 | `POST /articles/{id}/fork` | ❌ | ❌ | ✅（状态 = published） | 不能重复分叉同一篇文章 |
+| 操作 | 路由 | 允许状态 | 额外条件 |
+|------|------|----------|----------|
+| 创建文章 | `POST /articles` | —（新文章，初始状态 `draft`） | 已认证即可 |
+| 发布到沉淀池 | `POST /articles/{id}/publish` | 任意（作者） | HEAD commit 必须有 `scope=pool` 的自审记录 |
+| 分叉文章 | `POST /articles/{id}/fork` | `published` | 同一用户不能重复分叉同一篇文章 |
 
 ## 状态常量
 
 ```python
-# 规则定义于 core/peerpedia_core/policies/articles.py
+# core/peerpedia_core/policies/articles.py
 
-PUBLIC_READABLE_STATUSES   = {"sedimentation", "published"}   # 匿名可见
-FORKABLE_STATUSES          = {"published"}                    # 可分叉
-REPO_DOWNLOADABLE_STATUSES = {"published"}                    # git repo 可下载
+PUBLIC_READABLE_STATUSES   = {"sedimentation", "published"}
+FORKABLE_STATUSES          = {"published"}
+REPO_DOWNLOADABLE_STATUSES = {"published"}
+```
+
+`visible_statuses_for_user` 的返回值：
+
+```python
+visible_statuses_for_user(None)                 → {"sedimentation", "published"}
+visible_statuses_for_user(authenticated_user)   → {"draft", "sedimentation", "published"}
 ```
 
 ## 异常映射
 
-所有权限检查抛出 `peerpedia_core.exceptions` 中的语义异常：
+权限检查抛出 `peerpedia_core.exceptions` 中的语义异常，由 `backend/peerpedia_api/main.py` 的 handler 统一转为 HTTP 状态码：
 
-| 异常 | HTTP 状态码 | 含义 |
-|------|------------|------|
+| 异常 | HTTP | 触发场景 |
+|------|------|----------|
 | `NotFoundError` | 404 | 文章不存在 |
-| `NotAuthorizedError` | 403 | 用户无此操作权限 |
-| `ConflictError` | 409 | 操作冲突（如重复分叉） |
-| `BadRequestError` | 400 | 输入无效（如缺少自审） |
-
-映射集中在 `backend/peerpedia_api/main.py` 的 `peerpedia_error_handler` 中，使用 `isinstance` 链确保子类正确继承父类的状态码。
+| `NotAuthorizedError` | 403 | 权限不足（非公开状态 + 非作者） |
+| `ConflictError` | 409 | 重复分叉 |
+| `BadRequestError` | 400 | 发布前缺少自审、git repo 不存在 |
 
 ## 设计原则
 
-1. **Core 层无 HTTP 概念** — 异常名描述"什么错了"，不描述"HTTP 返回什么"
-2. **默认拒绝** — 不匹配任何允许规则的访问一律拒绝
-3. **每个路由调用对应的 assert_can_* 函数** — 不重复 `current_user.id in get_author_ids(...)` 检查
-4. **沉淀池文章不可分叉** — 下载完整 git 仓库被视为等价于 fork，也受相同限制
+1. **Core 无 HTTP** — 异常名描述"什么错了"，不描述"HTTP 返回什么"
+2. **默认拒绝** — 未匹配任何允许规则的访问一律拒绝
+3. **一函数一检查** — 路由调 `assert_can_*`，不散落 `current_user.id in get_author_ids(...)`
+4. **Repo 下载 = Fork** — 沉淀池文章不可分叉，完整 git 历史导出视为等价操作
