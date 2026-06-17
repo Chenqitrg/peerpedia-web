@@ -2,25 +2,24 @@
 # SPDX-License-Identifier: CC-BY-NC-SA-4.0
 
 """Article CRUD operations."""
+
 from sqlalchemy.orm import Session
 
 from peerpedia_core.storage.db.models import Article, ArticleAuthor
 
-# Canonical status for articles entering the sedimentation pool.
-# Client article.json and server _refresh_db_from_git must use the same value
-# to correctly trigger set_sink_start.  Matches ArticleStatus.sedimentation.
-POOL_STATUS = "sedimentation"
-
 # ── Author helpers (join table) ───────────────────────────────────────────
+
 
 def add_article_authors(session: Session, article_id: str, author_ids: list[str]) -> None:
     """Insert ArticleAuthor rows for an article."""
     for pos, author_id in enumerate(author_ids):
-        session.add(ArticleAuthor(
-            article_id=article_id,
-            author_id=author_id,
-            position=pos,
-        ))
+        session.add(
+            ArticleAuthor(
+                article_id=article_id,
+                author_id=author_id,
+                position=pos,
+            )
+        )
 
 
 def replace_article_authors(session: Session, article_id: str, author_ids: set[str]) -> None:
@@ -54,12 +53,7 @@ def replace_article_authors(session: Session, article_id: str, author_ids: set[s
 
 def get_author_ids(session: Session, article_id: str) -> list[str]:
     """Get all author IDs for an article (ordered by position)."""
-    rows = (
-        session.query(ArticleAuthor)
-        .filter(ArticleAuthor.article_id == article_id)
-        .order_by(ArticleAuthor.position)
-        .all()
-    )
+    rows = session.query(ArticleAuthor).filter(ArticleAuthor.article_id == article_id).order_by(ArticleAuthor.position).all()
     return [r.author_id for r in rows]
 
 
@@ -95,6 +89,7 @@ def get_articles_by_author(session: Session, author_id: str) -> list[Article]:
 
 # ── CRUD ──────────────────────────────────────────────────────────────────
 
+
 def create_article(
     session: Session,
     authors: list[str],
@@ -114,19 +109,22 @@ def get_article(session: Session, article_id: str) -> Article | None:
     return session.get(Article, article_id)
 
 
-def list_articles(session: Session, status: str | None = None,
-                  author_id: str | None = None,
-                  follower_id: str | None = None,
-                  limit: int | None = None, offset: int = 0) -> list[Article]:
+def list_articles(
+    session: Session,
+    status: str | None = None,
+    author_id: str | None = None,
+    follower_id: str | None = None,
+    limit: int | None = None,
+    offset: int = 0,
+) -> list[Article]:
     q = session.query(Article)
     if status:
         q = q.filter(Article.status == status)
     if author_id:
-        q = q.join(ArticleAuthor, Article.id == ArticleAuthor.article_id).filter(
-            ArticleAuthor.author_id == author_id
-        )
+        q = q.join(ArticleAuthor, Article.id == ArticleAuthor.article_id).filter(ArticleAuthor.author_id == author_id)
     if follower_id:
         from peerpedia_core.storage.db.models import Follow
+
         q = (
             q.join(ArticleAuthor, Article.id == ArticleAuthor.article_id)
             .join(Follow, ArticleAuthor.author_id == Follow.followed_id)
@@ -139,15 +137,12 @@ def list_articles(session: Session, status: str | None = None,
     return q.all()
 
 
-def count_articles(session: Session, status: str | None = None,
-                   author_id: str | None = None) -> int:
+def count_articles(session: Session, status: str | None = None, author_id: str | None = None) -> int:
     q = session.query(Article)
     if status:
         q = q.filter(Article.status == status)
     if author_id:
-        q = q.join(ArticleAuthor, Article.id == ArticleAuthor.article_id).filter(
-            ArticleAuthor.author_id == author_id
-        )
+        q = q.join(ArticleAuthor, Article.id == ArticleAuthor.article_id).filter(ArticleAuthor.author_id == author_id)
     return q.count()
 
 
@@ -188,6 +183,7 @@ def increment_fork_count(session: Session, article_id: str) -> Article:
 
 def set_sink_start(session: Session, article_id: str, duration_days: int) -> Article:
     from datetime import datetime, timezone
+
     a = session.get(Article, article_id)
     if a is None:
         raise ValueError(f"Article {article_id} not found")
@@ -224,9 +220,7 @@ def delete_article(session: Session, article_id: str) -> None:
     session.query(ArticleAuthor).filter(ArticleAuthor.article_id == article_id).delete()
     session.query(Review).filter(Review.article_id == article_id).delete()
     session.query(Bookmark).filter(Bookmark.article_id == article_id).delete()
-    session.query(Citation).filter(
-        (Citation.from_article_id == article_id) | (Citation.to_article_id == article_id)
-    ).delete()
+    session.query(Citation).filter((Citation.from_article_id == article_id) | (Citation.to_article_id == article_id)).delete()
     session.query(MergeProposal).filter(
         (MergeProposal.fork_article_id == article_id) | (MergeProposal.target_article_id == article_id)
     ).delete()
@@ -336,11 +330,7 @@ def rebuild_article_authors(
     # Only rebuild join table when authors actually changed
     if merged != existing:
         # Resolve usernames for lexicographic sort
-        rows = (
-            session.query(User)
-            .filter(User.id.in_(list(merged)))
-            .all()
-        )
+        rows = session.query(User).filter(User.id.in_(list(merged))).all()
         row_map = {u.id: u for u in rows}
         sorted_ids = sorted(
             [uid for uid in merged if uid in row_map],
@@ -350,13 +340,12 @@ def rebuild_article_authors(
         sorted_ids.extend(uid for uid in merged if uid not in row_map)
 
         # Rebuild join table
-        session.query(ArticleAuthor).filter(
-            ArticleAuthor.article_id == article_id
-        ).delete()
+        session.query(ArticleAuthor).filter(ArticleAuthor.article_id == article_id).delete()
         add_article_authors(session, article_id, sorted_ids)
 
     # Update rebuild marker
     import git
+
     article = session.get(Article, article_id)
     if article:
         rp = DEFAULT_ARTICLES_DIR / article_id
@@ -443,8 +432,26 @@ def repair_orphan_article_authors(session: Session) -> int:
     return repair_article_authors(session, mode="orphans")
 
 
+def validate_article_has_authors(session: Session, article_id: str) -> None:
+    """Raise ValueError if an article has no authors.
+
+    Articles must always have at least one author.  An article without
+    authors indicates a bug in the creation path — never silently repair,
+    always surface the error.
+    """
+    author_ids = get_author_ids(session, article_id)
+    if not author_ids:
+        raise ValueError(
+            f"Article {article_id} has no authors. "
+            "This is a bug — every article must have at least one author. "
+            "Check the creation path (create_article, sync auto-create, or direct DB insert)."
+        )
+
+
 def get_article_by_fork_and_author(
-    session: Session, forked_from: str, author_id: str,
+    session: Session,
+    forked_from: str,
+    author_id: str,
 ) -> Article | None:
     """Find an article forked from *forked_from* by *author_id*."""
     return (
