@@ -1843,7 +1843,7 @@ class TestRefreshDbFromGit:
         from peerpedia_core.storage.db.crud_article import get_article
 
         updated = get_article(s3, aid)
-        assert updated.status == "sedimentation"  # POOL_STATUS constant
+        assert updated.status == "sedimentation"
         assert updated.sink_start is not None  # sink was triggered
         assert updated.sink_duration_days > 0  # sink duration was set
         s3.close()
@@ -1851,8 +1851,8 @@ class TestRefreshDbFromGit:
     def test_refresh_db_from_git_sets_sink_on_sedimentation(self, db_engine):
         """REGRESSION: status='sedimentation' in article.json triggers set_sink_start.
 
-        Verifies the sink trigger at articles.py line 738 uses the POOL_STATUS
-        constant.  Without this, the sink timer never starts and auto-publish
+        Verifies the sink trigger at articles.py uses the "sedimentation" status.
+        Without this, the sink timer never starts and auto-publish
         silently fails.
         """
         import json
@@ -2015,10 +2015,10 @@ class TestAuthorArticleLink:
         assert len(authors[0]["name"]) > 0
 
     def test_sync_auto_create_populates_authors(self, db_engine):
-        """REGRESSION: first-time bundle sync creates DB record and populates authors.
+        """REGRESSION: first-time bundle sync creates DB record with authors.
 
-        Verifies the sync auto-create path (articles.py:831) passes authors=[]
-        and then rebuild_article_authors from git history.
+        Verifies the sync auto-create path extracts authors from git BEFORE
+        creating the DB record.  The article must never be in an author-less state.
         """
         import json
         import uuid as _uuid
@@ -2028,40 +2028,39 @@ class TestAuthorArticleLink:
         from peerpedia_core.storage.git_backend import commit_article, init_article_repo
 
         s = get_session(db_engine)
-        # Create a user whose UUID matches the git commit email
         u = User(username="sync_test_author", password_hash="", name="SyncAuthor", anonymous_name="sa")
         s.add(u)
         s.commit()
         uid = u.id
         s.close()
 
-        # Create a git repo (simulating Tauri client) — but NO DB article record yet
+        # Create a git repo (simulating Tauri client) — no DB article record yet
         aid = str(_uuid.uuid4())
         rp = init_article_repo(aid)
         (rp / "article.md").write_text("# Sync Test")
         commit_article(rp, "init", "SyncAuthor", f"{uid}@peerpedia")
         (rp / "article.json").write_text(json.dumps({"status": "draft", "title": "Sync Article"}))
 
-        # Simulate sync auto-create: create article with empty authors, then rebuild
+        # Simulate sync auto-create: extract authors from git FIRST
         from peerpedia_core.storage.db.crud_article import (
             create_article,
             get_author_ids,
             get_authors_from_git,
-            rebuild_article_authors,
         )
 
         s2 = get_session(db_engine)
-        create_article(s2, authors=[], id=aid, status="draft")
+        git_authors = get_authors_from_git(rp, s2)
+        author_list = list(git_authors) if git_authors else []
+        assert len(author_list) > 0, "Must find authors in git history"
+
+        # Create with authors from git — never empty
+        create_article(s2, authors=author_list, id=aid, status="draft")
         s2.commit()
 
-        # Rebuild authors from git — this is what the sync endpoint does
-        git_authors = get_authors_from_git(rp, s2)
-        rebuild_article_authors(s2, aid, git_authors)
-
-        # Verify authors are populated
+        # Verify authors are populated from the start
         s3 = get_session(db_engine)
         author_ids = get_author_ids(s3, aid)
-        assert uid in author_ids, f"Author {uid} should be in {author_ids} after rebuild from git"
+        assert uid in author_ids, f"Author {uid} should be in {author_ids} after auto-create"
         s3.close()
 
     def test_delete_succeeds_for_author(self, client, auth_user_id):
@@ -2145,98 +2144,32 @@ class TestAuthorArticleLink:
         assert uid2 in author_ids, f"Co-author {uid2} must be added after sync + rebuild"
         s4.close()
 
-    def test_repair_orphan_article_authors(self, db_engine):
-        """REGRESSION: startup repair populates article_authors for orphan articles.
-
-        Articles without author links are repaired from git history.
-        """
-        import json
-        import uuid as _uuid
+    def test_validate_article_has_authors_raises_on_empty(self, db_engine):
+        """validate_article_has_authors raises ValueError when article has no authors."""
+        import pytest
 
         from peerpedia_core.storage.db.crud_article import (
             create_article,
-            get_author_ids,
-            repair_orphan_article_authors,
-        )
-        from peerpedia_core.storage.db.engine import get_session
-        from peerpedia_core.storage.db.models import User
-        from peerpedia_core.storage.git_backend import commit_article, init_article_repo
-
-        s = get_session(db_engine)
-        u = User(username="repair_test_u", password_hash="", name="RepairAuthor", anonymous_name="ra")
-        s.add(u)
-        s.commit()
-        uid = u.id
-        s.close()
-
-        # Create article with git history but NO article_authors rows
-        aid = str(_uuid.uuid4())
-        rp = init_article_repo(aid)
-        (rp / "article.md").write_text("# Repair Test")
-        commit_article(rp, "init", "RepairAuthor", f"{uid}@peerpedia")
-        (rp / "article.json").write_text(json.dumps({"status": "draft", "title": "Repair Me"}))
-
-        # Create article with empty authors (simulating the broken state)
-        s2 = get_session(db_engine)
-        create_article(s2, authors=[], id=aid, status="draft")
-        s2.commit()
-        # Verify it has no authors
-        assert get_author_ids(s2, aid) == []
-        s2.close()
-
-        # Run repair
-        s3 = get_session(db_engine)
-        repaired = repair_orphan_article_authors(s3)
-        assert repaired >= 1, f"Expected ≥1 repair, got {repaired}"
-
-        # Verify authors are now populated
-        author_ids = get_author_ids(s3, aid)
-        assert uid in author_ids, f"Author {uid} should be in {author_ids} after repair"
-        s3.close()
-
-    def test_repair_orphan_returns_zero_when_no_orphans(self, db_engine):
-        """repair_orphan_article_authors returns 0 when all articles have authors."""
-        from peerpedia_core.storage.db.crud_article import (
-            create_article,
-            repair_orphan_article_authors,
+            validate_article_has_authors,
         )
         from peerpedia_core.storage.db.engine import get_session
         from peerpedia_core.storage.db.models import User
 
         s = get_session(db_engine)
-        u = User(username="repair_noop_u", password_hash="", name="N", anonymous_name="n")
+        u = User(username="val_auth_u", password_hash="", name="V", anonymous_name="v")
         s.add(u)
         s.commit()
 
-        # Article WITH authors — healthy state
-        create_article(s, authors=[u.id], title="Healthy", status="draft")
-        s.close()
+        # Create article WITH authors — validate should pass
+        a = create_article(s, authors=[u.id], title="Has Authors", status="draft")
+        validate_article_has_authors(s, a.id)  # no exception
 
-        s2 = get_session(db_engine)
-        repaired = repair_orphan_article_authors(s2)
-        assert repaired == 0, f"Expected 0 repairs when no orphans, got {repaired}"
-        s2.close()
-
-    def test_repair_orphan_skips_no_git_dir(self, db_engine):
-        """repair_orphan_article_authors skips articles with no git repo."""
-        import uuid as _uuid
-
-        from peerpedia_core.storage.db.crud_article import (
-            repair_orphan_article_authors,
-        )
-        from peerpedia_core.storage.db.engine import get_session
+        # Direct insert article with no authors — validate should raise
         from peerpedia_core.storage.db.models import Article
-
-        # Article with no authors AND no git repo
-        aid = str(_uuid.uuid4())
-        s = get_session(db_engine)
-        a = Article(id=aid, title="No Git", status="draft")
-        s.add(a)
+        aid2 = "test-no-authors-1"
+        s.add(Article(id=aid2, title="Orphan", status="draft"))
         s.commit()
-        s.close()
 
-        s2 = get_session(db_engine)
-        repaired = repair_orphan_article_authors(s2)
-        # Should return 0 — article has no .git dir, so it's skipped
-        assert repaired == 0, f"Expected 0 repairs when orphan has no git repo, got {repaired}"
-        s2.close()
+        with pytest.raises(ValueError, match="has no authors"):
+            validate_article_has_authors(s, aid2)
+        s.close()
