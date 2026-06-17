@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: CC-BY-NC-SA-4.0
 
 """Integration tests for article API routes."""
+
 import pytest
 from fastapi.testclient import TestClient
 from peerpedia_core.storage.db.engine import get_session
@@ -23,8 +24,7 @@ def client(db_engine):
             session.close()
 
     s = get_session(db_engine)
-    _u = User(username="test_articles_auth", password_hash="",
-               name="TestAuthor", anonymous_name="anon", affiliation="U")
+    _u = User(username="test_articles_auth", password_hash="", name="TestAuthor", anonymous_name="anon", affiliation="U")
     s.add(_u)
     s.commit()
     _uid = _u.id
@@ -113,8 +113,7 @@ class TestCreateArticle:
     def test_create_minimal(self, client, seed_user):
         body = {
             "authors": [seed_user],
-            "self_review": {"originality": 4, "rigor": 3, "completeness": 4,
-                            "pedagogy": 3, "impact": 3},
+            "self_review": {"originality": 4, "rigor": 3, "completeness": 4, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=body)
         assert resp.status_code == 201
@@ -124,12 +123,15 @@ class TestCreateArticle:
 
     def test_create_missing_self_review(self, client, seed_user):
         """self_review is optional for draft creation; only required at publish time."""
-        resp = client.post("/api/v1/articles", json={
-            "authors": [seed_user],
-            "title": "Draft without self-review",
-            "content": "# Test",
-            "format": "markdown",
-        })
+        resp = client.post(
+            "/api/v1/articles",
+            json={
+                "authors": [seed_user],
+                "title": "Draft without self-review",
+                "content": "# Test",
+                "format": "markdown",
+            },
+        )
         assert resp.status_code == 201
         data = resp.json()
         assert data["status"] == "draft"
@@ -137,33 +139,42 @@ class TestCreateArticle:
 
     def test_create_publish_without_self_review_rejected(self, client, seed_user):
         """Publishing without self_review must be rejected with 400."""
-        resp = client.post("/api/v1/articles", json={
-            "authors": [seed_user],
-            "title": "Publish without review",
-            "content": "# Test",
-            "format": "markdown",
-            "publish": True,
-        })
+        resp = client.post(
+            "/api/v1/articles",
+            json={
+                "authors": [seed_user],
+                "title": "Publish without review",
+                "content": "# Test",
+                "format": "markdown",
+                "publish": True,
+            },
+        )
         assert resp.status_code == 400
         assert "self_review is required" in resp.json()["detail"]
 
     def test_update_publish_without_self_review_rejected(self, client, auth_user_id):
         """Updating with publish=true but no self_review must be rejected."""
         # Create a draft first (auth_user_id is the implicit require_user override)
-        resp = client.post("/api/v1/articles", json={
-            "authors": [auth_user_id],
-            "title": "Draft to publish",
-            "content": "# Test",
-            "format": "markdown",
-        })
+        resp = client.post(
+            "/api/v1/articles",
+            json={
+                "authors": [auth_user_id],
+                "title": "Draft to publish",
+                "content": "# Test",
+                "format": "markdown",
+            },
+        )
         assert resp.status_code == 201
         article_id = resp.json()["id"]
 
         # Try to publish via update without self_review
-        resp2 = client.put(f"/api/v1/articles/{article_id}", json={
-            "content": "# Updated",
-            "publish": True,
-        })
+        resp2 = client.put(
+            f"/api/v1/articles/{article_id}",
+            json={
+                "content": "# Updated",
+                "publish": True,
+            },
+        )
         assert resp2.status_code == 400
         assert "self_review is required" in resp2.json()["detail"]
 
@@ -171,15 +182,12 @@ class TestCreateArticle:
         """Create article with categories, keywords, abstract, contributions."""
         body = {
             "authors": [seed_user],
-            "self_review": {"originality": 5, "rigor": 4, "completeness": 4,
-                            "pedagogy": 3, "impact": 4},
+            "self_review": {"originality": 5, "rigor": 4, "completeness": 4, "pedagogy": 3, "impact": 4},
             "title": "Quantum Entanglement in Many-Body Systems",
             "abstract": "A comprehensive review of entanglement measures.",
             "keywords": ["quantum", "entanglement", "many-body"],
             "categories": ["physics", "quantum"],
-            "contributions": {seed_user: {"originality": 5, "rigor": 4,
-                                           "completeness": 4, "pedagogy": 3,
-                                           "impact": 4}},
+            "contributions": {seed_user: {"originality": 5, "rigor": 4, "completeness": 4, "pedagogy": 3, "impact": 4}},
             "format": "markdown",
             "content": "# Introduction\n\nEntanglement is a fundamental resource...",
             "commit_message": "Initial draft",
@@ -193,8 +201,7 @@ class TestCreateArticle:
         """Empty content is valid — article can be saved as draft."""
         body = {
             "authors": [seed_user],
-            "self_review": {"originality": 3, "rigor": 3, "completeness": 3,
-                            "pedagogy": 3, "impact": 3},
+            "self_review": {"originality": 3, "rigor": 3, "completeness": 3, "pedagogy": 3, "impact": 3},
             "content": "",
         }
         resp = client.post("/api/v1/articles", json=body)
@@ -221,13 +228,17 @@ class TestCreateArticle:
             src_rp = Path(tmp) / article_uuid
             init_article_repo(article_uuid, base_dir=Path(tmp))
             (src_rp / "article.md").write_text("# Bundle Article\n\nContent.")
-            (src_rp / "article.json").write_text(json.dumps({
-                "title": "Bundle Article",
-                "abstract": "Created via tar.gz bundle",
-                "keywords": ["bundle", "test"],
-                "categories": ["testing"],
-                "status": "draft",
-            }))
+            (src_rp / "article.json").write_text(
+                json.dumps(
+                    {
+                        "title": "Bundle Article",
+                        "abstract": "Created via tar.gz bundle",
+                        "keywords": ["bundle", "test"],
+                        "categories": ["testing"],
+                        "status": "draft",
+                    }
+                )
+            )
             commit_article(src_rp, "initial", "Author", f"{auth_user_id}@peerpedia")
 
             # Tar.gz the repo — extractall(path=rp.parent) expects article_uuid/ dir
@@ -299,8 +310,7 @@ class TestCreateArticle:
             "content": "# Publish Test\n\nContent.",
             "format": "markdown",
             "publish": True,
-            "self_review": {"originality": 5, "rigor": 4, "completeness": 4,
-                            "pedagogy": 3, "impact": 4},
+            "self_review": {"originality": 5, "rigor": 4, "completeness": 4, "pedagogy": 3, "impact": 4},
         }
         resp = client.post("/api/v1/articles", json=body)
         assert resp.status_code == 201
@@ -317,8 +327,7 @@ class TestUpdateArticle:
             "authors": [seed_user, auth_user_id],
             "content": "# Original\n\nHello world.",
             "format": "markdown",
-            "self_review": {"originality": 4, "rigor": 3, "completeness": 4,
-                            "pedagogy": 3, "impact": 3},
+            "self_review": {"originality": 4, "rigor": 3, "completeness": 4, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=create_body)
         assert resp.status_code == 201
@@ -327,8 +336,7 @@ class TestUpdateArticle:
         # Now edit it
         edit_body = {
             "content": "# Edited\n\nUpdated content.",
-            "self_review": {"originality": 5, "rigor": 4, "completeness": 5,
-                            "pedagogy": 4, "impact": 4},
+            "self_review": {"originality": 5, "rigor": 4, "completeness": 5, "pedagogy": 4, "impact": 4},
         }
         resp2 = client.put(f"/api/v1/articles/{article_id}", json=edit_body)
         assert resp2.status_code == 200
@@ -342,8 +350,7 @@ class TestUpdateArticle:
             "authors": [seed_user, auth_user_id],
             "content": "# Test",
             "format": "markdown",
-            "self_review": {"originality": 3, "rigor": 3, "completeness": 3,
-                            "pedagogy": 3, "impact": 3},
+            "self_review": {"originality": 3, "rigor": 3, "completeness": 3, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=create_body)
         assert resp.status_code == 201
@@ -351,8 +358,7 @@ class TestUpdateArticle:
 
         # Edit without changing content
         edit_body = {
-            "self_review": {"originality": 4, "rigor": 4, "completeness": 4,
-                            "pedagogy": 4, "impact": 4},
+            "self_review": {"originality": 4, "rigor": 4, "completeness": 4, "pedagogy": 4, "impact": 4},
         }
         resp2 = client.put(f"/api/v1/articles/{article_id}", json=edit_body)
         assert resp2.status_code == 200
@@ -386,8 +392,7 @@ class TestUpdateArticle:
             "authors": [seed_user],
             "content": "# Test\n\nContent.",
             "format": "markdown",
-            "self_review": {"originality": 4, "rigor": 3, "completeness": 4,
-                            "pedagogy": 3, "impact": 3},
+            "self_review": {"originality": 4, "rigor": 3, "completeness": 4, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=create_body)
         article_id = resp.json()["id"]
@@ -395,9 +400,9 @@ class TestUpdateArticle:
         # Create a third user who is NOT an author
         from peerpedia_core.storage.db.engine import get_session
         from peerpedia_core.storage.db.models import User
+
         s = get_session(db_engine)
-        other = User(username="other_editor", password_hash="",
-                      name="OtherEditor", anonymous_name="anon_other", affiliation="X")
+        other = User(username="other_editor", password_hash="", name="OtherEditor", anonymous_name="anon_other", affiliation="X")
         s.add(other)
         s.commit()
         other_id = other.id
@@ -405,6 +410,7 @@ class TestUpdateArticle:
 
         # Switch auth to the non-author user
         from peerpedia_api import deps
+
         s2 = get_session(db_engine)
         other_obj = s2.get(User, other_id)
         app = client.app
@@ -427,8 +433,7 @@ class TestHistoryWithScores:
             "authors": [seed_user],
             "content": "# V1\n\nFirst version.",
             "format": "markdown",
-            "self_review": {"originality": 4, "rigor": 3, "completeness": 4,
-                            "pedagogy": 3, "impact": 3},
+            "self_review": {"originality": 4, "rigor": 3, "completeness": 4, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=create_body)
         article_id = resp.json()["id"]
@@ -450,8 +455,7 @@ class TestHistoryWithScores:
             "authors": [seed_user, auth_user_id],
             "content": "# V1",
             "format": "markdown",
-            "self_review": {"originality": 3, "rigor": 3, "completeness": 3,
-                            "pedagogy": 3, "impact": 3},
+            "self_review": {"originality": 3, "rigor": 3, "completeness": 3, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=create_body)
         article_id = resp.json()["id"]
@@ -459,8 +463,7 @@ class TestHistoryWithScores:
         # Edit to create second commit
         edit_body = {
             "content": "# V2\n\nEdited.",
-            "self_review": {"originality": 5, "rigor": 4, "completeness": 5,
-                            "pedagogy": 4, "impact": 4},
+            "self_review": {"originality": 5, "rigor": 4, "completeness": 5, "pedagogy": 4, "impact": 4},
             "publish": True,
         }
         client.put(f"/api/v1/articles/{article_id}", json=edit_body)
@@ -491,8 +494,7 @@ class TestScoreBackfill:
             "authors": [seed_user, auth_user_id],
             "content": "# Backfill test",
             "format": "markdown",
-            "self_review": {"originality": 4, "rigor": 3, "completeness": 4,
-                            "pedagogy": 3, "impact": 3},
+            "self_review": {"originality": 4, "rigor": 3, "completeness": 4, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=create_body)
         article_id = resp.json()["id"]
@@ -500,10 +502,13 @@ class TestScoreBackfill:
         assert resp.json()["score"] is None
 
         # Publish → score computed.
-        pub_resp = client.put(f"/api/v1/articles/{article_id}", json={
-            "publish": True,
-            "self_review": {"originality": 4, "rigor": 3, "completeness": 4, "pedagogy": 3, "impact": 3},
-        })
+        pub_resp = client.put(
+            f"/api/v1/articles/{article_id}",
+            json={
+                "publish": True,
+                "self_review": {"originality": 4, "rigor": 3, "completeness": 4, "pedagogy": 3, "impact": 3},
+            },
+        )
         assert pub_resp.status_code == 200
         assert pub_resp.json()["score"] is not None  # published article has score
 
@@ -530,8 +535,7 @@ class TestScoreNotCleared:
             "authors": [seed_user, auth_user_id],
             "content": "# V1",
             "format": "markdown",
-            "self_review": {"originality": 4, "rigor": 3, "completeness": 4,
-                            "pedagogy": 3, "impact": 3},
+            "self_review": {"originality": 4, "rigor": 3, "completeness": 4, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=create_body)
         article_id = resp.json()["id"]
@@ -539,10 +543,13 @@ class TestScoreNotCleared:
         assert resp.json()["score"] is None
 
         # Publish → score computed.
-        client.put(f"/api/v1/articles/{article_id}", json={
-            "publish": True,
-            "self_review": {"originality": 4, "rigor": 3, "completeness": 4, "pedagogy": 3, "impact": 3},
-        })
+        client.put(
+            f"/api/v1/articles/{article_id}",
+            json={
+                "publish": True,
+                "self_review": {"originality": 4, "rigor": 3, "completeness": 4, "pedagogy": 3, "impact": 3},
+            },
+        )
         # Edit WITHOUT self_review — score persists from publish commit.
         edit_body = {"content": "# V2\n\nNew content."}
         resp2 = client.put(f"/api/v1/articles/{article_id}", json=edit_body)
@@ -559,17 +566,19 @@ class TestScoreNotCleared:
             "authors": [seed_user, auth_user_id],
             "content": "# V1",
             "format": "markdown",
-            "self_review": {"originality": 4, "rigor": 3, "completeness": 4,
-                            "pedagogy": 3, "impact": 3},
+            "self_review": {"originality": 4, "rigor": 3, "completeness": 4, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=create_body)
         article_id = resp.json()["id"]
 
         # Publish → score computed from self_review.
-        pub_resp = client.put(f"/api/v1/articles/{article_id}", json={
-            "publish": True,
-            "self_review": {"originality": 4, "rigor": 3, "completeness": 4, "pedagogy": 3, "impact": 3},
-        })
+        pub_resp = client.put(
+            f"/api/v1/articles/{article_id}",
+            json={
+                "publish": True,
+                "self_review": {"originality": 4, "rigor": 3, "completeness": 4, "pedagogy": 3, "impact": 3},
+            },
+        )
         assert pub_resp.status_code == 200
         assert pub_resp.json()["score"] is not None
         # Edit without self-review (commit B, no reviews)
@@ -595,6 +604,7 @@ class TestPagination:
         """GET /articles returns paginated response with page and size."""
         from peerpedia_core.storage.db.engine import get_session
         from peerpedia_core.storage.db.models import Article, User
+
         s = get_session(db_engine)
         u = User(username="user22", password_hash="", name="pagination_user", anonymous_name="anon_pag")
         s.add(u)
@@ -630,8 +640,7 @@ class TestDownloadEndpoints:
             "authors": [seed_user],
             "content": content,
             "format": fmt,
-            "self_review": {"originality": 4, "rigor": 3, "completeness": 4,
-                            "pedagogy": 3, "impact": 3},
+            "self_review": {"originality": 4, "rigor": 3, "completeness": 4, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=create_body)
         assert resp.status_code == 201
@@ -647,8 +656,7 @@ class TestDownloadEndpoints:
 
     def test_download_source_typst(self, client, seed_user):
         """Download source file for a Typst article."""
-        aid = self._create_article_with_content(
-            client, seed_user, "= Introduction\nSome text.", fmt="typst")
+        aid = self._create_article_with_content(client, seed_user, "= Introduction\nSome text.", fmt="typst")
         resp = client.get(f"/api/v1/articles/{aid}/download/source")
         assert resp.status_code == 200
         assert "Introduction" in resp.text
@@ -673,8 +681,7 @@ class TestDownloadEndpoints:
 
     def test_download_repo_returns_tar_gz(self, client, seed_user):
         """Download repo bundle returns a valid tar.gz with git history."""
-        aid = self._create_article_with_content(
-            client, seed_user, "# Test\n\nContent.", fmt="markdown")
+        aid = self._create_article_with_content(client, seed_user, "# Test\n\nContent.", fmt="markdown")
         resp = client.get(f"/api/v1/articles/{aid}/download/repo")
         assert resp.status_code == 200
         assert resp.headers["content-type"] == "application/gzip"
@@ -752,8 +759,7 @@ class TestDeleteArticle:
             "authors": [auth_id],
             "content": "# Test\n\nContent.",
             "format": "markdown",
-            "self_review": {"originality": 4, "rigor": 3, "completeness": 4,
-                            "pedagogy": 3, "impact": 3},
+            "self_review": {"originality": 4, "rigor": 3, "completeness": 4, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=create_body)
         assert resp.status_code == 201
@@ -776,6 +782,7 @@ class TestDeleteArticle:
     def test_delete_endpoint_requires_auth(self, client, owned_article):
         """DELETE /articles/{id} returns 401 without authentication."""
         from peerpedia_api import deps
+
         app = client.app
         old = app.dependency_overrides.get(deps.require_user)
         try:
@@ -805,14 +812,14 @@ class TestDeleteArticle:
         from peerpedia_core.storage.db.models import User
 
         s = get_session(db_engine)
-        other = User(username="other_user", password_hash="",
-                      name="Other", anonymous_name="anon_other", affiliation="X")
+        other = User(username="other_user", password_hash="", name="Other", anonymous_name="anon_other", affiliation="X")
         s.add(other)
         s.commit()
         other_id = other.id
         s.close()
 
         from peerpedia_api import deps
+
         s2 = get_session(db_engine)
         other_obj = s2.get(User, other_id)
         app = client.app
@@ -831,6 +838,7 @@ class TestDeleteArticle:
 # Article lifecycle — status transitions (sedimentation → published)
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestArticleLifecycle:
     """Verify article status transitions through the sedimentation pool."""
 
@@ -840,8 +848,7 @@ class TestArticleLifecycle:
             "authors": [seed_user],
             "content": "# Test\n\nContent.",
             "format": "markdown",
-            "self_review": {"originality": 4, "rigor": 3, "completeness": 4,
-                            "pedagogy": 3, "impact": 3},
+            "self_review": {"originality": 4, "rigor": 3, "completeness": 4, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=body)
         assert resp.status_code == 201
@@ -853,8 +860,7 @@ class TestArticleLifecycle:
             "authors": [seed_user, auth_user_id],
             "content": "# V1\n\nFirst.",
             "format": "markdown",
-            "self_review": {"originality": 3, "rigor": 3, "completeness": 3,
-                            "pedagogy": 3, "impact": 3},
+            "self_review": {"originality": 3, "rigor": 3, "completeness": 3, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=create_body)
         article_id = resp.json()["id"]
@@ -862,8 +868,7 @@ class TestArticleLifecycle:
         # Edit with publish flag
         edit_body = {
             "content": "# V2\n\nUpdated.",
-            "self_review": {"originality": 4, "rigor": 4, "completeness": 4,
-                            "pedagogy": 4, "impact": 4},
+            "self_review": {"originality": 4, "rigor": 4, "completeness": 4, "pedagogy": 4, "impact": 4},
             "publish": True,
         }
         resp2 = client.put(f"/api/v1/articles/{article_id}", json=edit_body)
@@ -876,8 +881,7 @@ class TestArticleLifecycle:
             "authors": [seed_user],
             "content": "# To Publish",
             "format": "markdown",
-            "self_review": {"originality": 3, "rigor": 3, "completeness": 3,
-                            "pedagogy": 3, "impact": 3},
+            "self_review": {"originality": 3, "rigor": 3, "completeness": 3, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=create_body)
         article_id = resp.json()["id"]
@@ -895,6 +899,7 @@ class TestArticleLifecycle:
 # Sink extension — extra pool time
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestSinkExtension:
     """Verify sink extension API extends the sedimentation pool duration."""
 
@@ -903,17 +908,14 @@ class TestSinkExtension:
             "authors": [seed_user],
             "content": "# Sink Test",
             "format": "markdown",
-            "self_review": {"originality": 3, "rigor": 3, "completeness": 3,
-                            "pedagogy": 3, "impact": 3},
+            "self_review": {"originality": 3, "rigor": 3, "completeness": 3, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=create_body)
         article_id = resp.json()["id"]
         original_duration = resp.json()["sink_duration_days"]
 
         # Extend by 10 days
-        ext_resp = client.put(
-            f"/api/v1/articles/{article_id}/sink-extension",
-            json={"extra_days": 10})
+        ext_resp = client.put(f"/api/v1/articles/{article_id}/sink-extension", json={"extra_days": 10})
         assert ext_resp.status_code == 200
         assert ext_resp.json()["sink_duration_days"] > original_duration
 
@@ -922,23 +924,20 @@ class TestSinkExtension:
             "authors": [seed_user],
             "content": "# Sink Test 2",
             "format": "markdown",
-            "self_review": {"originality": 3, "rigor": 3, "completeness": 3,
-                            "pedagogy": 3, "impact": 3},
+            "self_review": {"originality": 3, "rigor": 3, "completeness": 3, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=create_body)
         article_id = resp.json()["id"]
 
         for bad_days in [0, -1]:
-            ext_resp = client.put(
-                f"/api/v1/articles/{article_id}/sink-extension",
-                json={"extra_days": bad_days})
-            assert ext_resp.status_code == 422, \
-                f"extra_days={bad_days} should be rejected, got {ext_resp.status_code}"
+            ext_resp = client.put(f"/api/v1/articles/{article_id}/sink-extension", json={"extra_days": bad_days})
+            assert ext_resp.status_code == 422, f"extra_days={bad_days} should be rejected, got {ext_resp.status_code}"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Error path coverage — fork, has-forked, rollback
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestArticleErrorPaths:
     """Verify error responses for article sub-routes."""
@@ -954,14 +953,14 @@ class TestArticleErrorPaths:
             "authors": [seed_user],
             "content": "# Forkable",
             "format": "markdown",
-            "self_review": {"originality": 3, "rigor": 3, "completeness": 3,
-                            "pedagogy": 3, "impact": 3},
+            "self_review": {"originality": 3, "rigor": 3, "completeness": 3, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=create_body)
         article_id = resp.json()["id"]
 
         # Without auth override, require_user dependency returns 401
         from peerpedia_api import deps
+
         app = client.app
         old = app.dependency_overrides.get(deps.require_user)
         try:
@@ -980,8 +979,7 @@ class TestArticleErrorPaths:
         """Happy path: create article with 2 commits, rollback to first, verify content restored."""
         body = {
             "authors": [seed_user, auth_user_id],
-            "self_review": {"originality": 4, "rigor": 3, "completeness": 4,
-                            "pedagogy": 3, "impact": 3},
+            "self_review": {"originality": 4, "rigor": 3, "completeness": 4, "pedagogy": 3, "impact": 3},
             "title": "Rollback Test",
             "content": "Original content",
             "format": "markdown",
@@ -1027,6 +1025,7 @@ class TestArticleErrorPaths:
 # Additional edge cases for uncovered branches
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestArticleCreateEdgeCases:
     """Edge cases for article creation."""
 
@@ -1037,8 +1036,7 @@ class TestArticleCreateEdgeCases:
             "title": "Solo Article",
             "content": "Content",
             "format": "markdown",
-            "self_review": {"originality": 3, "rigor": 3, "completeness": 3,
-                           "pedagogy": 3, "impact": 3},
+            "self_review": {"originality": 3, "rigor": 3, "completeness": 3, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=body)
         assert resp.status_code == 201
@@ -1056,8 +1054,7 @@ class TestArticleUpdateEdgeCases:
             "title": "Original Title",
             "content": "Content",
             "format": "markdown",
-            "self_review": {"originality": 3, "rigor": 3, "completeness": 3,
-                           "pedagogy": 3, "impact": 3},
+            "self_review": {"originality": 3, "rigor": 3, "completeness": 3, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=body)
         article_id = resp.json()["id"]
@@ -1084,8 +1081,7 @@ class TestHasForked:
             "title": "Unforked",
             "content": "Content",
             "format": "markdown",
-            "self_review": {"originality": 3, "rigor": 3, "completeness": 3,
-                           "pedagogy": 3, "impact": 3},
+            "self_review": {"originality": 3, "rigor": 3, "completeness": 3, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=body)
         article_id = resp.json()["id"]
@@ -1101,8 +1097,7 @@ class TestHasForked:
             "title": "WillBeForked",
             "content": "Content",
             "format": "markdown",
-            "self_review": {"originality": 3, "rigor": 3, "completeness": 3,
-                           "pedagogy": 3, "impact": 3},
+            "self_review": {"originality": 3, "rigor": 3, "completeness": 3, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=body)
         article_id = resp.json()["id"]
@@ -1132,15 +1127,12 @@ class TestDiffEdgeCases:
             "title": "Diff Test",
             "content": "Content for diff test.",
             "format": "markdown",
-            "self_review": {"originality": 3, "rigor": 3, "completeness": 3,
-                           "pedagogy": 3, "impact": 3},
+            "self_review": {"originality": 3, "rigor": 3, "completeness": 3, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=body)
         article_id = resp.json()["id"]
         # Try diff with invalid hashes
-        diff_resp = client.get(
-            f"/api/v1/articles/{article_id}/diff/badhash1/badhash2"
-        )
+        diff_resp = client.get(f"/api/v1/articles/{article_id}/diff/badhash1/badhash2")
         assert diff_resp.status_code == 400
 
 
@@ -1166,8 +1158,7 @@ class TestArticleSource:
             "title": "Typst Article",
             "content": "= Hello\nWorld",
             "format": "typst",
-            "self_review": {"originality": 3, "rigor": 3, "completeness": 3,
-                           "pedagogy": 3, "impact": 3},
+            "self_review": {"originality": 3, "rigor": 3, "completeness": 3, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=body)
         article_id = resp.json()["id"]
@@ -1192,8 +1183,7 @@ class TestUpdatePublishWithContributions:
             "title": "Contrib Test",
             "content": "Initial content.",
             "format": "markdown",
-            "self_review": {"originality": 3, "rigor": 3, "completeness": 3,
-                           "pedagogy": 3, "impact": 3},
+            "self_review": {"originality": 3, "rigor": 3, "completeness": 3, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=body)
         article_id = resp.json()["id"]
@@ -1201,11 +1191,9 @@ class TestUpdatePublishWithContributions:
         update = {
             "content": "Updated content with contributions.",
             "publish": True,
-            "self_review": {"originality": 4, "rigor": 4, "completeness": 4,
-                           "pedagogy": 4, "impact": 4},
+            "self_review": {"originality": 4, "rigor": 4, "completeness": 4, "pedagogy": 4, "impact": 4},
             "contributions": {
-                seed_user: {"originality": 1.0, "rigor": 1.0, "completeness": 1.0,
-                            "pedagogy": 1.0, "impact": 1.0},
+                seed_user: {"originality": 1.0, "rigor": 1.0, "completeness": 1.0, "pedagogy": 1.0, "impact": 1.0},
             },
         }
         resp2 = client.put(f"/api/v1/articles/{article_id}", json=update)
@@ -1263,8 +1251,7 @@ class TestBundleSyncEndpoints:
             "authors": [auth_user_id],
             "content": "# Test Bundle\n\nInitial content.",
             "format": "markdown",
-            "self_review": {"originality": 4, "rigor": 3, "completeness": 4,
-                            "pedagogy": 3, "impact": 3},
+            "self_review": {"originality": 4, "rigor": 3, "completeness": 4, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=body)
         assert resp.status_code == 201
@@ -1281,6 +1268,7 @@ class TestBundleSyncEndpoints:
         # Rebuild authors in DB so get_author_ids works for auth checks
         s = get_session(db_engine)
         from peerpedia_core.storage.db.crud_article import rebuild_article_authors
+
         rebuild_article_authors(s, article_id, {auth_user_id})
         s.close()
 
@@ -1507,8 +1495,7 @@ class TestBundleSyncEndpoints:
 
         # Create a different user who is NOT an author
         s = get_session(db_engine)
-        other = User(username="not_an_author", password_hash="",
-                     name="Other", anonymous_name="anon_other", affiliation="U")
+        other = User(username="not_an_author", password_hash="", name="Other", anonymous_name="anon_other", affiliation="U")
         s.add(other)
         s.commit()
         other_obj = s.get(User, other.id)
@@ -1588,6 +1575,7 @@ class TestBundleSyncEndpoints:
             assert "Fast-forward merge failed" in detail["error"]
         finally:
             import shutil
+
             shutil.rmtree(tmp, ignore_errors=True)
 
 
@@ -1613,8 +1601,7 @@ class TestRefreshDbFromGit:
 
         # Create article in DB with repo
         s = get_session(db_engine)
-        a = Article(title="Old Title", abstract="Old Abstract",
-                    keywords=["old"], categories=["old-cat"], status="draft")
+        a = Article(title="Old Title", abstract="Old Abstract", keywords=["old"], categories=["old-cat"], status="draft")
         s.add(a)
         s.flush()
         s.add(ArticleAuthor(article_id=a.id, author_id=auth_user_id, position=0))
@@ -1644,6 +1631,7 @@ class TestRefreshDbFromGit:
         # Verify DB was updated
         s3 = get_session(db_engine)
         from peerpedia_core.storage.db.crud_article import get_article
+
         updated = get_article(s3, aid)
         assert updated.title == "New Title"
         assert updated.abstract == "New Abstract"
@@ -1683,6 +1671,7 @@ class TestRefreshDbFromGit:
 
         s3 = get_session(db_engine)
         from peerpedia_core.storage.db.crud_article import get_article
+
         assert get_article(s3, aid).keywords == []
         s3.close()
 
@@ -1784,11 +1773,15 @@ class TestRefreshDbFromGit:
         rp = init_article_repo(aid)
         (rp / "article.md").write_text("# C")
         commit_article(rp, "init", "A", f"{auth_user_id}@peerpedia")
-        (rp / "article.json").write_text(json.dumps({
-            "title": "Publishing", "status": "sedimentation",
-            "self_review": {"originality": 5, "rigor": 4, "completeness": 4,
-                            "pedagogy": 3, "impact": 4},
-        }))
+        (rp / "article.json").write_text(
+            json.dumps(
+                {
+                    "title": "Publishing",
+                    "status": "sedimentation",
+                    "self_review": {"originality": 5, "rigor": 4, "completeness": 4, "pedagogy": 3, "impact": 4},
+                }
+            )
+        )
 
         s2 = get_session(db_engine)
         _refresh_db_from_git(aid, rp, s2)
@@ -1796,6 +1789,7 @@ class TestRefreshDbFromGit:
 
         s3 = get_session(db_engine)
         from peerpedia_core.storage.db.crud_article import get_article
+
         updated = get_article(s3, aid)
         assert updated.status == "sedimentation"  # POOL_STATUS constant
         assert updated.sink_start is not None  # sink was triggered
@@ -1842,6 +1836,7 @@ class TestRefreshDbFromGit:
 
         s3 = get_session(db_engine)
         from peerpedia_core.storage.db.crud_article import get_article
+
         updated = get_article(s3, aid)
         assert updated.status == "sedimentation"
         assert updated.sink_start is not None, "sink_start must be set when status is sedimentation"
@@ -1870,8 +1865,7 @@ class TestRefreshDbFromGit:
         publish_body = {
             "content": "# Publish Test\n\nContent. (published)",
             "publish": True,
-            "self_review": {"originality": 4, "rigor": 3, "completeness": 4,
-                            "pedagogy": 3, "impact": 3},
+            "self_review": {"originality": 4, "rigor": 3, "completeness": 4, "pedagogy": 3, "impact": 3},
         }
         resp2 = client.put(f"/api/v1/articles/{article_id}", json=publish_body)
         assert resp2.status_code == 200, f"Publish failed: {resp2.json()}"
@@ -2003,6 +1997,7 @@ class TestAuthorArticleLink:
             get_authors_from_git,
             rebuild_article_authors,
         )
+
         s2 = get_session(db_engine)
         create_article(s2, authors=[], id=aid, status="draft")
         s2.commit()
@@ -2083,6 +2078,7 @@ class TestAuthorArticleLink:
 
         # Normal sync path: refresh from git + rebuild authors
         from peerpedia_api.routes.articles import _refresh_db_from_git
+
         s3 = get_session(db_engine)
         _refresh_db_from_git(aid, rp, s3)
         git_authors = get_authors_from_git(rp, s3)
@@ -2145,3 +2141,50 @@ class TestAuthorArticleLink:
         author_ids = get_author_ids(s3, aid)
         assert uid in author_ids, f"Author {uid} should be in {author_ids} after repair"
         s3.close()
+
+    def test_repair_orphan_returns_zero_when_no_orphans(self, db_engine):
+        """repair_orphan_article_authors returns 0 when all articles have authors."""
+        from peerpedia_core.storage.db.crud_article import (
+            create_article,
+            repair_orphan_article_authors,
+        )
+        from peerpedia_core.storage.db.engine import get_session
+        from peerpedia_core.storage.db.models import User
+
+        s = get_session(db_engine)
+        u = User(username="repair_noop_u", password_hash="", name="N", anonymous_name="n")
+        s.add(u)
+        s.commit()
+
+        # Article WITH authors — healthy state
+        create_article(s, authors=[u.id], title="Healthy", status="draft")
+        s.close()
+
+        s2 = get_session(db_engine)
+        repaired = repair_orphan_article_authors(s2)
+        assert repaired == 0, f"Expected 0 repairs when no orphans, got {repaired}"
+        s2.close()
+
+    def test_repair_orphan_skips_no_git_dir(self, db_engine):
+        """repair_orphan_article_authors skips articles with no git repo."""
+        import uuid as _uuid
+
+        from peerpedia_core.storage.db.crud_article import (
+            repair_orphan_article_authors,
+        )
+        from peerpedia_core.storage.db.engine import get_session
+        from peerpedia_core.storage.db.models import Article
+
+        # Article with no authors AND no git repo
+        aid = str(_uuid.uuid4())
+        s = get_session(db_engine)
+        a = Article(id=aid, title="No Git", status="draft")
+        s.add(a)
+        s.commit()
+        s.close()
+
+        s2 = get_session(db_engine)
+        repaired = repair_orphan_article_authors(s2)
+        # Should return 0 — article has no .git dir, so it's skipped
+        assert repaired == 0, f"Expected 0 repairs when orphan has no git repo, got {repaired}"
+        s2.close()
