@@ -186,6 +186,7 @@ class TestBundleSync:
     def test_create_and_apply_bundle_preserves_hash(self, articles_dir):
         """S1+S2: Full bundle preserves commit hash when applied to empty repo."""
         import git as gitmod
+
         from peerpedia_core.storage.git_backend import (
             apply_bundle,
             commit_article,
@@ -282,6 +283,7 @@ class TestBundleSync:
     def test_apply_bundle_divergent_history(self, articles_dir):
         """apply_bundle with divergent history raises MergeConflictError."""
         import git as gitmod
+
         from peerpedia_core.storage.git_backend import (
             MergeConflictError,
             apply_bundle,
@@ -362,6 +364,7 @@ class TestClosedLoopSync:
     def test_full_lifecycle_s1_s2_s3(self, articles_dir):
         """S1+S2+S3: Create → push → verify hash → server change → pull → push again."""
         import git as gitmod
+
         from peerpedia_core.storage.git_backend import (
             apply_bundle,
             commit_article,
@@ -436,6 +439,7 @@ class TestClosedLoopSync:
     def test_divergent_history_s4(self, articles_dir):
         """S4: Divergent commits on both sides → 409 conflict."""
         import git as gitmod
+
         from peerpedia_core.storage.git_backend import (
             MergeConflictError,
             apply_bundle,

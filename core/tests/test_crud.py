@@ -4,13 +4,14 @@
 """Tests for CRUD operations — create, read, update, delete for all entities."""
 
 import pytest
+from sqlalchemy.orm import Session
+
 from peerpedia_core.storage.db.engine import get_session
 from peerpedia_core.storage.db.models import (
     Article,
     Review,
     User,
 )
-from sqlalchemy.orm import Session
 
 # ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -278,6 +279,7 @@ class TestReviewCRUD:
     def test_duplicate_same_commit_fails(self, engine):
         """Same (article, reviewer, scope, commit_hash) must raise integrity error."""
         import sqlalchemy
+
         from peerpedia_core.storage.db.crud_review import create_review
 
         session = get_session(engine)

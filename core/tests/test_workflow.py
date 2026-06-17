@@ -5,9 +5,10 @@
 
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 # Register all models with Base.metadata before engine fixture creates tables
 import peerpedia_core.storage.db.models  # noqa: F401
-import pytest
 
 
 class TestComputeArticleScore:

@@ -5,6 +5,8 @@
 MergeProposal, Citation."""
 
 import pytest
+from sqlalchemy.orm import Session
+
 from peerpedia_core.storage.db.engine import get_session
 from peerpedia_core.storage.db.models import (
     Article,
@@ -16,7 +18,6 @@ from peerpedia_core.storage.db.models import (
     User,
 )
 from peerpedia_core.types.messages import ThreadMessage
-from sqlalchemy.orm import Session
 
 # ── Helpers ─────────────────────────────────────────────────────────────
 
