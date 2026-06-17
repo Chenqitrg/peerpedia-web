@@ -1638,8 +1638,8 @@ class TestBundleSyncEndpoints:
         """
         import json
         import uuid
-        import git as gitmod  # noqa: I001
 
+        import git as gitmod  # noqa: I001
         from peerpedia_core.storage.git_backend import (
             commit_article,
             create_bundle,
