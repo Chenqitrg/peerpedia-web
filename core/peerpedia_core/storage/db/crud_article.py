@@ -41,7 +41,6 @@ def replace_article_authors(session: Session, article_id: str, author_ids: set[s
         [uid for uid in author_ids if uid in row_map],
         key=lambda uid: row_map[uid].username,
     )
-    sorted_ids.extend(uid for uid in author_ids if uid not in row_map)
 
     for pos, author_id in enumerate(sorted_ids):
         session.add(
@@ -260,25 +259,19 @@ def extend_sink(session: Session, article_id: str, extra_days: int, max_days: in
 # ── Multi-author: git-derived authors ──────────────────────────────────────
 
 
-def resolve_user_id_from_git_email(session: Session, email: str) -> str | None:
+def resolve_user_id_from_git_email(session: Session, email: str) -> str:
     """Resolve a user ID from a git commit email.
 
-    Supports two formats:
-    - canonical: ``{UUID}@peerpedia`` (direct User.id lookup)
-    - legacy:    ``{username}@peerpedia`` (User.username lookup)
+    Only accepts ``{UUID}@peerpedia`` format (User.id lookup).
+    Raises ValueError if the email does not resolve to a known user.
     """
     from peerpedia_core.storage.db.models import User
 
     local = email.split("@", 1)[0].strip()
-    # Canonical: UUID@peerpedia
     u = session.get(User, local)
-    if u:
-        return u.id
-    # Legacy: username@peerpedia
-    u = session.query(User).filter(User.username == local).first()
-    if u:
-        return u.id
-    return None
+    if u is None:
+        raise ValueError(f"No user found for git email: {email}")
+    return u.id
 
 
 def get_authors_from_git(
@@ -307,9 +300,11 @@ def get_authors_from_git(
 
     for commit in commits:
         email = commit.author.email
-        user_id = resolve_user_id_from_git_email(session, email)
-        if user_id:
+        try:
+            user_id = resolve_user_id_from_git_email(session, email)
             user_ids.add(user_id)
+        except ValueError:
+            pass
 
     return user_ids
 
@@ -359,93 +354,6 @@ def rebuild_article_authors(
     session.commit()
 
 
-def repair_article_authors(
-    session: Session,
-    *,
-    mode: str = "orphans",
-    articles_dir: str | Path | None = None,
-) -> int:
-    """Repair article_authors from git commit history.
-
-    Parameters
-    ----------
-    mode : str
-        ``"orphans"`` — only fix articles with zero author rows (startup-safe).
-        ``"all"``    — force-rebuild ALL articles from git history; uses
-                       ``replace_article_authors`` to overwrite DB with git truth.
-    articles_dir : str or Path or None
-        Override the default articles directory (for testing).
-
-    Returns
-    -------
-    int
-        Number of articles repaired.
-    """
-    import logging
-
-    from peerpedia_core.storage.git_backend import DEFAULT_ARTICLES_DIR
-
-    assert mode in {"orphans", "all"}, f"Invalid mode: {mode}"
-
-    base_dir = Path(articles_dir) if articles_dir else DEFAULT_ARTICLES_DIR
-
-    logger = logging.getLogger(__name__)
-    articles = session.query(Article).all()
-    repaired = 0
-
-    for article in articles:
-        db_authors = set(get_author_ids(session, article.id))
-
-        if mode == "orphans" and db_authors:
-            continue
-
-        rp = base_dir / article.id
-        if not (rp / ".git").is_dir():
-            continue
-
-        try:
-            git_authors = get_authors_from_git(rp, session)
-        except Exception:
-            logger.warning("Failed to read git history for article %s", article.id)
-            continue
-
-        if not git_authors:
-            continue
-
-        if mode == "all":
-            # Full mode: REPLACE — overwrite DB with git truth
-            if git_authors != db_authors:
-                replace_article_authors(session, article.id, git_authors)
-                repaired += 1
-        else:
-            # Orphan mode: only populate when completely empty
-            if not db_authors:
-                replace_article_authors(session, article.id, git_authors)
-                repaired += 1
-
-    if repaired:
-        session.commit()
-        logger.info("Repaired %d articles (mode=%s) with authors from git history", repaired, mode)
-    return repaired
-
-
-def repair_orphan_article_authors(
-    session: Session,
-    *,
-    articles_dir: str | Path | None = None,
-) -> int:
-    """Rebuild article_authors for articles that have none.
-
-    Scans all articles, finds those with zero rows in article_authors,
-    and attempts to rebuild from git commit history.  Returns the number
-    of articles repaired.
-
-    This is a startup repair for databases where article_authors was
-    never populated (e.g., Tauri local DB, migration gaps).
-
-    Delegates to ``repair_article_authors(mode="orphans")``.
-    """
-    return repair_article_authors(session, mode="orphans", articles_dir=articles_dir)
 
 
 def validate_article_has_authors(session: Session, article_id: str) -> None:

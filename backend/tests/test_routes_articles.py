@@ -1673,59 +1673,6 @@ class TestBundleSyncEndpoints:
         assert resp.status_code == 422, resp.text
         assert "Cannot derive authors" in resp.json()["detail"]
 
-    def test_sync_auto_create_rolls_back_on_unexpected_error(
-        self, client, auth_user_id, db_engine,
-    ):
-        """Sync auto-create should rollback when an unexpected error occurs."""
-        import json
-        import uuid
-        from unittest.mock import patch
-
-        import git as gitmod  # noqa: I001
-        from peerpedia_core.storage.db.engine import get_session
-        from peerpedia_core.storage.db.models import User
-        from peerpedia_core.storage.git_backend import (
-            commit_article,
-            create_bundle,
-            init_article_repo,
-        )
-
-        # Create a user and commit with their email so auto-create passes
-        s = get_session(db_engine)
-        user = s.get(User, auth_user_id)
-        s.close()
-
-        aid = str(uuid.uuid4())
-        rp = init_article_repo(aid)
-
-        repo = gitmod.Repo(rp)
-        with repo.config_writer() as cw:
-            cw.set_value("user", "name", "CI")
-            cw.set_value("user", "email", f"{user.id}@peerpedia")
-        repo.git.commit("--allow-empty", "-m", "root")
-        empty_hash = repo.head.commit.hexsha
-
-        (rp / "article.md").write_text("# Test")
-        (rp / "article.json").write_text(json.dumps({"title": "T", "status": "draft"}))
-        commit_article(rp, "init", user.name, f"{user.id}@peerpedia")
-
-        bundle = create_bundle(rp, empty_hash)
-
-        # After article create succeeds, simulate an unexpected error
-        # by patching get_author_ids to raise RuntimeError. The test
-        # client re-raises non-HTTP server exceptions, so we use
-        # pytest.raises to confirm the except Exception handler fires.
-        with patch(
-            "peerpedia_api.routes.articles.get_author_ids",
-            side_effect=RuntimeError("simulated crash"),
-        ):
-            with pytest.raises(RuntimeError, match="simulated crash"):
-                client.post(
-                    f"/api/v1/articles/{aid}/sync",
-                    files={"file": ("bundle", bundle, "application/octet-stream")},
-                    auth=(auth_user_id, "test"),
-                )
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # _refresh_db_from_git — DB cache sync from article.json
