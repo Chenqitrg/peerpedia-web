@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: CC-BY-NC-SA-4.0
 
 """Article routes: CRUD, history, diff, fork, rollback, publish, source, download."""
+
 import shutil
 import tarfile
 import tempfile
@@ -14,6 +15,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 from peerpedia_core.config.params import params
 from peerpedia_core.storage.db.crud_article import (
+    POOL_STATUS,
     count_articles,
     create_article,
     delete_article,
@@ -83,9 +85,7 @@ def compute_sink(a) -> tuple[datetime | None, int | None]:
     return None, None
 
 
-def build_article_detail(
-    db: Session, article_id: str, current_user: User | None = None
-) -> ArticleDetail:
+def build_article_detail(db: Session, article_id: str, current_user: User | None = None) -> ArticleDetail:
     """Build ArticleDetail from DB."""
     a = get_article(db, article_id)
     if a is None:
@@ -94,6 +94,7 @@ def build_article_detail(
     # Lazy-check: trigger auto-publish when someone views the article
     if a.status == "sedimentation":
         from peerpedia_core.workflow.sedimentation import publish_ready_articles
+
         publish_ready_articles(db)
         db.refresh(a)
 
@@ -151,12 +152,12 @@ def api_list_articles(
     size: int = 20,
     db: Session = Depends(deps.get_db),
 ):
-    articles = list_articles(db, status=status, author_id=author_id,
-                             limit=size, offset=(page - 1) * size)
+    articles = list_articles(db, status=status, author_id=author_id, limit=size, offset=(page - 1) * size)
     total = count_articles(db, status=status, author_id=author_id)
     summaries = [
         build_article_summary(
-            db, a,
+            db,
+            a,
             current_user=current_user,
             sink_eta=(eta := compute_sink(a))[0],
             days_remaining=eta[1],
@@ -164,8 +165,7 @@ def api_list_articles(
         )
         for a in articles
     ]
-    return {"articles": [s.model_dump() for s in summaries], "total": total,
-            "page": page, "size": size}
+    return {"articles": [s.model_dump() for s in summaries], "total": total, "page": page, "size": size}
 
 
 @router.get("/{article_id}", response_model=ArticleDetail)
@@ -192,7 +192,7 @@ def api_create_article(
             raise HTTPException(
                 status_code=400,
                 detail=f"Author '{author_id}' is not synced to the server. "
-                       "Please log out and log in again while the server is running.",
+                "Please log out and log in again while the server is running.",
             )
     # Client-generated UUID: validate and check for duplicates.
     # Authors are always derived from current_user — client UUID is trusted
@@ -233,6 +233,7 @@ def api_create_article(
         # Extract the bundle instead of init+commit. Commits are preserved as-is.
         import base64
         import logging
+
         logger = logging.getLogger(__name__)
 
         try:
@@ -274,13 +275,13 @@ def api_create_article(
         (rp / f"article{ext}").write_text(body.content)
         commit_msg = body.commit_message or "Initial submission"
         author_name = current_user.name or current_user.username
-        commit_hash = commit_article(rp, commit_msg, author_name,
-                                     f"{author_list[0]}@peerpedia", allow_empty=True)
+        commit_hash = commit_article(rp, commit_msg, author_name, f"{author_list[0]}@peerpedia", allow_empty=True)
 
     # Rebuild authors from git history after first commit
     from peerpedia_core.storage.db.crud_article import (
         rebuild_article_authors,
     )
+
     rebuild_article_authors(db, a.id, set(author_list))
 
     # Self-review and scoring: only created when the author explicitly
@@ -313,7 +314,8 @@ def api_create_article(
 
 @router.put("/{article_id}", response_model=ArticleDetail)
 def api_update_article(
-    article_id: str, body: ArticleUpdate,
+    article_id: str,
+    body: ArticleUpdate,
     current_user: User = Depends(deps.require_user),
     db: Session = Depends(deps.get_db),
 ):
@@ -362,6 +364,7 @@ def api_update_article(
         commit_hash = commit_article(rp, commit_msg, author, f"{author}@peerpedia")
     else:
         import git as gitmod
+
         commit_hash = gitmod.Repo(rp).head.commit.hexsha if gitmod.Repo(rp).head.is_valid() else None
 
     # Rebuild authors from git history (incremental scan when marker exists)
@@ -369,15 +372,12 @@ def api_update_article(
         get_authors_from_git,
         rebuild_article_authors,
     )
+
     git_authors = get_authors_from_git(rp, db, since_hash=a.last_author_rebuild_hash)
     rebuild_article_authors(db, article_id, git_authors)
 
     if body.publish:
-        sink_days = (
-            params.sink.new_article_default_days
-            if a.status == "draft"
-            else params.sink.edit_article_default_days
-        )
+        sink_days = params.sink.new_article_default_days if a.status == "draft" else params.sink.edit_article_default_days
         a = set_sink_start(db, article_id, sink_days)
 
         if body.self_review is not None:
@@ -473,11 +473,14 @@ def api_fork_article(
         init_article_repo(fork_id)
 
     fork = create_article(
-        db, id=fork_id, title=original.title,
+        db,
+        id=fork_id,
+        title=original.title,
         abstract=original.abstract,
         keywords=original.keywords,
         categories=original.categories,
-        authors=[current_user.id], status="draft",
+        authors=[current_user.id],
+        status="draft",
         forked_from=article_id,
     )
     increment_fork_count(db, article_id)
@@ -488,6 +491,7 @@ def api_fork_article(
         get_authors_from_git,
         rebuild_article_authors,
     )
+
     if (dst / ".git").is_dir():
         git_authors = get_authors_from_git(dst, db)
         git_authors.add(current_user.id)
@@ -504,6 +508,7 @@ def api_has_forked(
 ):
     """Check if a user has already forked this article."""
     from peerpedia_core.storage.db.crud_article import get_article_by_fork_and_author
+
     a = get_article_by_fork_and_author(db, forked_from=article_id, author_id=current_user.id)
     if a is not None:
         return {"has_forked": True, "fork_article_id": a.id}
@@ -512,7 +517,8 @@ def api_has_forked(
 
 @router.post("/{article_id}/rollback/{hash}")
 def api_rollback(
-    article_id: str, hash: str,
+    article_id: str,
+    hash: str,
     current_user: User = Depends(deps.require_user),
     db: Session = Depends(deps.get_db),
 ):
@@ -533,11 +539,12 @@ def api_rollback(
         neutral = 3.0
         rollback_author_ids = get_author_ids(db, article_id)
         create_review(
-            db, article_id=article_id, commit_hash=new_hash,
+            db,
+            article_id=article_id,
+            commit_hash=new_hash,
             reviewer_id=rollback_author_ids[0] if rollback_author_ids else "system",
             scope="pool",
-            scores={"originality": neutral, "rigor": neutral,
-                    "completeness": neutral, "pedagogy": neutral, "impact": neutral},
+            scores={"originality": neutral, "rigor": neutral, "completeness": neutral, "pedagogy": neutral, "impact": neutral},
         )
         score = compute_article_score_for_commit(db, article_id, new_hash)
         if score is not None:
@@ -554,7 +561,8 @@ def api_rollback(
 
 @router.put("/{article_id}/sink-extension", response_model=ArticleDetail)
 def api_extend_sink(
-    article_id: str, body: SinkExtensionRequest,
+    article_id: str,
+    body: SinkExtensionRequest,
     current_user: User = Depends(deps.require_user),
     db: Session = Depends(deps.get_db),
 ):
@@ -621,6 +629,7 @@ def api_download_pdf(article_id: str):
                     out_dir = tmp_dir / "out"
                     out_dir.mkdir()
                     from peerpedia_core.storage.compiler import TypstBackend
+
                     result = TypstBackend().compile(f, out_dir, fmt="pdf")
                     if not result.success:
                         raise HTTPException(
@@ -638,6 +647,7 @@ def api_download_pdf(article_id: str):
                     out_dir = tmp_dir / "out"
                     out_dir.mkdir()
                     from peerpedia_core.storage.compiler import MarkdownBackend
+
                     result = MarkdownBackend().compile(f, out_dir)
                     html = result.html_content or ""
                     if not html and result.output_path:
@@ -646,8 +656,7 @@ def api_download_pdf(article_id: str):
                         content=html,
                         media_type="text/html",
                         headers={
-                            "Content-Disposition":
-                                f"attachment; filename={article_id}.html",
+                            "Content-Disposition": f"attachment; filename={article_id}.html",
                         },
                     )
     raise HTTPException(status_code=404, detail="Source file not found")
@@ -689,6 +698,7 @@ def _refresh_db_from_git(article_id: str, rp: Path, db: "Session | None" = None)
     """
     import json
     import logging
+
     logger = logging.getLogger(__name__)
 
     article_json = rp / "article.json"
@@ -733,7 +743,7 @@ def _refresh_db_from_git(article_id: str, rp: Path, db: "Session | None" = None)
         if new_status is not None and new_status != a.status:
             a.status = new_status
             updated = True
-            if new_status == "pool":
+            if new_status == POOL_STATUS:
                 sink_days = params.sink.new_article_default_days
                 set_sink_start(db, article_id, sink_days)
 
@@ -762,6 +772,7 @@ def api_get_head(article_id: str):
         raise HTTPException(status_code=404, detail="Article repo not found")
 
     import git as gitmod
+
     repo = gitmod.Repo(rp)
     if not repo.head.is_valid():
         raise HTTPException(status_code=404, detail="No commits in repo")
@@ -785,6 +796,7 @@ def api_get_bundle(
         raise HTTPException(status_code=404, detail="Article repo not found")
 
     import git as gitmod
+
     repo = gitmod.Repo(rp)
     if not repo.head.is_valid():
         raise HTTPException(status_code=404, detail="No commits in repo")
@@ -827,12 +839,14 @@ async def api_sync_article(
         if not (rp / ".git").is_dir():
             raise HTTPException(status_code=404, detail="Article not found")
         from peerpedia_core.storage.db.crud_article import create_article as _create_article
+
         a = _create_article(db, authors=[], id=article_id, status="draft")
         # Rebuild authors from git commit history (single source of truth)
         from peerpedia_core.storage.db.crud_article import (
             get_authors_from_git,
             rebuild_article_authors,
         )
+
         git_authors = get_authors_from_git(rp, db)
         rebuild_article_authors(db, article_id, git_authors)
         # Refresh metadata from article.json
@@ -846,6 +860,7 @@ async def api_sync_article(
         raise HTTPException(status_code=404, detail="Article repo not found")
 
     import logging
+
     logger = logging.getLogger(__name__)
 
     # Size guard: academic articles with git history rarely exceed 50MB
@@ -877,6 +892,7 @@ async def api_sync_article(
                 raise HTTPException(status_code=422, detail=str(e))
             except MergeConflictError:
                 import git as gitmod
+
                 repo = gitmod.Repo(rp)
                 current_head = repo.head.commit.hexsha if repo.head.is_valid() else None
                 raise HTTPException(
@@ -894,10 +910,20 @@ async def api_sync_article(
     # Update DB cache — best-effort, git is truth
     try:
         _refresh_db_from_git(article_id, rp, db)
+        # Rebuild authors from git history — sync may include new co-author commits
+        from peerpedia_core.storage.db.crud_article import (
+            get_authors_from_git,
+            rebuild_article_authors,
+        )
+
+        git_authors = get_authors_from_git(rp, db)
+        if git_authors:
+            rebuild_article_authors(db, article_id, git_authors)
     except Exception:
         logger.warning("DB cache refresh failed for article %s", article_id)
 
     import git as gitmod
+
     repo = gitmod.Repo(rp)
     head_hash = repo.head.commit.hexsha if repo.head.is_valid() else None
     return {"head": head_hash}
