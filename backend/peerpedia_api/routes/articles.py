@@ -16,12 +16,14 @@ from fastapi.responses import FileResponse, PlainTextResponse, Response
 from peerpedia_core.config.params import params
 from peerpedia_core.policies.articles import (
     assert_can_delete_article,
+    assert_can_download_repo,
     assert_can_edit_article,
     assert_can_extend_sink,
     assert_can_fork_article,
     assert_can_publish_article,
     assert_can_read_article,
     assert_can_rollback_article,
+    require_self_review_for_publish,
     visible_statuses_for_user,
 )
 from peerpedia_core.storage.db.crud_article import (
@@ -552,18 +554,18 @@ def api_rollback(
     set_sink_start(db, article_id, params.sink.edit_article_default_days)
     neutral = 3.0
     rollback_author_ids = get_author_ids(db, article_id)
-        create_review(
-            db,
-            article_id=article_id,
-            commit_hash=new_hash,
-            reviewer_id=rollback_author_ids[0] if rollback_author_ids else "system",
-            scope="pool",
-            scores={"originality": neutral, "rigor": neutral, "completeness": neutral, "pedagogy": neutral, "impact": neutral},
-        )
-        score = compute_article_score_for_commit(db, article_id, new_hash)
-        if score is not None:
-            article.score = score
-            db.commit()
+    create_review(
+        db,
+        article_id=article_id,
+        commit_hash=new_hash,
+        reviewer_id=rollback_author_ids[0] if rollback_author_ids else "system",
+        scope="pool",
+        scores={"originality": neutral, "rigor": neutral, "completeness": neutral, "pedagogy": neutral, "impact": neutral},
+    )
+    score = compute_article_score_for_commit(db, article_id, new_hash)
+    if score is not None:
+        article.score = score
+        db.commit()
 
     return {"commit_hash": new_hash, "message": f"Rollback to {hash[:8]}"}
 
@@ -596,6 +598,7 @@ def api_publish_article(
 ):
     """Explicitly publish a draft article to the sedimentation pool."""
     assert_can_publish_article(db, article_id, current_user)
+    require_self_review_for_publish(db, article_id, current_user)
     a = set_sink_start(db, article_id, params.sink.new_article_default_days)
     a = update_article_status(db, article_id, "sedimentation")
     return build_article_detail(db, a.id)
@@ -691,8 +694,13 @@ def api_download_pdf(
 
 
 @router.get("/{article_id}/download/repo")
-def api_download_repo(article_id: str):
+def api_download_repo(
+    article_id: str,
+    current_user: User | None = Depends(deps.get_current_user),
+    db: Session = Depends(deps.get_db),
+):
     """Export the entire article git repository as a tar.gz bundle."""
+    assert_can_download_repo(db, article_id, current_user)
     rp = repo_path(article_id)
     if not (rp / ".git").is_dir():
         raise HTTPException(status_code=404, detail="Git repo not found")

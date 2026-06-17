@@ -640,6 +640,7 @@ class TestDownloadEndpoints:
             "authors": [seed_user],
             "content": content,
             "format": fmt,
+            "publish": True,
             "self_review": {"originality": 4, "rigor": 3, "completeness": 4, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=create_body)
@@ -679,9 +680,16 @@ class TestDownloadEndpoints:
         resp = client.get("/api/v1/articles/nonexistent/download/pdf")
         assert resp.status_code == 404
 
-    def test_download_repo_returns_tar_gz(self, client, seed_user):
+    def test_download_repo_returns_tar_gz(self, client, db_engine, seed_user):
         """Download repo bundle returns a valid tar.gz with git history."""
         aid = self._create_article_with_content(client, seed_user, "# Test\n\nContent.", fmt="markdown")
+        # publish=True creates a sedimentation article, but download requires
+        # "published" status.  Set it directly via the test DB engine.
+        s = get_session(db_engine)
+        a = s.query(Article).filter(Article.id == aid).first()
+        assert a is not None
+        a.status = "published"
+        s.commit()
         resp = client.get(f"/api/v1/articles/{aid}/download/repo")
         assert resp.status_code == 200
         assert resp.headers["content-type"] == "application/gzip"
@@ -875,18 +883,27 @@ class TestArticleLifecycle:
         assert resp2.status_code == 200
         assert resp2.json()["status"] == "sedimentation"
 
-    def test_publish_transitions_to_sedimentation(self, client, seed_user):
-        """Publish endpoint transitions article to sedimentation pool."""
+    def test_publish_transitions_to_sedimentation(self, client, auth_user_id):
+        """Publish endpoint transitions article to sedimentation pool.
+
+        The publish route now requires a self-review on the HEAD commit
+        (require_self_review_for_publish), so publish through the update
+        flow which creates the review as part of the commit.
+        """
         create_body = {
-            "authors": [seed_user],
+            "authors": [auth_user_id],
             "content": "# To Publish",
             "format": "markdown",
-            "self_review": {"originality": 3, "rigor": 3, "completeness": 3, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=create_body)
         article_id = resp.json()["id"]
 
-        pub_resp = client.post(f"/api/v1/articles/{article_id}/publish")
+        edit_body = {
+            "content": "# To Publish (revised)",
+            "publish": True,
+            "self_review": {"originality": 3, "rigor": 3, "completeness": 3, "pedagogy": 3, "impact": 3},
+        }
+        pub_resp = client.put(f"/api/v1/articles/{article_id}", json=edit_body)
         assert pub_resp.status_code == 200
         assert pub_resp.json()["status"] == "sedimentation"
 
@@ -903,9 +920,9 @@ class TestArticleLifecycle:
 class TestSinkExtension:
     """Verify sink extension API extends the sedimentation pool duration."""
 
-    def test_extend_sink_increases_duration(self, client, seed_user):
+    def test_extend_sink_increases_duration(self, client, auth_user_id):
         create_body = {
-            "authors": [seed_user],
+            "authors": [auth_user_id],
             "content": "# Sink Test",
             "format": "markdown",
             "self_review": {"originality": 3, "rigor": 3, "completeness": 3, "pedagogy": 3, "impact": 3},
@@ -919,9 +936,9 @@ class TestSinkExtension:
         assert ext_resp.status_code == 200
         assert ext_resp.json()["sink_duration_days"] > original_duration
 
-    def test_extend_sink_rejects_zero_or_negative(self, client, seed_user):
+    def test_extend_sink_rejects_zero_or_negative(self, client, auth_user_id):
         create_body = {
-            "authors": [seed_user],
+            "authors": [auth_user_id],
             "content": "# Sink Test 2",
             "format": "markdown",
             "self_review": {"originality": 3, "rigor": 3, "completeness": 3, "pedagogy": 3, "impact": 3},
@@ -1090,10 +1107,10 @@ class TestHasForked:
         assert check.status_code == 200
         assert check.json()["has_forked"] is False
 
-    def test_has_forked_returns_true(self, client, seed_user):
+    def test_has_forked_returns_true(self, client, db_engine, auth_user_id):
         """Returns true after user forks an article."""
         body = {
-            "authors": [seed_user],
+            "authors": [auth_user_id],
             "title": "WillBeForked",
             "content": "Content",
             "format": "markdown",
@@ -1101,6 +1118,13 @@ class TestHasForked:
         }
         resp = client.post("/api/v1/articles", json=body)
         article_id = resp.json()["id"]
+
+        # Fork requires published status.  Set it directly.
+        s = get_session(db_engine)
+        a = s.query(Article).filter(Article.id == article_id).first()
+        assert a is not None
+        a.status = "published"
+        s.commit()
 
         # Fork it
         fork_resp = client.post(f"/api/v1/articles/{article_id}/fork")
@@ -1151,13 +1175,14 @@ class TestExtendSinkEdgeCase:
 class TestArticleSource:
     """Source file retrieval edge cases."""
 
-    def test_source_typst(self, client, seed_user):
+    def test_source_typst(self, client, auth_user_id):
         """Getting Typst source returns correct format."""
         body = {
-            "authors": [seed_user],
+            "authors": [auth_user_id],
             "title": "Typst Article",
             "content": "= Hello\nWorld",
             "format": "typst",
+            "publish": True,
             "self_review": {"originality": 3, "rigor": 3, "completeness": 3, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=body)
@@ -1982,13 +2007,14 @@ class TestRefreshDbFromGit:
         Verifies that get_articles_by_author / list_articles with author_id
         correctly joins ArticleAuthor and returns articles for the author.
         """
-
-        # Create an article by the auth user
+        # Create a published article so visibility filtering doesn't hide it.
         create_body = {
             "authors": [auth_user_id],
             "title": "Author Filter Test",
             "content": "# Author Filter\n\nTesting.",
             "format": "markdown",
+            "publish": True,
+            "self_review": {"originality": 3, "rigor": 3, "completeness": 3, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=create_body)
         assert resp.status_code == 201, f"Create failed: {resp.json()}"
@@ -2013,6 +2039,8 @@ class TestAuthorArticleLink:
             "title": "Author Link Test",
             "content": "# Author Link\n\nTesting.",
             "format": "markdown",
+            "publish": True,
+            "self_review": {"originality": 3, "rigor": 3, "completeness": 3, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=body)
         assert resp.status_code == 201, f"Create failed: {resp.json()}"
@@ -2027,6 +2055,8 @@ class TestAuthorArticleLink:
             "title": "Filter Test",
             "content": "# Filter\n\nTesting.",
             "format": "markdown",
+            "publish": True,
+            "self_review": {"originality": 3, "rigor": 3, "completeness": 3, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=body)
         assert resp.status_code == 201
@@ -2044,6 +2074,8 @@ class TestAuthorArticleLink:
             "title": "Author Name Test",
             "content": "# Name Test",
             "format": "markdown",
+            "publish": True,
+            "self_review": {"originality": 3, "rigor": 3, "completeness": 3, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=body)
         assert resp.status_code == 201
