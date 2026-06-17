@@ -23,6 +23,7 @@ from peerpedia_api.routes.pool import router as pool_router
 from peerpedia_api.routes.reviews import router as reviews_router
 from peerpedia_api.routes.search import router as search_router
 from peerpedia_api.routes.users import router as users_router
+from peerpedia_core.exceptions import PeerpediaError
 
 logger = logging.getLogger(__name__)
 
@@ -125,11 +126,27 @@ async def health_check():
     return {"status": "ok"}
 
 
+@app.exception_handler(PeerpediaError)
+async def peerpedia_error_handler(request: Request, exc: PeerpediaError):
+    """Translate PeerPedia semantic exceptions to HTTP status codes."""
+    from peerpedia_core.exceptions import BadRequest, Conflict, NotAuthorized, NotFound
+
+    status_map = {
+        NotFound: 404,
+        NotAuthorized: 403,
+        Conflict: 409,
+        BadRequest: 400,
+    }
+    status_code = status_map.get(type(exc), 500)
+    return JSONResponse(status_code=status_code, content={"detail": exc.detail})
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Catch unhandled exceptions and return a clean 500 response.
 
     HTTPException is re-raised so FastAPI's default handler can process it.
+    PeerpediaError is handled by the specific handler above.
     """
     if isinstance(exc, HTTPException):
         raise exc

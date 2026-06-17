@@ -857,8 +857,9 @@ async def api_sync_article(
         # Refresh metadata from article.json
         _refresh_db_from_git(article_id, rp, db)
 
-    if current_user.id not in get_author_ids(db, article_id):
-        raise HTTPException(status_code=403, detail="Only authors can sync article content")
+    from peerpedia_core.policies.articles import assert_can_sync_article
+
+    assert_can_sync_article(db, article_id, current_user)
 
     rp = repo_path(article_id)
     if not (rp / ".git").is_dir():
