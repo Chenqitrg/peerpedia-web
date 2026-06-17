@@ -15,7 +15,6 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 from peerpedia_core.config.params import params
 from peerpedia_core.storage.db.crud_article import (
-    POOL_STATUS,
     count_articles,
     create_article,
     delete_article,
@@ -743,7 +742,7 @@ def _refresh_db_from_git(article_id: str, rp: Path, db: "Session | None" = None)
         if new_status is not None and new_status != a.status:
             a.status = new_status
             updated = True
-            if new_status == POOL_STATUS:
+            if new_status == "sedimentation":
                 sink_days = params.sink.new_article_default_days
                 set_sink_start(db, article_id, sink_days)
 
@@ -834,21 +833,27 @@ async def api_sync_article(
     a = get_article(db, article_id)
     if a is None:
         # Git repo exists but no DB record — first-time bundle push.
-        # Auto-create the article record from git history.
+        # Extract authors from git BEFORE creating the DB record so the
+        # article is never in an author-less state.
         rp = repo_path(article_id)
         if not (rp / ".git").is_dir():
             raise HTTPException(status_code=404, detail="Article not found")
-        from peerpedia_core.storage.db.crud_article import create_article as _create_article
-
-        a = _create_article(db, authors=[], id=article_id, status="draft")
-        # Rebuild authors from git commit history (single source of truth)
+        from peerpedia_core.storage.db.crud_article import (
+            create_article as _create_article,
+        )
         from peerpedia_core.storage.db.crud_article import (
             get_authors_from_git,
-            rebuild_article_authors,
         )
 
         git_authors = get_authors_from_git(rp, db)
-        rebuild_article_authors(db, article_id, git_authors)
+        author_list = list(git_authors) if git_authors else []
+        if not author_list:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot auto-create article: no authors found in git history",
+            )
+        a = _create_article(db, authors=author_list, id=article_id, status="draft")
+        db.commit()
         # Refresh metadata from article.json
         _refresh_db_from_git(article_id, rp, db)
 
