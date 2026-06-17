@@ -3,6 +3,8 @@
 
 """Article CRUD operations."""
 
+from pathlib import Path
+
 from sqlalchemy.orm import Session
 
 from peerpedia_core.storage.db.models import Article, ArticleAuthor
@@ -13,6 +15,34 @@ from peerpedia_core.storage.db.models import Article, ArticleAuthor
 def add_article_authors(session: Session, article_id: str, author_ids: list[str]) -> None:
     """Insert ArticleAuthor rows for an article."""
     for pos, author_id in enumerate(author_ids):
+        session.add(
+            ArticleAuthor(
+                article_id=article_id,
+                author_id=author_id,
+                position=pos,
+            )
+        )
+
+
+def replace_article_authors(session: Session, article_id: str, author_ids: set[str]) -> None:
+    """Replace all author rows for an article (delete old + insert new).
+
+    Unlike ``rebuild_article_authors`` which merges (never loses existing
+    authors), this fully replaces the join table to match the given set.
+    """
+    from peerpedia_core.storage.db.models import User
+
+    session.query(ArticleAuthor).filter(ArticleAuthor.article_id == article_id).delete()
+
+    # Sort by username for stable ordering
+    rows = session.query(User).filter(User.id.in_(list(author_ids))).all()
+    row_map = {u.id: u for u in rows}
+    sorted_ids = sorted(
+        [uid for uid in author_ids if uid in row_map],
+        key=lambda uid: row_map[uid].username,
+    )
+
+    for pos, author_id in enumerate(sorted_ids):
         session.add(
             ArticleAuthor(
                 article_id=article_id,
@@ -173,7 +203,6 @@ def delete_article(session: Session, article_id: str) -> None:
     Raises ValueError if the article does not exist.
     """
     import shutil
-    from pathlib import Path
 
     from peerpedia_core.storage.db.models import (
         Bookmark,
@@ -229,6 +258,21 @@ def extend_sink(session: Session, article_id: str, extra_days: int, max_days: in
 # ── Multi-author: git-derived authors ──────────────────────────────────────
 
 
+def resolve_user_id_from_git_email(session: Session, email: str) -> str:
+    """Resolve a user ID from a git commit email.
+
+    Only accepts ``{UUID}@peerpedia`` format (User.id lookup).
+    Raises ValueError if the email does not resolve to a known user.
+    """
+    from peerpedia_core.storage.db.models import User
+
+    local = email.split("@", 1)[0].strip()
+    u = session.get(User, local)
+    if u is None:
+        raise ValueError(f"No user found for git email: {email}")
+    return u.id
+
+
 def get_authors_from_git(
     repo_path,
     session: Session,
@@ -241,8 +285,6 @@ def get_authors_from_git(
     correctly without missing author chains.
     """
     import git
-
-    from peerpedia_core.storage.db.models import User
 
     repo = git.Repo(repo_path)
     if not repo.head.is_valid():
@@ -257,9 +299,11 @@ def get_authors_from_git(
 
     for commit in commits:
         email = commit.author.email
-        user_id = email.split("@")[0]
-        if session.get(User, user_id):
+        try:
+            user_id = resolve_user_id_from_git_email(session, email)
             user_ids.add(user_id)
+        except ValueError:
+            pass
 
     return user_ids
 

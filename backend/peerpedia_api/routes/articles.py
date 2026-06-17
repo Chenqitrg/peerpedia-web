@@ -830,8 +830,8 @@ async def api_sync_article(
     Returns 409 if history diverged.
     """
     # Auth: only article authors can push bundles.
-    a = get_article(db, article_id)
-    if a is None:
+    article = get_article(db, article_id)
+    if article is None:
         # Git repo exists but no DB record — first-time bundle push.
         # Extract authors from git BEFORE creating the DB record so the
         # article is never in an author-less state.
@@ -849,10 +849,10 @@ async def api_sync_article(
         author_list = list(git_authors) if git_authors else []
         if not author_list:
             raise HTTPException(
-                status_code=400,
-                detail="Cannot auto-create article: no authors found in git history",
+                status_code=422,
+                detail="Cannot derive authors from git history — ensure commit emails use UUID@peerpedia format",
             )
-        a = _create_article(db, authors=author_list, id=article_id, status="draft")
+        article = _create_article(db, authors=author_list, id=article_id, status="draft")
         db.commit()
         # Refresh metadata from article.json
         _refresh_db_from_git(article_id, rp, db)

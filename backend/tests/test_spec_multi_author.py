@@ -345,7 +345,7 @@ def test_spec_regression_username_email_rejected(db_engine):
     rp = Path(tmp)
     repo = git.Repo.init(rp)
     (rp / "f.md").write_text("# T\n")
-    # Deliberately use username in email — should NOT match
+    # Deliberately use username in email — NOT matched (UUID@peerpedia only)
     repo.index.add(["f.md"])
     repo.index.commit("init", author=git.Actor("Bob", "bob@peerpedia"), committer=git.Actor("Bob", "bob@peerpedia"))
 
