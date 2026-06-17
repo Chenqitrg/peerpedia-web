@@ -326,8 +326,9 @@ def api_create_article(
             contributions=contributions,
         )
         score = compute_article_score_for_commit(db, a.id, commit_hash)
-        if score is not None:
-            a.score = score
+        if score is None:
+            raise HTTPException(status_code=500, detail="Failed to compute score after self-review")
+        a.score = score
 
     # Publish to pool if requested
     if body.publish:
@@ -416,8 +417,9 @@ def api_update_article(
             )
 
         score = compute_article_score_for_commit(db, a.id, commit_hash)
-        if score is not None:
-            a.score = score
+        if score is None:
+            raise HTTPException(status_code=500, detail="Failed to compute score after publish")
+        a.score = score
     db.commit()
 
     return build_article_detail(db, a.id)
