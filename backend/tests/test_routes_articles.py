@@ -637,7 +637,7 @@ class TestPagination:
 class TestDownloadEndpoints:
     """Tests for download endpoints (source and PDF)."""
 
-    def _create_article_with_content(self, client, seed_user, content, fmt="markdown"):
+    def _create_article_with_content(self, client, db_engine, seed_user, content, fmt="markdown"):
         create_body = {
             "authors": [seed_user],
             "content": content,
@@ -647,19 +647,28 @@ class TestDownloadEndpoints:
         }
         resp = client.post("/api/v1/articles", json=create_body)
         assert resp.status_code == 201
-        return resp.json()["id"]
+        aid = resp.json()["id"]
+        # publish=True creates a sedimentation article.  Download endpoints
+        # require "published" status.  Promote directly.
+        from peerpedia_core.storage.db.engine import get_session
+        s = get_session(db_engine)
+        a = s.query(Article).filter(Article.id == aid).first()
+        if a is not None:
+            a.status = "published"
+            s.commit()
+        return aid
 
-    def test_download_source_markdown(self, client, seed_user):
+    def test_download_source_markdown(self, client, db_engine, seed_user):
         """Download source file for a markdown article."""
-        aid = self._create_article_with_content(client, seed_user, "# Test\n\nContent.")
+        aid = self._create_article_with_content(client, db_engine, seed_user, "# Test\n\nContent.")
         resp = client.get(f"/api/v1/articles/{aid}/download/source")
         assert resp.status_code == 200
         assert "# Test" in resp.text
         assert "Content-Type" in resp.headers
 
-    def test_download_source_typst(self, client, seed_user):
+    def test_download_source_typst(self, client, db_engine, seed_user):
         """Download source file for a Typst article."""
-        aid = self._create_article_with_content(client, seed_user, "= Introduction\nSome text.", fmt="typst")
+        aid = self._create_article_with_content(client, db_engine, seed_user, "= Introduction\nSome text.", fmt="typst")
         resp = client.get(f"/api/v1/articles/{aid}/download/source")
         assert resp.status_code == 200
         assert "Introduction" in resp.text
@@ -669,9 +678,9 @@ class TestDownloadEndpoints:
         resp = client.get("/api/v1/articles/nonexistent/download/source")
         assert resp.status_code == 404
 
-    def test_download_pdf_markdown_returns_html(self, client, seed_user):
+    def test_download_pdf_markdown_returns_html(self, client, db_engine, seed_user):
         """PDF download for markdown article returns compiled HTML."""
-        aid = self._create_article_with_content(client, seed_user, "# Test\n\nContent.")
+        aid = self._create_article_with_content(client, db_engine, seed_user, "# Test\n\nContent.")
         resp = client.get(f"/api/v1/articles/{aid}/download/pdf")
         assert resp.status_code == 200
         # Markdown compiler produces HTML
@@ -684,14 +693,7 @@ class TestDownloadEndpoints:
 
     def test_download_repo_returns_tar_gz(self, client, db_engine, seed_user):
         """Download repo bundle returns a valid tar.gz with git history."""
-        aid = self._create_article_with_content(client, seed_user, "# Test\n\nContent.", fmt="markdown")
-        # publish=True creates a sedimentation article, but download requires
-        # "published" status.  Set it directly via the test DB engine.
-        s = get_session(db_engine)
-        a = s.query(Article).filter(Article.id == aid).first()
-        assert a is not None
-        a.status = "published"
-        s.commit()
+        aid = self._create_article_with_content(client, db_engine, seed_user, "# Test\n\nContent.", fmt="markdown")
         resp = client.get(f"/api/v1/articles/{aid}/download/repo")
         assert resp.status_code == 200
         assert resp.headers["content-type"] == "application/gzip"
@@ -998,7 +1000,7 @@ class TestArticleErrorPaths:
         resp = client.post("/api/v1/articles/nonexistent/rollback/abc123")
         assert resp.status_code == 404
 
-    def test_rollback_creates_revert_commit(self, client, seed_user, auth_user_id):
+    def test_rollback_creates_revert_commit(self, client, db_engine, seed_user, auth_user_id):
         """Happy path: create article with 2 commits, rollback to first, verify content restored."""
         body = {
             "authors": [seed_user, auth_user_id],
@@ -1032,6 +1034,13 @@ class TestArticleErrorPaths:
         data = resp3.json()
         assert "commit_hash" in data
         assert "Rollback" in data["message"]
+
+        # Source download requires published status.
+        s = get_session(db_engine)
+        a = s.query(Article).filter(Article.id == article_id).first()
+        assert a is not None
+        a.status = "published"
+        s.commit()
 
         # Source should be restored to original
         src = client.get(f"/api/v1/articles/{article_id}/source")
@@ -1181,7 +1190,7 @@ class TestExtendSinkEdgeCase:
 class TestArticleSource:
     """Source file retrieval edge cases."""
 
-    def test_source_typst(self, client, auth_user_id):
+    def test_source_typst(self, client, db_engine, auth_user_id):
         """Getting Typst source returns correct format."""
         body = {
             "authors": [auth_user_id],
@@ -1193,6 +1202,12 @@ class TestArticleSource:
         }
         resp = client.post("/api/v1/articles", json=body)
         article_id = resp.json()["id"]
+        # Source download requires published status.
+        s = get_session(db_engine)
+        a = s.query(Article).filter(Article.id == article_id).first()
+        if a is not None:
+            a.status = "published"
+            s.commit()
 
         src = client.get(f"/api/v1/articles/{article_id}/source")
         assert src.status_code == 200

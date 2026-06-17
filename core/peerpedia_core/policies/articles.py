@@ -33,9 +33,10 @@ PUBLIC_READABLE_STATUSES = {"sedimentation", "published"}
 # Only published articles can be forked.
 FORKABLE_STATUSES = {"published"}
 
-# Only published articles can be downloaded as a full git repo.
-# (Pool / sedimentation cannot be forked, so repo download is author-only.)
-REPO_DOWNLOADABLE_STATUSES = {"published"}
+# Only published articles can be downloaded — source, PDF, or full git repo.
+# Sedimentation articles are publicly viewable on the web page but their
+# source content and compiled output are not distributed during the pool period.
+PUBLIC_DOWNLOADABLE_STATUSES = {"published"}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -87,22 +88,24 @@ def assert_can_read_article(
     raise NotAuthorizedError("Article is private")
 
 
-def assert_can_download_repo(
+def assert_can_download_content(
     db: Session,
     article_id: str,
     current_user: Optional[User],
 ) -> Article:
-    """Raise if *current_user* cannot download the full git repo.
+    """Raise if *current_user* cannot download article content.
 
-    Pool/sedimentation articles cannot be forked, so exporting the
-    complete git history is treated as equivalent to a fork.
+    Source files, compiled PDF, and full git repo are all treated the
+    same: only published articles are publicly downloadable.  During the
+    sedimentation pool period content is viewable on the web but not
+    distributed.
     """
     a = get_article_or_raise(db, article_id)
-    if a.status in REPO_DOWNLOADABLE_STATUSES:
+    if a.status in PUBLIC_DOWNLOADABLE_STATUSES:
         return a
     if _is_author(db, article_id, current_user):
         return a
-    raise NotAuthorizedError("Repo download not available for this article")
+    raise NotAuthorizedError("Content download not available for this article")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

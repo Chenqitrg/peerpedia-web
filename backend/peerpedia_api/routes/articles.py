@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse, PlainTextResponse, Response
 from peerpedia_core.config.params import params
 from peerpedia_core.policies.articles import (
     assert_can_delete_article,
-    assert_can_download_repo,
+    assert_can_download_content,
     assert_can_edit_article,
     assert_can_extend_sink,
     assert_can_fork_article,
@@ -613,7 +613,7 @@ def api_get_source(
     current_user: User | None = Depends(deps.get_current_user),
     db: Session = Depends(deps.get_db),
 ):
-    assert_can_read_article(db, article_id, current_user)
+    assert_can_download_content(db, article_id, current_user)
     rp = repo_path(article_id)
     for ext in [".md", ".typ"]:
         f = rp / f"article{ext}"
@@ -629,7 +629,7 @@ def api_download_source(
     current_user: User | None = Depends(deps.get_current_user),
     db: Session = Depends(deps.get_db),
 ):
-    assert_can_read_article(db, article_id, current_user)
+    assert_can_download_content(db, article_id, current_user)
     rp = repo_path(article_id)
     for ext in [".md", ".typ"]:
         f = rp / f"article{ext}"
@@ -700,7 +700,7 @@ def api_download_repo(
     db: Session = Depends(deps.get_db),
 ):
     """Export the entire article git repository as a tar.gz bundle."""
-    assert_can_download_repo(db, article_id, current_user)
+    assert_can_download_content(db, article_id, current_user)
     rp = repo_path(article_id)
     if not (rp / ".git").is_dir():
         raise HTTPException(status_code=404, detail="Git repo not found")

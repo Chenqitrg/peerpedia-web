@@ -10,7 +10,7 @@ from peerpedia_core.policies.articles import (
     FORKABLE_STATUSES,
     PUBLIC_READABLE_STATUSES,
     assert_can_delete_article,
-    assert_can_download_repo,
+    assert_can_download_content,
     assert_can_edit_article,
     assert_can_extend_sink,
     assert_can_fork_article,
@@ -194,7 +194,7 @@ class TestDownloadPermissions:
         s.add(a)
         s.commit()
 
-        result = assert_can_download_repo(s, "a-dl-pub", None)
+        result = assert_can_download_content(s, "a-dl-pub", None)
         assert result.id == "a-dl-pub"
 
     def test_author_can_download_draft(self, db_engine):
@@ -207,7 +207,7 @@ class TestDownloadPermissions:
         s.add(ArticleAuthor(article_id="a-dl-draft", author_id="u-dl-author", position=0))
         s.commit()
 
-        result = assert_can_download_repo(s, "a-dl-draft", u)
+        result = assert_can_download_content(s, "a-dl-draft", u)
         assert result.id == "a-dl-draft"
 
     def test_non_author_cannot_download_draft(self, db_engine):
@@ -218,13 +218,13 @@ class TestDownloadPermissions:
         s.add(a)
         s.commit()
 
-        with pytest.raises(NotAuthorizedError, match="Repo download not available"):
-            assert_can_download_repo(s, "a-dl-draft2", u)
+        with pytest.raises(NotAuthorizedError, match="Content download not available"):
+            assert_can_download_content(s, "a-dl-draft2", u)
 
     def test_raises_not_found_for_missing(self, db_engine):
         s = get_session(db_engine)
         with pytest.raises(NotFoundError, match="Article not found"):
-            assert_can_download_repo(s, "nonexistent", None)
+            assert_can_download_content(s, "nonexistent", None)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
