@@ -2,6 +2,42 @@
 
 > 重大架构决策及其原因。按时间倒序，每条记录：背景、决策、后果。
 
+## ADR-010: 作者解析失败必须报错，禁止静默修复
+
+**日期**: 2026-06 | **状态**: 已实施（PR #68 评审修订）
+
+**背景**: PR #63 引入多作者支持后，Phase 0 添加了 `repair_article_authors`、`repair_orphan_article_authors` 和 legacy `username@peerpedia` 兼容。这些函数在数据不完整时静默修复，掩盖了数据完整性错误。此外，`api_sync_article` 的 auto-create 路径用 `authors=[]` 创建文章再 `rebuild_article_authors`，中间状态存在无作者文章。
+
+**决策**:
+
+1. **作者必须存在于创建时**。`api_sync_article` 先从 git history 解析作者，再传 `author_list` 给 `create_article`。解析不出作者 → 422，不创建文章。
+
+2. **Git commit email 只用 `{UUID}@peerpedia`**。`resolve_user_id_from_git_email` 不接受 `username@peerpedia`，只有一种规范格式。
+
+3. **解析失败抛异常，不返回 None**。`resolve_user_id_from_git_email` 对未知 email 抛出 `ValueError`。`get_authors_from_git` 逐 commit 捕获 `ValueError`（CI/bot commit 是正常的非作者 commit），但单个函数的默认行为是 loud failure。
+
+4. **孤儿文章不修复，只检测**。删除 `repair_article_authors` 和 `repair_orphan_article_authors`。`validate_article_has_authors` 在发现零作者文章时抛出 `ValueError`——这是 bug，不是需要修复的状态。
+
+5. **`replace_article_authors` 不做兜底**。如果 author_id 对应的 User 行不存在，不做 `sorted_ids.extend` 兜底——外键约束会报错，比静默吞掉好。
+
+**放弃的方案**:
+
+- 保留 `repair_article_authors`（掩盖数据完整性错误，把 bug 正常化）
+- 保留 `username@peerpedia` 兼容（多种格式增加歧义，且 username 不是 stable identity）
+- `resolve_user_id_from_git_email` 返回 `None`（调用方容易忽略，silent skip）
+- 创建文章时用 `authors=[]` 再 rebuild（中间状态无作者，rebuild 失败则残留孤儿记录）
+
+**后果**:
+
+- ✅ 文章不可能处于无作者状态——创建时要么带作者，要么不创建
+- ✅ 数据完整性错误立即暴露，不会被静默吞掉
+- ✅ 代码更简单：`repair_article_authors` + `repair_orphan_article_authors` 全部删除（-87 行）
+- ✅ email 格式唯一，没有歧义
+- ❌ CI/bot commit 的 email 在 `get_authors_from_git` 中会被捕获跳过——如果将来 bot 也需要映射到 User，需要额外处理
+- ❌ 不再支持 `username@peerpedia` 格式的旧数据——如果数据库中有 username-based email 的历史 commit，它们会被跳过
+
+---
+
 ## ADR-009: History 展示 article.json 以暴露状态变更
 
 **日期**: 2026-06 | **状态**: 已实施（PR #66）
