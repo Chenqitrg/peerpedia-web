@@ -530,7 +530,11 @@ class TestScoreNotCleared:
     """Regression tests: article.score must not be cleared when latest commit has no reviews."""
 
     def test_edit_without_self_review_preserves_score(self, client, seed_user, auth_user_id):
-        """Editing content without self_review should not set score to None."""
+        """Editing a sedimentation article is forbidden — draft-only writes.
+
+        The sedimentation pool is a peer-review period: even the author
+        cannot edit a sedimentation article.
+        """
         create_body = {
             "authors": [seed_user, auth_user_id],
             "content": "# V1",
@@ -539,10 +543,9 @@ class TestScoreNotCleared:
         }
         resp = client.post("/api/v1/articles", json=create_body)
         article_id = resp.json()["id"]
-        # Draft: score is None until publish.
         assert resp.json()["score"] is None
 
-        # Publish → score computed.
+        # Publish → sedimentation.
         client.put(
             f"/api/v1/articles/{article_id}",
             json={
@@ -550,11 +553,10 @@ class TestScoreNotCleared:
                 "self_review": {"originality": 4, "rigor": 3, "completeness": 4, "pedagogy": 3, "impact": 3},
             },
         )
-        # Edit WITHOUT self_review — score persists from publish commit.
+        # Editing a sedimentation article is now forbidden.
         edit_body = {"content": "# V2\n\nNew content."}
         resp2 = client.put(f"/api/v1/articles/{article_id}", json=edit_body)
-        assert resp2.status_code == 200
-        assert resp2.json()["score"] is not None
+        assert resp2.status_code == 403
 
     def test_backfill_walks_commits_for_score(self, client, seed_user, db_engine, auth_user_id):
         """Backfill should find a score from older commit if latest has none."""
@@ -921,10 +923,12 @@ class TestSinkExtension:
     """Verify sink extension API extends the sedimentation pool duration."""
 
     def test_extend_sink_increases_duration(self, client, auth_user_id):
+        # extend-sink requires sedimentation status.
         create_body = {
             "authors": [auth_user_id],
             "content": "# Sink Test",
             "format": "markdown",
+            "publish": True,
             "self_review": {"originality": 3, "rigor": 3, "completeness": 3, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=create_body)
@@ -937,10 +941,12 @@ class TestSinkExtension:
         assert ext_resp.json()["sink_duration_days"] > original_duration
 
     def test_extend_sink_rejects_zero_or_negative(self, client, auth_user_id):
+        # extend-sink requires sedimentation status.
         create_body = {
             "authors": [auth_user_id],
             "content": "# Sink Test 2",
             "format": "markdown",
+            "publish": True,
             "self_review": {"originality": 3, "rigor": 3, "completeness": 3, "pedagogy": 3, "impact": 3},
         }
         resp = client.post("/api/v1/articles", json=create_body)

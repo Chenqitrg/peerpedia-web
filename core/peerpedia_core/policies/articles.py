@@ -106,8 +106,13 @@ def assert_can_download_repo(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Write permissions — author-only
+# Write permissions — author-only, status-gated
 # ═══════════════════════════════════════════════════════════════════════════════
+
+# Sedimentation articles are immutable — even the author cannot edit, delete,
+# rollback, or sync during the peer-review window.  Draft and published
+# articles accept writes (published will eventually go through a PR flow).
+_WRITABLE_STATUSES = {"draft", "published"}
 
 
 def _assert_is_author(
@@ -115,19 +120,17 @@ def _assert_is_author(
     article_id: str,
     current_user: User,
     action: str,
+    allowed_statuses: set[str] | None = None,
 ) -> Article:
-    # Check author membership first (one query).  If the article
-    # does not exist, get_author_ids returns an empty list.
-    if _is_author(db, article_id, current_user):
-        # Return a lightweight stub — callers that need full Article
-        # data should call get_article_or_raise themselves.
-        return get_article_or_raise(db, article_id)
-    # Confirm whether the article exists at all so we return the
-    # right error: NotFound vs NotAuthorized.
-    exists = db.query(Article.id).filter(Article.id == article_id).first() is not None
-    if not exists:
-        raise NotFoundError("Article not found")
-    raise NotAuthorizedError(f"Only authors can {action} this article")
+    eff = allowed_statuses if allowed_statuses is not None else _WRITABLE_STATUSES
+    a = get_article_or_raise(db, article_id)
+    if not _is_author(db, article_id, current_user):
+        raise NotAuthorizedError(f"Only authors can {action} this article")
+    if a.status not in eff:
+        raise NotAuthorizedError(
+            f"Cannot {action} an article in {a.status} status"
+        )
+    return a
 
 
 def assert_can_edit_article(db: Session, article_id: str, current_user: User) -> Article:
@@ -147,7 +150,7 @@ def assert_can_publish_article(db: Session, article_id: str, current_user: User)
 
 
 def assert_can_extend_sink(db: Session, article_id: str, current_user: User) -> Article:
-    return _assert_is_author(db, article_id, current_user, "extend sink")
+    return _assert_is_author(db, article_id, current_user, "extend sink", allowed_statuses={"sedimentation"})
 
 
 def assert_can_sync_article(db: Session, article_id: str, current_user: User) -> Article:

@@ -300,7 +300,6 @@ class TestAllAuthorOnlyWrappers:
             assert_can_delete_article,
             assert_can_rollback_article,
             assert_can_publish_article,
-            assert_can_extend_sink,
         ],
     )
     def test_author_succeeds(self, db_engine, func):
@@ -315,3 +314,17 @@ class TestAllAuthorOnlyWrappers:
 
         result = func(s, "a-auth-all", u)
         assert result.id == "a-auth-all"
+
+    def test_author_can_extend_sink_on_sedimentation(self, db_engine):
+        """extend-sink requires sedimentation status (the pool period)."""
+        s = get_session(db_engine)
+        u = _user(id="u-ext-sink", username="ext_sink")
+        s.add(u)
+        a = Article(id="a-ext-sink", status="sedimentation", fork_count=0)
+        s.add(a)
+        s.flush()
+        s.add(ArticleAuthor(article_id="a-ext-sink", author_id="u-ext-sink", position=0))
+        s.commit()
+
+        result = assert_can_extend_sink(s, "a-ext-sink", u)
+        assert result.id == "a-ext-sink"

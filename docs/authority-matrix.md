@@ -24,9 +24,9 @@
 |------|------|---------------|---------------|
 | 查看文章详情 | `GET /articles/{id}` | `sedimentation, published` | `draft`（仅自己的）, `sedimentation, published` |
 | 列出文章 | `GET /articles` | `sedimentation, published` | `draft`（仅自己的）, `sedimentation, published` |
-| 查看源码 | `GET /articles/{id}/source` | `sedimentation, published` | `draft`（仅自己的）, `sedimentation, published` |
-| 下载源码 | `GET /articles/{id}/download/source` | `sedimentation, published` | `draft`（仅自己的）, `sedimentation, published` |
-| 下载 PDF | `GET /articles/{id}/download/pdf` | `sedimentation, published` | `draft`（仅自己的）, `sedimentation, published` |
+| 查看源码 | `GET /articles/{id}/source` | `published` | `published`；作者额外可下载 `draft, sedimentation` |
+| 下载源码 | `GET /articles/{id}/download/source` | `published` | `published`；作者额外可下载 `draft, sedimentation` |
+| 下载 PDF | `GET /articles/{id}/download/pdf` | `published` | `published`；作者额外可下载 `draft, sedimentation` |
 | 下载 git repo | `GET /articles/{id}/download/repo` | `published` | `published`；作者额外可下载 `draft, sedimentation` |
 | 查看 diff | `GET /articles/{id}/diff/{a}/{b}` | `sedimentation, published` | `draft`（仅自己的）, `sedimentation, published` |
 | 查看历史 | `GET /articles/{id}/history` | `sedimentation, published` | `draft`（仅自己的）, `sedimentation, published` |
@@ -34,15 +34,15 @@
 
 ## 写操作
 
-所有写操作要求已认证 + 是文章作者。未认证请求一律返回 401/403。
+所有写操作要求已认证 + 是文章作者。未认证请求一律返回 401/403 （在core里不知道什么是401/403? 这或许是个问题？因为似乎异常报错在core里是纯语义的返回值。）。
 
 | 操作 | 路由 | 允许状态 |
 |------|------|----------|
-| 编辑文章 | `PUT /articles/{id}` | 任意（作者可编辑任何状态的文章） |
-| 删除文章 | `DELETE /articles/{id}` | 任意 |
-| 回滚 | `POST /articles/{id}/rollback/{hash}` | 任意 |
-| 延长沉淀期 | `PUT /articles/{id}/sink-extension` | 任意 |
-| 同步 bundle | `POST /articles/{id}/sync` | 任意 |
+| 编辑文章 | `PUT /articles/{id}` | `draft, published` |
+| 删除文章 | `DELETE /articles/{id}` | `draft, published` |
+| 回滚 | `POST /articles/{id}/rollback/{hash}` | `draft, published` |
+| 延长沉淀期 | `PUT /articles/{id}/sink-extension` | `sedimentation` |
+| 同步 bundle | `POST /articles/{id}/sync` | `draft, published` |
 
 ## 生命周期操作
 
