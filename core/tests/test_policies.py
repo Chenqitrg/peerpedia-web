@@ -3,7 +3,7 @@
 
 """Tests for article permission policy functions."""
 
-from peerpedia_core.exceptions import BadRequest, Conflict, NotAuthorized, NotFound
+from peerpedia_core.exceptions import ConflictError, NotAuthorizedError, NotFoundError
 from peerpedia_core.policies.articles import (
     FORKABLE_STATUSES,
     PUBLIC_READABLE_STATUSES,
@@ -55,7 +55,7 @@ class TestGetArticleOrRaise:
         import pytest
 
         s = get_session(db_engine)
-        with pytest.raises(NotFound, match="Article not found"):
+        with pytest.raises(NotFoundError, match="Article not found"):
             get_article_or_raise(s, "nonexistent")
 
 
@@ -92,7 +92,7 @@ class TestReadPermissions:
         s.add(a)
         s.commit()
 
-        with pytest.raises(NotAuthorized, match="Article is private"):
+        with pytest.raises(NotAuthorizedError, match="Article is private"):
             assert_can_read_article(s, "a-other-draft", u)
 
 
@@ -120,7 +120,7 @@ class TestWritePermissions:
         s.add(a)
         s.commit()
 
-        with pytest.raises(NotAuthorized):
+        with pytest.raises(NotAuthorizedError):
             assert_can_sync_article(s, "a-nosync", u)
 
 
@@ -146,7 +146,7 @@ class TestForkPermissions:
         s.add(a)
         s.commit()
 
-        with pytest.raises(NotAuthorized, match="Only published articles can be forked"):
+        with pytest.raises(NotAuthorizedError, match="Only published articles can be forked"):
             assert_can_fork_article(s, "a-nofork", u)
 
     def test_cannot_fork_twice(self, db_engine):
@@ -160,7 +160,9 @@ class TestForkPermissions:
         s.flush()
         # Simulate an existing fork by the same user
         fork = Article(
-            id="fork-existing", status="draft", fork_count=0,
+            id="fork-existing",
+            status="draft",
+            fork_count=0,
             forked_from="a-dup-fork",
         )
         s.add(fork)
@@ -168,5 +170,5 @@ class TestForkPermissions:
         s.add(ArticleAuthor(article_id="fork-existing", author_id="u-dup", position=0))
         s.commit()
 
-        with pytest.raises(Conflict, match="Already forked"):
+        with pytest.raises(ConflictError, match="Already forked"):
             assert_can_fork_article(s, "a-dup-fork", u)

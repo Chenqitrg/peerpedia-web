@@ -4,7 +4,6 @@
 """Tests for the reputation mechanism (core calculation logic)."""
 
 import pytest
-
 from peerpedia_core.storage.db.crud_article import create_article
 from peerpedia_core.storage.db.crud_user import create_user, update_user_reputation
 from peerpedia_core.storage.db.engine import get_session

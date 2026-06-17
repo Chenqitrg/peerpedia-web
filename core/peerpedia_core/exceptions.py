@@ -16,17 +16,17 @@ class PeerpediaError(Exception):
         self.detail = detail
 
 
-class NotFound(PeerpediaError):
+class NotFoundError(PeerpediaError):
     """Requested resource does not exist."""
 
 
-class NotAuthorized(PeerpediaError):
+class NotAuthorizedError(PeerpediaError):
     """User lacks permission for the requested action."""
 
 
-class Conflict(PeerpediaError):
+class ConflictError(PeerpediaError):
     """Request conflicts with the current state of the resource."""
 
 
-class BadRequest(PeerpediaError):
+class BadRequestError(PeerpediaError):
     """Input is invalid or missing required data."""

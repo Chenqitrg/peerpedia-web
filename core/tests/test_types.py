@@ -4,7 +4,6 @@
 """Tests for core value objects — sharable types used across models."""
 
 import pytest
-
 from peerpedia_core.types.messages import ThreadMessage
 from peerpedia_core.types.scores import FiveDimScores, ReputationScores
 

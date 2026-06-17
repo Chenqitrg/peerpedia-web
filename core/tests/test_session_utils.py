@@ -16,7 +16,6 @@ Contract:
 """
 
 import pytest
-
 from peerpedia_core.storage.db.models import User
 from peerpedia_core.storage.db.session_utils import db_session_scope
 

@@ -4,7 +4,6 @@
 """Tests for peerpedia_core.config.params — all tunable system parameters."""
 
 import pytest
-
 from peerpedia_core.config.params import (
     CommentParams,
     Params,

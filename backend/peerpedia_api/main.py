@@ -11,6 +11,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from peerpedia_core.exceptions import PeerpediaError
 
 from peerpedia_api.routes.articles import router as articles_router
 from peerpedia_api.routes.auth import router as auth_router
@@ -23,7 +24,6 @@ from peerpedia_api.routes.pool import router as pool_router
 from peerpedia_api.routes.reviews import router as reviews_router
 from peerpedia_api.routes.search import router as search_router
 from peerpedia_api.routes.users import router as users_router
-from peerpedia_core.exceptions import PeerpediaError
 
 logger = logging.getLogger(__name__)
 
@@ -129,13 +129,13 @@ async def health_check():
 @app.exception_handler(PeerpediaError)
 async def peerpedia_error_handler(request: Request, exc: PeerpediaError):
     """Translate PeerPedia semantic exceptions to HTTP status codes."""
-    from peerpedia_core.exceptions import BadRequest, Conflict, NotAuthorized, NotFound
+    from peerpedia_core.exceptions import BadRequestError, ConflictError, NotAuthorizedError, NotFoundError
 
     status_map = {
-        NotFound: 404,
-        NotAuthorized: 403,
-        Conflict: 409,
-        BadRequest: 400,
+        NotFoundError: 404,
+        NotAuthorizedError: 403,
+        ConflictError: 409,
+        BadRequestError: 400,
     }
     status_code = status_map.get(type(exc), 500)
     return JSONResponse(status_code=status_code, content={"detail": exc.detail})

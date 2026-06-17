@@ -4,10 +4,10 @@
 """Tests for semantic exception classes."""
 
 from peerpedia_core.exceptions import (
-    BadRequest,
-    Conflict,
-    NotAuthorized,
-    NotFound,
+    BadRequestError,
+    ConflictError,
+    NotAuthorizedError,
+    NotFoundError,
     PeerpediaError,
 )
 
@@ -22,13 +22,13 @@ class TestPeerpediaError:
         assert e.detail == ""
 
     def test_subclass_inherits_from_base(self):
-        assert issubclass(NotFound, PeerpediaError)
-        assert issubclass(NotAuthorized, PeerpediaError)
-        assert issubclass(Conflict, PeerpediaError)
-        assert issubclass(BadRequest, PeerpediaError)
+        assert issubclass(NotFoundError, PeerpediaError)
+        assert issubclass(NotAuthorizedError, PeerpediaError)
+        assert issubclass(ConflictError, PeerpediaError)
+        assert issubclass(BadRequestError, PeerpediaError)
 
     def test_subclass_instance_is_peerpedia_error(self):
-        for cls in [NotFound, NotAuthorized, Conflict, BadRequest]:
+        for cls in [NotFoundError, NotAuthorizedError, ConflictError, BadRequestError]:
             assert isinstance(cls("test"), PeerpediaError)
 
 
@@ -37,8 +37,6 @@ class TestSemanticNames:
 
     def test_no_status_code_attribute(self):
         """None of the semantic exceptions should have a status_code."""
-        for cls in [NotFound, NotAuthorized, Conflict, BadRequest]:
+        for cls in [NotFoundError, NotAuthorizedError, ConflictError, BadRequestError]:
             e = cls("test")
-            assert not hasattr(e, "status_code"), (
-                f"{cls.__name__} should not have status_code"
-            )
+            assert not hasattr(e, "status_code"), f"{cls.__name__} should not have status_code"

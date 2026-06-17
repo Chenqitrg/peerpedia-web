@@ -19,7 +19,6 @@ Contract:
 from datetime import datetime, timedelta, timezone
 
 import pytest
-
 from peerpedia_core.storage.db.engine import get_session
 from peerpedia_core.storage.db.models import Article, ArticleAuthor, Review, User
 from peerpedia_core.workflow.sedimentation import (

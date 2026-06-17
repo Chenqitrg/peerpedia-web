@@ -148,10 +148,12 @@ def count_articles(session: Session, status: str | None = None, author_id: str |
 
 
 def list_articles_multi_status(
-    session: Session, statuses: set[str],
+    session: Session,
+    statuses: set[str],
     author_id: str | None = None,
     follower_id: str | None = None,
-    limit: int | None = None, offset: int = 0,
+    limit: int | None = None,
+    offset: int = 0,
 ) -> list[Article]:
     """List articles matching any of *statuses* (SQL-level IN filter).
 
@@ -164,9 +166,7 @@ def list_articles_multi_status(
     if statuses:
         q = q.filter(Article.status.in_(list(statuses)))
     if author_id:
-        q = q.join(ArticleAuthor, Article.id == ArticleAuthor.article_id).filter(
-            ArticleAuthor.author_id == author_id
-        )
+        q = q.join(ArticleAuthor, Article.id == ArticleAuthor.article_id).filter(ArticleAuthor.author_id == author_id)
     if follower_id:
         q = (
             q.join(ArticleAuthor, Article.id == ArticleAuthor.article_id)
@@ -181,7 +181,8 @@ def list_articles_multi_status(
 
 
 def count_articles_multi_status(
-    session: Session, statuses: set[str],
+    session: Session,
+    statuses: set[str],
     author_id: str | None = None,
 ) -> int:
     """Count articles matching any of *statuses*."""
@@ -189,9 +190,7 @@ def count_articles_multi_status(
     if statuses:
         q = q.filter(Article.status.in_(list(statuses)))
     if author_id:
-        q = q.join(ArticleAuthor, Article.id == ArticleAuthor.article_id).filter(
-            ArticleAuthor.author_id == author_id
-        )
+        q = q.join(ArticleAuthor, Article.id == ArticleAuthor.article_id).filter(ArticleAuthor.author_id == author_id)
     return q.count()
 
 
