@@ -8,6 +8,13 @@
 
 **背景**: PR #63 引入多作者支持后，Phase 0 添加了 `repair_article_authors`、`repair_orphan_article_authors` 和 legacy `username@peerpedia` 兼容。这些函数在数据不完整时静默修复，掩盖了数据完整性错误。此外，`api_sync_article` 的 auto-create 路径用 `authors=[]` 创建文章再 `rebuild_article_authors`，中间状态存在无作者文章。
 
+**原则依据**: [Fail Fast](https://martinfowler.com/ieeeSoftware/failFast.pdf)（Jim Shore, 2004）——错误应该在最早可能的时刻暴露，而不是延迟到下游以更难调试的方式炸掉。具体到此 PR：
+
+- 非法输入立即拒绝（不返回 None 让调用方猜）
+- 不创建处于中间无效状态的对象（不搞 `authors=[]` 再 rebuild）
+- 不让 catch-all 掩盖 bug（不做 orphan repair）
+- 失败要 visible（User 不存在就让外键炸出来）
+
 **决策**:
 
 1. **作者必须存在于创建时**。`api_sync_article` 先从 git history 解析作者，再传 `author_list` 给 `create_article`。解析不出作者 → 422，不创建文章。
