@@ -233,3 +233,9 @@ def require_self_review_for_publish(
     )
     if existing is None:
         raise BadRequestError("self_review is required before publishing")
+
+    # Score must be computed before entering the sedimentation pool.
+    # Without a score the article cannot be ranked, forked, or evaluated.
+    a = get_article(db, article_id)
+    if a is not None and a.score is None:
+        raise BadRequestError("Article must have a score before publishing")
