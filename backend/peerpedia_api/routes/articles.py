@@ -27,7 +27,6 @@ from peerpedia_core.policies.articles import (
     visible_statuses_for_user,
 )
 from peerpedia_core.storage.db.crud_article import (
-    count_articles,
     count_articles_multi_status,
     create_article,
     delete_article,
@@ -35,7 +34,6 @@ from peerpedia_core.storage.db.crud_article import (
     get_article,
     get_author_ids,
     increment_fork_count,
-    list_articles,
     list_articles_multi_status,
     set_sink_start,
     update_article_status,
