@@ -222,6 +222,126 @@ class TestRepairArticleAuthors:
             f"All-mode repair should restore both authors from git, got {db_authors_after}"
         )
 
+    def test_orphan_mode_repairs_from_git(self, db_engine, tmp_path):
+        """Orphan mode should restore authors from git when DB has none."""
+        s = get_session(db_engine)
+        u = User(
+            id="u-orphan-git",
+            username="orphan_git",
+            password_hash="",
+            name="OG",
+            anonymous_name="o",
+            affiliation="X",
+            expertise=[],
+            reputation={},
+        )
+        s.add(u)
+        a = Article(id="a-orphan-git", status="draft", fork_count=0)
+        s.add(a)
+        s.flush()
+        s.commit()
+        # Article has NO authors in DB (orphan scenario)
+
+        # Create git repo with the user's commit
+        rp = tmp_path / "a-orphan-git"
+        init_article_repo("a-orphan-git", base_dir=tmp_path)
+        (rp / "article.md").write_text("# Orphan Test")
+        commit_article(rp, "Init", u.name, f"{u.id}@peerpedia", allow_empty=True)
+
+        # Orphan mode should repair this article
+        repaired = repair_article_authors(s, mode="orphans", articles_dir=tmp_path)
+        assert repaired == 1, f"Expected 1 article repaired, got {repaired}"
+        db_authors_after = get_author_ids(s, "a-orphan-git")
+        assert db_authors_after == [u.id], (
+            f"Orphan repair should restore author from git, got {db_authors_after}"
+        )
+
+    def test_all_mode_no_change_when_authors_match(self, db_engine, tmp_path):
+        """All-mode should report 0 repaired when git matches DB exactly."""
+        s = get_session(db_engine)
+        u = User(
+            id="u-match-1",
+            username="match1",
+            password_hash="",
+            name="M1",
+            anonymous_name="m",
+            affiliation="X",
+            expertise=[],
+            reputation={},
+        )
+        s.add(u)
+        a = Article(id="a-match", status="draft", fork_count=0)
+        s.add(a)
+        s.flush()
+        add_article_authors(s, "a-match", ["u-match-1"])
+        s.commit()
+
+        # Git repo with same author
+        rp = tmp_path / "a-match"
+        init_article_repo("a-match", base_dir=tmp_path)
+        (rp / "article.md").write_text("# Match Test")
+        commit_article(rp, "Init", u.name, f"{u.id}@peerpedia", allow_empty=True)
+
+        # All-mode: git_authors == db_authors → nothing to repair
+        repaired = repair_article_authors(s, mode="all", articles_dir=tmp_path)
+        assert repaired == 0, f"Expected 0 repaired when authors match, got {repaired}"
+
+    def test_all_mode_skips_when_git_has_no_recognized_authors(self, db_engine, tmp_path):
+        """All-mode should skip articles whose git history has no DB-matched authors."""
+        s = get_session(db_engine)
+        a = Article(id="a-no-match", status="draft", fork_count=0)
+        s.add(a)
+        s.flush()
+        add_article_authors(s, "a-no-match", [])
+        s.commit()
+
+        # Git repo with a commit by unknown@peerpedia — no matching DB user
+        rp = tmp_path / "a-no-match"
+        init_article_repo("a-no-match", base_dir=tmp_path)
+        (rp / "article.md").write_text("# No Match Test")
+        commit_article(rp, "Init", "Unknown", "unknown@peerpedia", allow_empty=True)
+
+        # All-mode should skip — no recognizable authors
+        repaired = repair_article_authors(s, mode="all", articles_dir=tmp_path)
+        assert repaired == 0, f"Expected 0 repaired, got {repaired}"
+
+    def test_repair_handles_git_read_error_gracefully(self, db_engine, tmp_path):
+        """Repair should continue when get_authors_from_git raises an exception."""
+        from unittest.mock import patch
+
+        s = get_session(db_engine)
+        u = User(
+            id="u-git-err",
+            username="git_err",
+            password_hash="",
+            name="GE",
+            anonymous_name="g",
+            affiliation="X",
+            expertise=[],
+            reputation={},
+        )
+        s.add(u)
+        a = Article(id="a-git-err", status="draft", fork_count=0)
+        s.add(a)
+        s.flush()
+        s.commit()
+
+        # Create a git repo so the directory check passes
+        rp = tmp_path / "a-git-err"
+        init_article_repo("a-git-err", base_dir=tmp_path)
+        (rp / "article.md").write_text("# Error Test")
+        commit_article(rp, "Init", u.name, f"{u.id}@peerpedia", allow_empty=True)
+
+        # Patch get_authors_from_git to raise during repair
+        with patch(
+            "peerpedia_core.storage.db.crud_article.get_authors_from_git",
+            side_effect=OSError("simulated git error"),
+        ):
+            repaired = repair_article_authors(s, mode="all", articles_dir=tmp_path)
+
+        # Should gracefully skip the broken article
+        assert repaired == 0, f"Expected 0 repaired after git error, got {repaired}"
+
 
 # ── Unit tests: resolve_user_id_from_git_email ───────────────────────────
 
