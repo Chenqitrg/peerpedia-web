@@ -33,7 +33,7 @@ core/peerpedia_core/
     └── scores.py        # FiveDimScores + ReputationScores
 ```
 
-## 依赖关系（分层架构）
+## C3: Core 组件依赖
 
 ```
         ┌───────────────────┐
