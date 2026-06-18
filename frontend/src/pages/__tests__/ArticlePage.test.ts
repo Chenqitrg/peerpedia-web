@@ -237,6 +237,8 @@ describe('ArticlePage', () => {
 
   it('renders Merge button when article is a fork (has forked_from)', async () => {
     // Override getArticle to return a forked article
+    const { useUserStore } = await import('../../stores/useUserStore')
+    useUserStore().viewer = { id: 'u1', name: 'Alice Chen' } as any
     const articlesMod = await import('../../api/articles')
     const getArticle = articlesMod.getArticle as ReturnType<typeof vi.fn>
     getArticle.mockResolvedValueOnce({
@@ -271,6 +273,8 @@ describe('ArticlePage', () => {
   })
 
   it('clicking Merge proposes merging the fork back to its parent', async () => {
+    const { useUserStore } = await import('../../stores/useUserStore')
+    useUserStore().viewer = { id: 'u1', name: 'Alice Chen' } as any
     const articlesMod = await import('../../api/articles')
     const getArticle = articlesMod.getArticle as ReturnType<typeof vi.fn>
     getArticle.mockResolvedValueOnce({
@@ -303,10 +307,6 @@ describe('ArticlePage', () => {
     })
     await new Promise(r => setTimeout(r, 100))
 
-    // Set a viewer so the merge handler proceeds
-    const { useUserStore } = await import('../../stores/useUserStore')
-    const userStore = useUserStore()
-    userStore.viewer = { id: 'u1', name: 'Alice Chen' } as any
 
     // Click the Merge button
     const mergeBtn = wrapper.find('button[aria-label="Propose merge"]')
@@ -416,6 +416,8 @@ describe('ArticlePage', () => {
   })
 
   it('shows merge error message when merge proposal fails', async () => {
+    const { useUserStore } = await import('../../stores/useUserStore')
+    useUserStore().viewer = { id: 'u1', name: 'Alice Chen' } as any
     const articlesMod = await import('../../api/articles')
     const getArticle = articlesMod.getArticle as ReturnType<typeof vi.fn>
     getArticle.mockResolvedValueOnce({
@@ -446,10 +448,6 @@ describe('ArticlePage', () => {
       global: { stubs: { 'router-link': RouterLinkStub, 'router-view': true } },
     })
     await new Promise(r => setTimeout(r, 100))
-
-    const { useUserStore } = await import('../../stores/useUserStore')
-    const userStore = useUserStore()
-    userStore.viewer = { id: 'u1', name: 'Alice Chen' } as any
 
     const mergeBtn = wrapper.find('button[aria-label="Propose merge"]')
     expect(mergeBtn.exists()).toBe(true)

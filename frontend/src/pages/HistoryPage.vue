@@ -223,11 +223,13 @@ async function confirmRollback() {
   rollbackError.value = ''
   try {
     if (isLocal.value) {
+      const viewer = userStore.viewer
+      if (!viewer) throw new Error('[confirmRollback] viewer is null — must be logged in')
       const result = await tauri.gitRollback({
         article_id: id,
         commit_hash: hash,
-        author: 'User',
-        author_id: userStore.viewer?.id,
+        author: viewer.name,
+        author_id: viewer.id,
       })
       if (result && 'error' in result) {
         rollbackError.value = typeof result.error === 'string' ? result.error : 'Rollback failed'

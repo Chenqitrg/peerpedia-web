@@ -245,7 +245,7 @@ describe('HistoryPage', () => {
       expect(_mockGitRollback).toHaveBeenCalledWith({
         article_id: 'art-1',
         commit_hash: 'ghi9012',
-        author: 'User',
+        author: 'Alice',
         author_id: 'test-uuid-123',
       })
     })
