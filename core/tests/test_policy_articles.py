@@ -4,6 +4,7 @@
 """Direct tests for article policy functions."""
 
 import pytest
+
 from peerpedia_core.exceptions import NotAuthorizedError, NotFoundError
 from peerpedia_core.policies.articles import (
     assert_can_bookmark_article,
@@ -51,6 +52,7 @@ def _article(s, aid, status="draft"):
 
 # ── visible_statuses_for_user ────────────────────────────────────────────
 
+
 class TestVisibleStatuses:
     def test_anon_sees_public(self):
         assert visible_statuses_for_user(None) == {"sedimentation", "published"}
@@ -62,6 +64,7 @@ class TestVisibleStatuses:
 
 # ── get_article_or_raise ─────────────────────────────────────────────────
 
+
 class TestGetArticleOrRaise:
     def test_raises_not_found(self, db_engine):
         s = get_session(db_engine)
@@ -72,13 +75,15 @@ class TestGetArticleOrRaise:
     def test_returns_article(self, db_engine):
         s = get_session(db_engine)
         a = Article(id="a-gor", status="draft", fork_count=0)
-        s.add(a); s.commit()
+        s.add(a)
+        s.commit()
         result = get_article_or_raise(s, a.id)
         assert result.id == "a-gor"
         s.close()
 
 
 # ── assert_can_bookmark_article ──────────────────────────────────────────
+
 
 class TestBookmarkPolicy:
     def test_raises_not_found_for_missing_article(self, db_engine):
@@ -104,6 +109,7 @@ class TestBookmarkPolicy:
 
 
 # ── assert_can_self_review ───────────────────────────────────────────────
+
 
 class TestSelfReviewPolicy:
     def test_author_draft_ok(self, db_engine):
@@ -137,6 +143,7 @@ class TestSelfReviewPolicy:
 
 
 # ── Write gates — _WRITABLE_STATUSES = {draft, published} ────────────────
+
 
 class TestWriteGate:
     def test_edit_blocked_sedimentation(self, db_engine):
@@ -199,6 +206,7 @@ class TestWriteGate:
 
 # ── Fork ─────────────────────────────────────────────────────────────────
 
+
 class TestForkPolicy:
     def test_ok_published(self, db_engine):
         s = get_session(db_engine)
@@ -225,6 +233,7 @@ class TestForkPolicy:
 
 
 # ── Read / Download ──────────────────────────────────────────────────────
+
 
 class TestReadDownload:
     def test_anon_can_read_published(self, db_engine):

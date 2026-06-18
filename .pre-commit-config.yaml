@@ -3,6 +3,6 @@ repos:
     rev: v0.15.17
     hooks:
       - id: ruff
-        args: [check, --fix, backend/, core/, seed.py]
+        args: [--fix, backend/, core/, seed.py]
       - id: ruff-format
         args: [backend/, core/, seed.py]
