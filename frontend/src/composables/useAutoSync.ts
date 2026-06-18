@@ -215,9 +215,9 @@ export function useAutoSync() {
             else failed++
             try { await tauri.clearPending({ id: op.id }) } catch { /* best-effort */ }
           } else {
-            const authorId = userStore.viewer?.id
-            if (!authorId) continue
-            const res = await pushRepo(op.id, 'PeerPedia', authorId, 'Auto-sync')
+            const viewer = userStore.viewer
+            if (!viewer) continue
+            const res = await pushRepo(op.id, viewer.name, viewer.id, 'Auto-sync')
             if (res.pushed) {
               synced++
               try { await tauri.clearPending({ id: op.id }) } catch { /* best-effort */ }

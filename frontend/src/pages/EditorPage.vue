@@ -394,7 +394,7 @@ async function saveDraft() {
   const viewer = userStore.viewer
   if (!viewer) throw new Error('[saveDraft] viewer is null — must be logged in')
   const accountId = viewer.id
-  const authorName = viewer.name || viewer.username || ''
+  const authorName = viewer.name
   const authorId = accountId  // UUID identity for git commits
 
   if (tauri.isTauri.value || tauri.isBrowserLocal.value) {
@@ -526,7 +526,7 @@ async function handleSubmitToPool() {
   const viewer = userStore.viewer
   if (!viewer) throw new Error('[handleSubmitToPool] viewer is null — must be logged in')
   const accountId = viewer.id
-  const authorName = viewer.name || viewer.username || ''
+  const authorName = viewer.name
   const aid = editId.value || currentDraftId.value
 
   // S5: Tauri mode — update article.json status → commit → bundle push.
