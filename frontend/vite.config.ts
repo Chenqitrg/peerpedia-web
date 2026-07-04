@@ -8,9 +8,6 @@ import { resolve } from 'path'
 
 export default defineConfig({
   plugins: [vue()],
-  optimizeDeps: {
-    exclude: ['@tauri-apps/api'],
-  },
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),

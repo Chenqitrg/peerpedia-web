@@ -6,7 +6,6 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { getHistory, rollbackArticle } from '../api/articles'
-import { useTauri, type CommitEntry } from '../composables/useTauri'
 import DiffView from '../components/DiffView.vue'
 import type { DiffResult } from '../components/DiffView.vue'
 import { useAsyncResource } from '../composables/useAsyncResource'
@@ -23,7 +22,6 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const id = route.params.id as string
-const tauri = useTauri()
 
 const selectedHash1 = ref<string | null>(null)
 const selectedHash2 = ref<string | null>(null)
@@ -32,25 +30,8 @@ const diffLoading = ref(false)
 const rollingBack = ref<string | null>(null)
 const rollbackError = ref('')
 
-const isLocal = computed(() => tauri.isTauri.value || tauri.isBrowserLocal.value)
-
 const { data: history, loading, error, execute: loadHistory } = useAsyncResource(
-  async () => {
-    // In local mode, fetch from local git history
-    if (isLocal.value) {
-      const entries = await tauri.gitHistory({ article_id: id })
-      if (entries && !('error' in entries) && Array.isArray(entries)) {
-        const commits = (entries as CommitEntry[]).map(e => ({
-          hash: e.hash,
-          message: e.message,
-          author: e.author,
-          timestamp: e.timestamp,
-        }))
-        return { commits } as ArticleHistory
-      }
-    }
-    return getHistory(id)
-  },
+  async () => getHistory(id),
   null as ArticleHistory | null,
   { immediate: true },
 )
@@ -112,21 +93,10 @@ async function loadDiff() {
   diffLoading.value = true
   try {
     let raw: DiffResult | null = null
-    if (isLocal.value) {
-      const data = await tauri.gitDiff({
-        article_id: id,
-        hash1: selectedHash1.value,
-        hash2: selectedHash2.value,
-      })
-      if (data && !('error' in data)) {
-        raw = data as unknown as DiffResult
-      }
-    } else {
-      const { getDiff } = await import('../api/articles')
-      const data = await getDiff(id, selectedHash1.value!, selectedHash2.value!)
-      if (data?.diff_text) {
-        raw = parseUnifiedDiff(data.diff_text, data.files || [])
-      }
+    const { getDiff } = await import('../api/articles')
+    const data = await getDiff(id, selectedHash1.value!, selectedHash2.value!)
+    if (data?.diff_text) {
+      raw = parseUnifiedDiff(data.diff_text, data.files || [])
     }
     // Show article content, metadata, and status changes.
     // article.json records status transitions (draft→sedimentation→published)
@@ -220,22 +190,7 @@ async function confirmRollback() {
   rollingBack.value = hash
   rollbackError.value = ''
   try {
-    if (isLocal.value) {
-      const result = await tauri.gitRollback({
-        article_id: id,
-        commit_hash: hash,
-        author: 'User',
-        author_id: 'local',
-      })
-      if (result && 'error' in result) {
-        rollbackError.value = typeof result.error === 'string' ? result.error : 'Rollback failed'
-        return
-      }
-      // Invalidate article cache so page shows fresh git content
-      await tauri.invalidateArticleCache({ article_id: id })
-    } else {
-      await rollbackArticle(id, hash)
-    }
+    await rollbackArticle(id, hash)
     await loadHistory()
   } catch (e: any) {
     rollbackError.value = e.response?.data?.detail || e?.message || 'Rollback failed'

@@ -13,9 +13,7 @@ import { useUserStore } from '../stores/useUserStore'
 import { useDraftPersistence } from '../composables/useDraftPersistence'
 import { useCommitFlow } from '../composables/useCommitFlow'
 import { useSplitPane } from '../composables/useSplitPane'
-import { useTauri } from '../composables/useTauri'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
-import { useAutoSync } from '@/composables/useAutoSync'
 import { useEditorTab } from '../composables/useTabIntegration'
 import { useTabStore } from '../stores/useTabStore'
 import { loadString, saveString, saveJSON, remove } from '../composables/useLocalStorage'
@@ -119,9 +117,7 @@ const DRAFT_ID_KEY = computed(() => `editor-draft-id-${draftUid.value}-${editId.
 
 // Draft persistence — Tauri IPC when available, REST + localStorage fallback.
 const draftPersistence = useDraftPersistence()
-const tauri = useTauri()
 const { isSynced } = useNetworkStatus()
-const autoSync = useAutoSync()
 
 const currentDraftId = ref<string | undefined>(
   isEdit.value ? (editId.value as string | undefined) : undefined
@@ -210,7 +206,6 @@ watch(content, (val) => {
     }, 300)
   } else if (
     format.value === 'typst' &&
-    (tauri.isTauri.value || tauri.isBrowserLocal.value) &&
     showPreview.value
   ) {
     if (compiling.value) {
@@ -241,49 +236,6 @@ async function loadExistingArticle() {
     savedTitle.value = title.value
     return
   } catch (e: any) {
-    // 2. In Tauri/dev-mock mode, read from git first (canonical source),
-    //    then fall back to local draft storage.
-    if (tauri.isTauri.value || tauri.isBrowserLocal.value) {
-      // Try gitShow for the latest commit content.
-      try {
-        const history = await tauri.gitHistory({ article_id: editId.value! })
-        if (history && !('error' in history) && Array.isArray(history) && history.length > 0) {
-          const latestHash = history[0].hash
-          const gitContent = await tauri.gitShow({ article_id: editId.value!, commit_hash: latestHash })
-          if (gitContent && typeof gitContent === 'string') {
-            content.value = gitContent
-            format.value = 'markdown' // gitShow returns raw content; infer format from draft metadata
-            commitHash.value = latestHash
-            // Try draft metadata for title and format
-            const accountId = userStore.viewer?.id || 'local'
-            const draft = await draftPersistence.load(editId.value!, accountId)
-            if (draft && draft.title) title.value = draft.title
-            if (draft && draft.format) format.value = draft.format as 'markdown' | 'typst'
-            savedContent.value = content.value
-            savedTitle.value = title.value
-            return
-          }
-        }
-      } catch { /* gitShow failed — fall through to draft persistence */ }
-
-      const accountId = userStore.viewer?.id || 'local'
-      const draft = await draftPersistence.load(editId.value!, accountId)
-      if (draft && draft.content !== undefined) {
-        title.value = draft.title || ''
-        content.value = draft.content || ''
-        format.value = (draft.format as 'markdown' | 'typst') || 'markdown'
-        savedContent.value = content.value
-        savedTitle.value = title.value
-        // Populate commit hash from local git
-        try {
-          const history = await tauri.gitHistory({ article_id: editId.value! })
-          if (history && !('error' in history) && Array.isArray(history) && history.length > 0) {
-            commitHash.value = history[0].hash
-          }
-        } catch { /* optional */ }
-        return
-      }
-    }
     errorMsg.value = 'Failed to load article'
   } finally {
     loadingArticle.value = false
@@ -315,53 +267,7 @@ async function restoreDraft() {
   }
 }
 
-/** Git-backed save for Tauri/local mode — git is source of truth (DESIGN.md §2.3). */
-async function persistToGit(accountId: string, authorName: string, authorId: string, msg: string): Promise<boolean> {
-  const existingId = currentDraftId.value
-
-  if (!existingId) {
-    // New draft — persistence entry first to get an ID.
-    const result = await draftPersistence.save(
-      accountId, title.value, content.value, format.value, undefined,
-    )
-    if (!result || !result.id) { errorMsg.value = 'Failed to create draft'; return false }
-    currentDraftId.value = result.id
-    saveString(DRAFT_ID_KEY.value, result.id)
-
-    // Phase C: always commit locally — bundle will carry the exact hash to server.
-    try {
-      const r = await tauri.gitInit({ article_id: result.id, content: content.value, format: format.value, commit_message: msg, author: authorName, author_id: authorId })
-      if (r && 'hash' in r) commitHash.value = r.hash
-    } catch (e: unknown) {
-      errorMsg.value = e instanceof Error ? e.message : 'Git init failed'
-    }
-    return true
-  }
-
-  // Existing draft — always commit locally (Phase C: bundle carries hash to server).
-  try {
-    const history = await tauri.gitHistory({ article_id: existingId })
-    const hasRepo = history && !('error' in history) && Array.isArray(history) && history.length > 0
-    if (hasRepo) {
-      const r = await tauri.gitCommit({ article_id: existingId, content: content.value, format: format.value, commit_message: msg, author: authorName, author_id: authorId })
-      if (r && 'hash' in r) { commitHash.value = r.hash }
-      else { errorMsg.value = 'Git commit failed'; return false }
-    } else {
-      const r = await tauri.gitInit({ article_id: existingId, content: content.value, format: format.value, commit_message: msg, author: authorName, author_id: authorId })
-      if (r && 'hash' in r) { commitHash.value = r.hash }
-      else { errorMsg.value = 'Git init failed'; return false }
-    }
-  } catch (e: unknown) {
-    errorMsg.value = e instanceof Error ? e.message : 'Git operation failed'
-    return false
-  }
-
-  // Update the DB index.
-  await draftPersistence.save(accountId, title.value, content.value, format.value, existingId)
-  return true
-}
-
-/** Persist via REST API + localStorage fallback (web mode). */
+/** Persist via REST API + localStorage fallback. */
 async function persistToWeb(accountId: string) {
   try {
     const result = await draftPersistence.save(
@@ -392,45 +298,8 @@ function markSaved() {
 
 async function saveDraft() {
   const accountId = userStore.viewer?.id || 'local'
-  const authorName = userStore.viewer?.name || userStore.viewer?.username || 'local'
-  const authorId = accountId  // UUID identity for git commits
-
-  if (tauri.isTauri.value || tauri.isBrowserLocal.value) {
-    const msg = commitMsg.value.trim()
-    const ok = await persistToGit(accountId, authorName, authorId, msg)
-    console.log('[saveDraft] persistToGit ok, draftId:', currentDraftId.value)
-    if (!ok) return
-    commitMsg.value = ''
-    markSaved()
-    // Phase C: push to server via bundle (preserves commit hash).
-    if (isSynced.value) {
-      const articleId = editId.value || currentDraftId.value
-      if (articleId) {
-        try {
-          const result = await autoSync.pushRepo(articleId, authorName, authorId, msg)
-          if (result.head) commitHash.value = result.head
-        } catch (e: any) {
-          console.warn('Bundle push failed — marking pending for retry:', e)
-          // Fall through to offline pending path so the edit is retried later.
-          if (tauri.isTauri.value || tauri.isBrowserLocal.value) {
-            const draftId = currentDraftId.value
-            if (draftId) {
-              try { await tauri.setPendingPush({ id: draftId }); await autoSync.refresh() } catch { /* best-effort */ }
-            }
-          }
-        }
-      }
-    } else if (tauri.isTauri.value || tauri.isBrowserLocal.value) {
-      // Offline: mark pending push for reconnect resolution.
-      const draftId = currentDraftId.value
-      if (draftId) {
-        try { await tauri.setPendingPush({ id: draftId }); await autoSync.refresh() } catch { /* best-effort */ }
-      }
-    }
-    return
-  }
-
   await persistToWeb(accountId)
+  commitMsg.value = ''
   markSaved()
 }
 
@@ -445,23 +314,19 @@ async function handleCompile() {
   try {
     if (format.value === 'markdown') {
       previewHtml.value = parseMarkdown(content.value)
-    } else if (tauri.isTauri.value || tauri.isBrowserLocal.value) {
-      // Typst: use Tauri local compilation
-      const result = await tauri.compileTypst({
-        content: content.value,
-        format: format.value,
-      })
-      if (result && typeof result === 'string') {
-        compileResult.value = { type: 'svg', content: sanitizeTypstSvg(result) }
-      } else {
-        const errMsg = (result && typeof result === 'object' && 'error' in result)
-          ? (result as { error: string }).error
-          : 'Compilation failed'
+    } else {
+      // Typst: compile via server API
+      try {
+        const { compilePreview } = await import('../api/compile')
+        const result = await compilePreview(content.value, 'typst')
+        if (result && result.svg) {
+          compileResult.value = { type: 'svg', content: sanitizeTypstSvg(result.svg) }
+        }
+      } catch (e: any) {
+        const errMsg = e?.response?.data?.detail || e?.message || 'Compilation failed'
         compileResult.value = { type: 'error', content: errMsg }
         errorMsg.value = errMsg
       }
-    } else {
-      previewHtml.value = '<p class="text-ink-muted text-sm">Typst preview available in Tauri desktop mode. Use Markdown for browser preview.</p>'
     }
   } catch (e: any) {
     errorMsg.value = e.message || 'Compile failed'
@@ -479,13 +344,7 @@ const { showCommitPopup, tempCommitMsg, openCommitPopup, confirmCommit, cancelCo
   useCommitFlow(async (msg: string) => { commitMsg.value = msg; await saveDraft() })
 
 async function handleSaveDraft() {
-  // In local mode, require a commit message
-  if ((tauri.isTauri.value || tauri.isBrowserLocal.value) && !commitMsg.value.trim()) {
-    openCommitPopup(commitMsg.value)
-    return
-  }
   await saveDraft()
-  // saveDraft() already handles server push for both Tauri and Web modes.
   savedMsg.value = true
   setTimeout(() => { savedMsg.value = false }, 2000)
 }
@@ -524,41 +383,6 @@ async function handleSubmitToPool() {
   const accountId = userStore.viewer?.id || 'local'
   const authorName = userStore.viewer?.name || userStore.viewer?.username || 'local'
   const aid = editId.value || currentDraftId.value
-
-  // S5: Tauri mode — update article.json status → commit → bundle push.
-  // Bundle carries full git state including status change; server /sync endpoint
-  // auto-creates DB records and syncs metadata.  Skip the redundant REST call
-  // on success to avoid dual-write races that reset sink_start.
-  let bundlePushed = false
-  if (aid && (tauri.isTauri.value || tauri.isBrowserLocal.value)) {
-    const meta = JSON.stringify({
-      status: 'sedimentation',
-      self_review: { ...scores.value },
-    })
-    try {
-      await tauri.gitUpdateMeta({
-        article_id: aid,
-        json_str: meta,
-        commit_message: '[publish]',
-        author: authorName,
-        author_id: accountId,
-      })
-      const pushRes = await autoSync.pushRepo(aid, authorName, accountId, '[publish]')
-      if (pushRes.head) {
-        commitHash.value = pushRes.head
-        bundlePushed = true
-      }
-    } catch (e: any) {
-      console.warn('Publish bundle push failed:', e)
-      // Fall through to REST path below
-    }
-  }
-  if (bundlePushed) {
-    successMsg.value = 'Article published!'
-    showSelfReview.value = false
-    submitting.value = false
-    return
-  }
 
   try {
     const body = {

@@ -6,7 +6,6 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useUserStore } from '../stores/useUserStore'
-import { useTauri } from '../composables/useTauri'
 import { useOffline } from '../composables/useOffline'
 import { saveString } from '../composables/useLocalStorage'
 import SyncButton from './SyncButton.vue'
@@ -23,12 +22,8 @@ import {
   Waves,
   X,
 } from 'lucide-vue-next'
-import { useAutoSync } from '../composables/useAutoSync'
-
 const router = useRouter()
 const userStore = useUserStore()
-const tauri = useTauri()
-const { pendingCount } = useAutoSync()
 const { canRead, isLocalOnly } = useOffline()
 const { t, locale } = useI18n()
 const searchQuery = ref('')

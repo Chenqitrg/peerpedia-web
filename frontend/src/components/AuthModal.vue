@@ -2,7 +2,7 @@
 <!-- SPDX-License-Identifier: CC-BY-NC-SA-4.0 -->
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useUserStore } from '../stores/useUserStore'
 import { extractErrorMessage } from '../composables/useLocalStorage'
@@ -18,8 +18,6 @@ const email = ref('')
 const displayName = ref('')
 const error = ref('')
 const loading = ref(false)
-
-const isLocal = computed(() => userStore.isTauriMode || userStore.isBrowserLocal)
 
 function switchTab(t: 'login' | 'register') {
   tab.value = t
@@ -62,12 +60,9 @@ async function handleRegister() {
     error.value = 'Password must be at least 6 characters'
     return
   }
-  // Email required in Web mode, optional in local mode.
-  if (!isLocal.value) {
-    if (!email.value.trim() || !email.value.includes('@')) {
-      error.value = 'Please enter a valid email address'
-      return
-    }
+  if (!email.value.trim() || !email.value.includes('@')) {
+    error.value = 'Please enter a valid email address'
+    return
   }
   if (!displayName.value.trim()) {
     displayName.value = username.value
@@ -164,15 +159,15 @@ function close() {
           <input
             v-model="email"
             type="email"
-            :placeholder="isLocal ? 'Email (optional)' : t('auth.email')"
-            :required="!isLocal"
+            :placeholder="t('auth.email')"
+            required
             class="w-full bg-[#0d1117] border border-divider rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-muted/50 focus:outline-none focus:ring-1 focus:ring-accent"
           />
           <input
             v-model="displayName"
             type="text"
-            :placeholder="isLocal ? 'Display name (optional)' : t('auth.name')"
-            :required="!isLocal"
+            :placeholder="t('auth.name')"
+            required
             class="w-full bg-[#0d1117] border border-divider rounded-lg px-3 py-2 text-sm text-ink placeholder:text-ink-muted/50 focus:outline-none focus:ring-1 focus:ring-accent"
           />
           <input

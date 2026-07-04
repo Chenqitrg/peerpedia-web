@@ -7,7 +7,6 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/useUserStore'
 import { followUser, unfollowUser } from '../api/users'
-import { useTauri } from '../composables/useTauri'
 import ReputationBadges from './ReputationBadges.vue'
 import { BookOpen, MapPin } from 'lucide-vue-next'
 import type { UserSummary } from '../api/types'
@@ -15,7 +14,6 @@ import type { UserSummary } from '../api/types'
 const { t } = useI18n()
 const router = useRouter()
 const userStore = useUserStore()
-const tauri = useTauri()
 
 const props = defineProps<{
   user: UserSummary
@@ -24,7 +22,6 @@ const props = defineProps<{
 
 const isFollowing = ref(props.isFollowing ?? false)
 const followLoading = ref(false)
-const isLocal = userStore.isTauriMode || userStore.isBrowserLocal
 
 function goToUser() {
   router.push(`/user/${props.user.id}`)
@@ -35,18 +32,10 @@ async function handleFollow(e: Event) {
   if (!userStore.viewer || followLoading.value) return
   followLoading.value = true
   try {
-    if (isLocal) {
-      if (isFollowing.value) {
-        await tauri.unfollowUser({ follower_id: userStore.viewer.id, followed_id: props.user.id })
-      } else {
-        await tauri.followUser({ follower_id: userStore.viewer.id, followed_id: props.user.id })
-      }
+    if (isFollowing.value) {
+      await unfollowUser(props.user.id)
     } else {
-      if (isFollowing.value) {
-        await unfollowUser(props.user.id)
-      } else {
-        await followUser(props.user.id)
-      }
+      await followUser(props.user.id)
     }
     isFollowing.value = !isFollowing.value
   } catch { /* ignore */ }

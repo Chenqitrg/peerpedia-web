@@ -62,7 +62,6 @@ import { useUserStore } from './stores/useUserStore'
 import { useTabStore } from './stores/useTabStore'
 import { loadString, remove } from './composables/useLocalStorage'
 import { useNetworkStatus } from './composables/useNetworkStatus'
-import { useAutoSync } from './composables/useAutoSync'
 
 const route = useRoute()
 const router = useRouter()
@@ -95,27 +94,10 @@ router.afterEach((to) => {
   }
 })
 
-// ── L4: Auto-sync local account to server when network or login state changes ──
-watch(
-  [isSynced, () => userStore.localToken, () => userStore.hasPendingCreds],
-  ([online, localTok, pending]) => {
-    console.log('[App] isSynced:', online, 'localToken:', !!localTok, 'pendingCreds:', pending)
-    if (online && (localTok || pending)) {
-      console.log('[App] calling trySyncServerAuth')
-      userStore.trySyncServerAuth()
-    }
-  },
-  { immediate: true },
-)
-
-// ── Reconnect: auto-flush pending ops when network comes back ─────────
-const autoSync = useAutoSync()
-
+// ── Reconnect: refresh session when network comes back ─────────
 watch(isSynced, async (online) => {
-  if (!online) return
-  const { synced, failed } = await autoSync.flush()
-  if (synced > 0) {
-    console.log(`[App] Auto-synced ${synced} pending ops` + (failed > 0 ? `, ${failed} failed` : ''))
+  if (online && userStore.viewer) {
+    await userStore.restoreSession()
   }
 })
 
@@ -177,7 +159,6 @@ async function saveAndClose() {
 
 onMounted(async () => {
   ping()
-  autoSync.refresh()
   await userStore.restoreSession()
   tabStore.restoreTabs()
   if (loadString('showAuthModal') === 'true') {
