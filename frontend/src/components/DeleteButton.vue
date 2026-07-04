@@ -5,10 +5,8 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Trash2 } from 'lucide-vue-next'
-import { useTauri } from '../composables/useTauri'
 import { useUserStore } from '../stores/useUserStore'
 import { useNetworkStatus } from '../composables/useNetworkStatus'
-import { useAutoSync } from '../composables/useAutoSync'
 import { deleteArticle } from '../api/articles'
 
 const { t } = useI18n()
@@ -26,46 +24,20 @@ const emit = defineEmits<{
 const showConfirm = ref(false)
 const deleting = ref(false)
 const errorMessage = ref('')
-const tauri = useTauri()
 const userStore = useUserStore()
 const { isSynced } = useNetworkStatus()
-const autoSync = useAutoSync()
 
 async function handleDelete() {
   if (deleting.value) return
   deleting.value = true
   errorMessage.value = ''
   try {
-    const isOnline = !!userStore.token && isSynced.value
-
-    if (isOnline) {
-      // Server-first: delete from server, then clean up local
-      await deleteArticle(props.articleId)
-      // If in Tauri mode, also clean local DB
-      if (tauri.isTauri.value || tauri.isBrowserLocal.value) {
-        try {
-          await tauri.deleteArticle({
-            id: props.articleId,
-            account_id: props.authorId || '',
-          })
-        } catch {
-          // Local cleanup is best-effort — server already succeeded
-        }
-      }
-    } else if (tauri.isTauri.value || tauri.isBrowserLocal.value) {
-      // Offline: mark pending delete (data preserved for reconnect confirmation).
-      try {
-        await tauri.setPendingDelete({ id: props.articleId }); await autoSync.refresh()
-      } catch (e: unknown) {
-        console.warn('setPendingDelete failed:', e)
-      }
-    } else {
-      // Neither online nor Tauri — shouldn't happen
+    if (!userStore.token || !isSynced.value) {
       errorMessage.value = 'Cannot delete: not connected'
       emit('error', errorMessage.value)
       return
     }
-
+    await deleteArticle(props.articleId)
     emit('deleted', props.articleId)
     showConfirm.value = false
   } catch (e: any) {

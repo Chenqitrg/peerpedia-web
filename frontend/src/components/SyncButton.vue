@@ -6,20 +6,15 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Wifi, WifiOff } from 'lucide-vue-next'
 import { useNetworkStatus } from '../composables/useNetworkStatus'
-import { useAutoSync } from '../composables/useAutoSync'
 
 const { t } = useI18n()
 const { connectionState, flash, connect, disconnect } = useNetworkStatus()
-const { pendingCount } = useAutoSync()
 
 const tooltip = computed(() => {
   switch (connectionState.value) {
     case 'connecting': return t('nav.syncConnecting')
     case 'synced': return t('nav.syncDisconnectAria')
-    default:
-      return pendingCount.value > 0
-        ? `${pendingCount.value} pending sync(s)`
-        : t('nav.syncConnectAria')
+    default: return t('nav.syncConnectAria')
   }
 })
 
@@ -58,10 +53,6 @@ function handleClick() {
       :class="{ 'sync-icon--flash': flash }"
       stroke-width="2"
     />
-    <span
-      v-if="connectionState === 'idle' && pendingCount > 0"
-      class="sync-badge"
-    >{{ pendingCount }}</span>
     <span
       class="sync-dot"
       :class="{

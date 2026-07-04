@@ -10,7 +10,6 @@ import { useNetworkStatus } from '../composables/useNetworkStatus'
 import { getUser, getFollowing, getFollowers, followUser, unfollowUser } from '../api/users'
 import { getArticles } from '../api/articles'
 import { useUserStore } from '../stores/useUserStore'
-import { useTauri } from '../composables/useTauri'
 import { useFollowCache } from '../composables/useFollowCache'
 import { useBookmarkToggle } from '../composables/useBookmarkToggle'
 import { useAsyncResource } from '../composables/useAsyncResource'
@@ -29,59 +28,17 @@ import {
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
-const tauri = useTauri()
 const { t } = useI18n()
 const { canRead, canWrite, getFallback } = useOffline()
 
 const canViewFollowGraph = computed(() => canRead('user.follow_graph'))
 
 const id = computed(() => route.params.id as string)
-
-// In local mode (Tauri or browser-local), use local account data.
 const isSelf = computed(() => userStore.viewer?.id === id.value)
-const isLocal = computed(() => userStore.isTauriMode || userStore.isBrowserLocal)
 const { isSynced } = useNetworkStatus()
 
-function _localUserToProfile(a: { id: string; username: string }): UserProfile {
-  return {
-    id: a.id,
-    username: a.username,
-    name: a.username,
-    anonymous_name: '',
-    affiliation: '',
-    expertise: [],
-    reputation: { professionalism: 0, objectivity: 0, collaboration: 0, pedagogy: 0 },
-    followers_count: 0,
-    following_count: 0,
-    article_count: 0,
-    created_at: new Date().toISOString(),
-  }
-}
-
 const { data: user, loading, error, execute: loadUser } = useAsyncResource(
-  async () => {
-    // Self in local mode — use viewer profile directly.
-    if (isLocal.value && isSelf.value && userStore.viewer) return userStore.viewer
-    // Other user in local mode — look up from browser-local accounts.
-    if (isLocal.value && !isSelf.value) {
-      const accts = await tauri.listAccounts()
-      if (accts && !('error' in accts) && Array.isArray(accts)) {
-        const found = accts.find(a => a.id === id.value)
-        if (found) return _localUserToProfile(found)
-      }
-      // Online — fetch from server, then cache for offline.
-      if (isSynced.value) {
-        const profile = await getUser(id.value)
-        useFollowCache().setCachedUserProfile(id.value, profile).catch(() => {})
-        return profile
-      }
-      // Offline — try cached profile for followed users.
-      const cached = await useFollowCache().getCachedUserProfile(id.value)
-      if (cached) return cached
-      throw new Error('User not found')
-    }
-    return getUser(id.value)
-  },
+  async () => getUser(id.value),
   null as UserProfile | null,
   { immediate: true },
 )
@@ -150,63 +107,12 @@ async function handleFollow() {
 async function loadArticles() {
   const merged: ArticleSummary[] = []
 
-  // 1. Server articles — fetch when online (including Tauri+online)
-  if (!tauri.isTauri.value || isSynced.value) {
-    try {
-      const artData = await getArticles({ author_id: id.value, page: 1, size: 50 })
-      const serverArticles = Array.isArray(artData) ? artData : (artData.articles ?? [])
-      merged.push(...serverArticles)
-      // Cache for offline browsing.
-      useFollowCache().setCachedUserArticles(id.value, serverArticles).catch(() => {})
-    } catch { /* server unreachable in Tauri offline mode */ }
-  } else if (tauri.isTauri.value && !isSelf.value) {
-    // Offline Tauri mode — read cached article cards for followed users.
-    try {
-      const cached = await useFollowCache().getCachedUserArticles(id.value)
-      if (cached) merged.push(...cached)
-    } catch { /* cache miss */ }
-  }
-
-  // 2. Tauri local drafts (only for current user's own page)
-  if ((tauri.isTauri.value || tauri.isBrowserLocal.value) && isSelf.value) {
-    try {
-      const drafts = await tauri.listDrafts({ account_id: id.value })
-      if (!drafts || 'error' in drafts) return
-      for (const d of drafts) {
-        // Avoid duplicates — skip if already loaded from server
-        if (!merged.some(a => a.id === d.id)) {
-          // Try to get actual commit hash from local git
-          let hash = ''
-          try {
-            const history = await tauri.gitHistory({ article_id: d.id })
-            if (history && !('error' in history) && Array.isArray(history) && history.length > 0) {
-              hash = history[0].hash
-            }
-          } catch { /* optional */ }
-          merged.push({
-            id: d.id,
-            title: d.title || 'Untitled',
-            status: 'draft' as const,
-            authors: [{ id: id.value, name: user.value?.name || id.value, anonymous_name: '' }],
-            abstract: null as string | null,
-            content_preview: '',
-            commit_hash: hash,
-            sink_eta: null as string | null,
-            fork_count: 0,
-            forked_from: null,
-            commit_count: 0,
-            score: null,
-            days_remaining: null,
-            sink_duration_days: null,
-            is_bookmarked: false,
-            is_own_article: true,
-            created_at: d.updated_at,
-            updated_at: d.updated_at,
-          })
-        }
-      }
-    } catch { /* Tauri drafts unavailable */ }
-  }
+  try {
+    const artData = await getArticles({ author_id: id.value, page: 1, size: 50 })
+    const serverArticles = Array.isArray(artData) ? artData : (artData.articles ?? [])
+    merged.push(...serverArticles)
+    useFollowCache().setCachedUserArticles(id.value, serverArticles).catch(() => {})
+  } catch { /* server unreachable */ }
 
   articles.value = merged
 }
@@ -370,7 +276,7 @@ watch(user, (u) => {
       <!-- Articles section -->
       <div>
         <h2 class="text-lg font-heading font-semibold text-ink mb-4">
-          {{ isSelf && isLocal ? t('user.myDrafts') : t('user.articlesTitle') }}
+          {{ isSelf ? t('user.myDrafts') : t('user.articlesTitle') }}
         </h2>
 
         <div v-if="articles.length === 0" class="card p-8 text-center">

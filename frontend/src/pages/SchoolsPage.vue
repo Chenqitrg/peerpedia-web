@@ -8,7 +8,6 @@ import { useI18n } from 'vue-i18n'
 import { getUsers, followUser, unfollowUser, getFollowing } from '../api/users'
 import { useUserStore } from '../stores/useUserStore'
 import ReputationBadges from '../components/ReputationBadges.vue'
-import { useTauri } from '../composables/useTauri'
 import { useFollowCache } from '../composables/useFollowCache'
 import { useOffline } from '../composables/useOffline'
 import { useNetworkStatus } from '../composables/useNetworkStatus'
@@ -20,12 +19,9 @@ import { Users, UserPlus, UserCheck, Landmark } from 'lucide-vue-next'
 const router = useRouter()
 const { t } = useI18n()
 const userStore = useUserStore()
-const tauri = useTauri()
 const { canRead, canWrite, getFallback } = useOffline()
 const { isSynced } = useNetworkStatus()
 const following = ref<Set<string>>(new Set())
-
-const isLocal = computed(() => userStore.isTauriMode || userStore.isBrowserLocal)
 
 async function loadFollowState() {
   if (!userStore.viewer) return

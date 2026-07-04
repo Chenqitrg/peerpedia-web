@@ -7,7 +7,6 @@ import { useI18n } from 'vue-i18n'
 import { Loader, FileDown, FileCode, Package } from 'lucide-vue-next'
 import { parseMarkdown } from '../utils/markdown'
 import { compileDownload } from '../api/compile'
-import { useTauri } from '../composables/useTauri'
 
 const { t } = useI18n()
 
@@ -26,8 +25,6 @@ const props = withDefaults(defineProps<{
   disabled: false,
   showLabel: false,
 })
-
-const tauri = useTauri()
 
 const downloading = ref(false)
 
@@ -58,52 +55,21 @@ async function handleDownload() {
 
     if (props.format === 'repo') {
       if (!props.articleId) return
-      if (tauri.isTauri.value || tauri.isBrowserLocal.value) {
-        // Tauri/local: Rust creates tar.gz, returns base64 → blob download
-        const result = await tauri.exportArticle({ article_id: props.articleId })
-        if (result && typeof result === 'string') {
-          const binary = Uint8Array.from(atob(result), c => c.charCodeAt(0))
-          const blob = new Blob([binary], { type: 'application/gzip' })
-          const url = URL.createObjectURL(blob)
-          const a = document.createElement('a')
-          a.href = url
-          a.download = `${base}${hashSuffix}.tar.gz`
-          a.click()
-          URL.revokeObjectURL(url)
-        }
-      } else {
-        // Web mode: server endpoint
-        window.open(`/api/v1/articles/${props.articleId}/download/repo`, '_blank')
-      }
+      window.open(`/api/v1/articles/${props.articleId}/download/repo`, '_blank')
       return
     }
 
     if (props.format === 'compiled' && props.contentFormat === 'typst') {
-      if (tauri.isTauri.value || tauri.isBrowserLocal.value) {
-        // Tauri/local: compile Typst → PDF via Rust sidecar (no REST backend needed)
-        const base64 = await tauri.compileTypstPdf({ content: props.content })
-        if (!base64 || typeof base64 !== 'string') return
-        const binary = Uint8Array.from(atob(base64), c => c.charCodeAt(0))
-        const pdfBlob = new Blob([binary], { type: 'application/pdf' })
-        const url = URL.createObjectURL(pdfBlob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `${base}${hashSuffix}.pdf`
-        a.click()
-        URL.revokeObjectURL(url)
-      } else {
-        // Web mode: call server to compile → PDF
-        const response = await compileDownload(props.content, 'typst')
-        const pdfBlob = response.data instanceof Blob
-          ? response.data
-          : new Blob([response.data], { type: 'application/pdf' })
-        const url = URL.createObjectURL(pdfBlob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `${base}${hashSuffix}.pdf`
-        a.click()
-        URL.revokeObjectURL(url)
-      }
+      const response = await compileDownload(props.content, 'typst')
+      const pdfBlob = response.data instanceof Blob
+        ? response.data
+        : new Blob([response.data], { type: 'application/pdf' })
+      const url = URL.createObjectURL(pdfBlob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${base}${hashSuffix}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
     } else {
       // Markdown compiled or source download — client-side
       const ext = props.format === 'source'

@@ -7,7 +7,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { getFollowers, getFollowing } from '../api/users'
 import { useUserStore } from '../stores/useUserStore'
-import { useTauri } from '../composables/useTauri'
 import { useFollowCache } from '../composables/useFollowCache'
 import { useNetworkStatus } from '../composables/useNetworkStatus'
 import UserCard from '../components/UserCard.vue'
@@ -19,7 +18,6 @@ const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
 const userStore = useUserStore()
-const tauri = useTauri()
 const { isSynced } = useNetworkStatus()
 
 const userId = computed(() => route.params.id as string)

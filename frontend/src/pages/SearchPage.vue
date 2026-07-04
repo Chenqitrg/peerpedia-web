@@ -9,7 +9,6 @@ import { useOffline } from '../composables/useOffline'
 import type { ArticleSummary } from '../api/types'
 import { searchArticles } from '../api/search'
 import { useUserStore } from '../stores/useUserStore'
-import { useTauri } from '../composables/useTauri'
 import { useAsyncResource } from '../composables/useAsyncResource'
 import { useBookmarkToggle } from '../composables/useBookmarkToggle'
 import ArticleCard from '../components/ArticleCard.vue'
@@ -21,19 +20,11 @@ import { Search } from 'lucide-vue-next'
 
 const route = useRoute()
 const userStore = useUserStore()
-const tauri = useTauri()
 const { t } = useI18n()
-const { canRead, getFallback, isLocalOnly } = useOffline()
+const { canRead, getFallback } = useOffline()
 
-const isLocalMode = computed(() =>
-  route.query.mode === 'local' || isLocalOnly()
-)
-const degraded = ref(false)
 const searchScope = computed(() =>
-  isLocalMode.value ? 'search_local'
-  : degraded.value ? 'search_degraded'
-  : canRead('search.network') ? 'search_network'
-  : 'search_local'
+  canRead('search.network') ? 'search_network' : 'search_local'
 )
 
 const query = ref('')
@@ -44,91 +35,11 @@ const pageSize = 20
 const { data: result, loading, error, execute: doSearch } = useAsyncResource(
   async () => {
     if (!query.value.trim()) return null
-    if (isLocalMode.value) {
-      const [drafts, cached] = await Promise.all([
-        tauri.searchDrafts({ q: query.value.trim(), account_id: userStore.viewer?.id }),
-        tauri.searchCachedArticles({ q: query.value.trim() }),
-      ])
-      const draftList = (drafts && !('error' in drafts) && Array.isArray(drafts)) ? drafts : []
-      const cacheList = (cached && !('error' in cached) && Array.isArray(cached)) ? cached : []
-      const seen = new Set<string>()
-      const merged: any[] = []
-      for (const d of draftList) {
-        if (!seen.has(d.id)) { seen.add(d.id); merged.push(d) }
-      }
-      for (const c of cacheList) {
-        if (!seen.has(c.id)) { seen.add(c.id); merged.push(c) }
-      }
-      return {
-        articles: merged.map(m => ({
-          id: m.id,
-          title: m.title || 'Untitled',
-          status: 'draft' as const,
-          authors: [{ id: userStore.viewer?.id || '', name: userStore.viewer?.name || '', anonymous_name: '' }],
-          content_preview: '',
-          commit_hash: '',
-          fork_count: 0,
-          forked_from: null,
-          commit_count: 0,
-          score: null,
-          days_remaining: null,
-          sink_duration_days: null,
-          is_bookmarked: false,
-          is_own_article: userStore.viewer?.id != null,
-          created_at: m.updated_at,
-          updated_at: m.updated_at,
-          abstract: null,
-        })),
-        total: merged.length,
-      }
-    }
-    degraded.value = false
-    try {
-      return await searchArticles({
-        q: query.value.trim(),
-        page: currentPage.value,
-        size: pageSize,
-      })
-    } catch {
-      // Network search failed — fall back to local
-      degraded.value = true
-      const [drafts, cached] = await Promise.all([
-        tauri.searchDrafts({ q: query.value.trim(), account_id: userStore.viewer?.id }),
-        tauri.searchCachedArticles({ q: query.value.trim() }),
-      ])
-      const draftList = (drafts && !('error' in drafts) && Array.isArray(drafts)) ? drafts : []
-      const cacheList = (cached && !('error' in cached) && Array.isArray(cached)) ? cached : []
-      const seen = new Set<string>()
-      const merged: any[] = []
-      for (const d of draftList) {
-        if (!seen.has(d.id)) { seen.add(d.id); merged.push(d) }
-      }
-      for (const c of cacheList) {
-        if (!seen.has(c.id)) { seen.add(c.id); merged.push(c) }
-      }
-      return {
-        articles: merged.map(m => ({
-          id: m.id,
-          title: m.title || 'Untitled',
-          status: 'draft' as const,
-          authors: [{ id: userStore.viewer?.id || '', name: userStore.viewer?.name || '', anonymous_name: '' }],
-          content_preview: '',
-          commit_hash: '',
-          fork_count: 0,
-          forked_from: null,
-          commit_count: 0,
-          score: null,
-          days_remaining: null,
-          sink_duration_days: null,
-          is_bookmarked: false,
-          is_own_article: userStore.viewer?.id != null,
-          created_at: m.updated_at,
-          updated_at: m.updated_at,
-          abstract: null,
-        })),
-        total: merged.length,
-      }
-    }
+    return await searchArticles({
+      q: query.value.trim(),
+      page: currentPage.value,
+      size: pageSize,
+    })
   },
   null as SearchResult | null,
   { immediate: false },
@@ -143,7 +54,7 @@ const { toggle: handleToggleBookmark } = useBookmarkToggle(results as any)
 onMounted(() => {
   const q = route.query.q as string
   if (q) query.value = q
-  if (q && (canRead('search.network') || isLocalMode.value)) {
+  if (q) {
     searched.value = true
     doSearch()
   }

@@ -65,7 +65,7 @@ Default to surfacing uncertainty, not hiding it.
 
 - README.md
 - docs/DESIGN.en.md
-- docs/api-contract.json
+- frontend/src/api/ — Axios API modules (the contract with peerpedia-core server)
 
 ---
 
@@ -109,25 +109,14 @@ Do not store relationships in JSON.
 
 ---
 
-## Source of Truth
+## Architecture
 
-Every piece of data has exactly one canonical owner.
+This is a pure Vue 3 SPA. It contains zero backend logic.
 
-Default:
-
-- Git = Source of Truth
-- Database = Index / Cache
-
-No dual-write systems without approval.
-
----
-
-## Architecture Rules
-
-- Modules communicate via Service Interfaces.
-- No direct cross-module database access.
-- Modules must be replaceable.
-- Prefer rewrite over patching complexity.
+- All data comes from a running `peerpedia server` instance (see peerpedia-core)
+- REST API is the single source of truth — no local database, no local Git
+- `localStorage` is for session persistence and offline cache only
+- See `frontend/src/api/` for the API client modules
 
 ---
 

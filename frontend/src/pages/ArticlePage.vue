@@ -10,8 +10,6 @@ import { getArticle, getArticleSource, getHistory, forkArticle, extendSink, crea
 import { compilePreview } from '../api/compile'
 import { addBookmark, removeBookmark } from '../api/bookmarks'
 import { useUserStore } from '../stores/useUserStore'
-import { useTauri } from '../composables/useTauri'
-import { useNetworkStatus } from '../composables/useNetworkStatus'
 import { useArticleTab } from '../composables/useTabIntegration'
 import { useTabStore } from '../stores/useTabStore'
 import { useReviewStore } from '../stores/useReviewStore'
@@ -40,7 +38,6 @@ import {
   X,
   Loader,
 } from 'lucide-vue-next'
-import { useArticleSync } from '../composables/useArticleSync'
 import { useFollowCache } from '../composables/useFollowCache'
 import { saveJSON, loadJSON } from '../composables/useLocalStorage'
 import DiffView from '../components/DiffView.vue'
@@ -76,13 +73,8 @@ useArticleTab(articleTabId, computed(() => article.value?.title), articleBodyRef
 
 const isOwnArticle = computed(() => {
   if (article.value?.is_own_article) return true
-  // Check both server identity (viewer.id) and local identity (localAccount.id).
-  // After server sync, viewer.id is the server UUID but local drafts use the
-  // local account UUID — the two IDs differ until the draft is synced.
   const viewerId = userStore.viewer?.id
-  const localId = userStore.localAccount?.id
-  if ((viewerId && articleAuthorIds.value.includes(viewerId)) ||
-      (localId && articleAuthorIds.value.includes(localId))) return true
+  if (viewerId && articleAuthorIds.value.includes(viewerId)) return true
   return false
 })
 
@@ -92,10 +84,6 @@ function handleDeleted() {
 
 const isBookmarked = computed(() => article.value?.is_bookmarked ?? false)
 const articleAuthorIds = computed(() => article.value?.authors.map(a => a.id) ?? [])
-// Cached article detection (Tauri offline mode).
-const tauri = useTauri()
-const isFromCache = ref(false)
-const cachedAt = ref<string | null>(null)
 const commitHash = ref('')
 
 const statusLabel = useStatusLabel(() => article.value?.status ?? '')
@@ -159,7 +147,6 @@ const sortedReviews = computed(() => {
 
 function buildArticleFromDraft(draft: { id: string; account_id: string; title: string; content: string; format: string; updated_at: string }): ArticleDetail {
   const viewerId = userStore.viewer?.id
-  const localId = userStore.localAccount?.id
   return {
     id: draft.id,
     title: draft.title || 'Untitled',
@@ -170,7 +157,7 @@ function buildArticleFromDraft(draft: { id: string; account_id: string; title: s
     forked_from: null,
     commit_count: 1,
     compiled_format: draft.format,
-    compiled_output: draft.content,  // use raw content as compiled output
+    compiled_output: draft.content,
     compiled_pages: null,
     score: null,
     sink_eta: null,
@@ -178,7 +165,7 @@ function buildArticleFromDraft(draft: { id: string; account_id: string; title: s
     sink_duration_days: null,
     review_count: 0,
     is_bookmarked: false,
-    is_own_article: viewerId === draft.account_id || localId === draft.account_id,
+    is_own_article: viewerId === draft.account_id,
     created_at: draft.updated_at,
     updated_at: draft.updated_at,
   }
@@ -202,11 +189,9 @@ async function loadArticle(articleId: string) {
     }).catch((e: unknown) => { console.warn('Cache article failed:', e) })
     return
   } catch (e: any) {
-    console.log('[loadArticle] REST failed:', articleId, 'status:', e?.response?.status, 'offline:', tauri.isTauri.value || tauri.isBrowserLocal.value)
-    // 2. In Tauri/dev-mock mode: try cached article first, then draft, then git.
-    //    Git is the source of truth — no cache chain to get stale.
-    const isOffline = tauri.isTauri.value || tauri.isBrowserLocal.value
-    if (isOffline) {
+    console.log('[loadArticle] REST failed:', articleId, 'status:', e?.response?.status)
+    // Try cached article (explicitly opened earlier).
+    {
       // Try cached article (explicitly opened earlier).
       const cache = useFollowCache()
       const cached = await cache.getCachedArticle(articleId)
@@ -217,10 +202,8 @@ async function loadArticle(articleId: string) {
         if (cached.source.content) {
           if (cached.source.format === 'typst') {
             try {
-              const result = await tauri.compileTypst({ content: cached.source.content, format: 'typst' })
-              if (result && typeof result === 'string') {
-                compiledHtml.value = `<div class="typst-preview">${sanitizeTypstSvg(result)}</div>`
-              }
+              const result = await compilePreview(cached.source.content, 'typst')
+              compiledHtml.value = `<div class="typst-preview">${sanitizeTypstSvg(result.svg || '')}</div>`
             } catch { compiledHtml.value = '' }
           } else {
             const { parseMarkdown } = await import('../utils/markdown')
@@ -230,37 +213,14 @@ async function loadArticle(articleId: string) {
         try { loadReviews() } catch { /* offline — no reviews available */ }
         return
       }
-      // Try local draft (own articles).
-      const draft = await tauri.getDraft({ id: articleId })
-      if (draft && !('error' in draft)) {
-        const draftData = draft as { id: string; account_id: string; title: string; content: string; format: string; updated_at: string }
-        article.value = buildArticleFromDraft(draftData)
-        // Always get latest content + hash from git (source of truth)
-        try {
-          const history = await tauri.gitHistory({ article_id: articleId })
-          if (history && !('error' in history) && Array.isArray(history) && history.length > 0) {
-            commitHash.value = history[0].hash
-            const gitContent = await tauri.gitShow({ article_id: articleId, commit_hash: commitHash.value })
-            if (gitContent && typeof gitContent === 'string' && !gitContent.startsWith('{')) {
-              article.value.compiled_output = gitContent
-            }
-          }
-        } catch { /* keep draft content as fallback */ }
-        await loadCompiledContent()
-        return
-      }
     }
 
     // 3. Neither source worked — show error.
-    if (isOffline) {
-      errorMessage.value = 'Could not open article. Try saving a draft first.'
+    const status = e?.response?.status
+    if (status === 404) {
+      errorMessage.value = 'Article not found.'
     } else {
-      const status = e?.response?.status
-      if (status === 404) {
-        errorMessage.value = 'Article not found.'
-      } else {
-        errorMessage.value = e.userMessage || 'Failed to load article. Is the server running?'
-      }
+      errorMessage.value = e.userMessage || 'Failed to load article. Is the server running?'
     }
   }
 }
@@ -285,8 +245,6 @@ watch(() => route.params.id, async (newId) => {
   reviewStore.reviews = []
   compiledHtml.value = ''
   activeTab.value = 'body'
-  isFromCache.value = false
-  cachedAt.value = null
   try {
     await loadArticle(newId as string)
   } finally {
@@ -296,61 +254,27 @@ watch(() => route.params.id, async (newId) => {
 
 async function loadCompiledContent() {
   if (!article.value) return
-  const isLocal = tauri.isTauri.value || tauri.isBrowserLocal.value
 
   let srcContent: string
   let srcFormat: string
 
-  // In local/Tauri mode, content was already sourced from git in loadArticle.
-  // compiled_output = git content (source of truth), not stale draft cache.
-  if (isLocal) {
-    srcContent = article.value.compiled_output || ''
-    srcFormat = article.value.compiled_format || 'markdown'
-    // Server articles (not local drafts): fetch source from server for compilation.
-    if (!srcContent) {
-      try {
-        const src = await getArticleSource(id)
-        srcContent = src.content
-        srcFormat = src.format
-      } catch {
-        compiledHtml.value = ''
-        return
-      }
-    }
-  } else {
-    // Web mode: fetch source from server to determine real format.
-    // compiled_format is never populated in the DB (on-demand compile).
-    try {
-      const src = await getArticleSource(id)
-      srcContent = src.content
-      srcFormat = src.format
-    } catch {
-      compiledHtml.value = ''
-      return
-    }
+  // Fetch source from server to determine real format.
+  // compiled_format is never populated in the DB (on-demand compile).
+  try {
+    const src = await getArticleSource(id)
+    srcContent = src.content
+    srcFormat = src.format
+  } catch {
+    compiledHtml.value = ''
+    return
   }
   articleFormat.value = srcFormat as 'markdown' | 'typst'
   articleSourceContent.value = srcContent
 
   const isTypst = srcFormat === 'typst'
 
-  // ── Typst articles ────────────────────────────────────────────────
+  // ── Typst articles: compile via server API ──────────────────────────
   if (isTypst) {
-    if (isLocal) {
-      try {
-        const result = await tauri.compileTypst({ content: srcContent, format: 'typst' })
-        if (result && typeof result === 'string') {
-          compiledHtml.value = `<div class="typst-preview">${sanitizeTypstSvg(result)}</div>`
-        } else if (result && typeof result === 'object' && 'error' in result) {
-          compiledHtml.value = `<div class="typst-preview-error text-[#d73a49] p-4 font-mono text-sm">${(result as { error: string }).error}</div>`
-        }
-      } catch {
-        compiledHtml.value = ''
-      }
-      return
-    }
-
-    // Web mode: compile Typst → SVG via server API
     try {
       const result = await compilePreview({ content: srcContent, format: 'typst' })
       compiledHtml.value = sanitizeTypstSvg(result.output)
@@ -361,15 +285,7 @@ async function loadCompiledContent() {
   }
 
   // ── Markdown articles ─────────────────────────────────────────────
-  if (isLocal) {
-    if (srcContent) {
-      const { parseMarkdown } = await import('../utils/markdown')
-      compiledHtml.value = parseMarkdown(srcContent)
-    }
-    return
-  }
-
-  // Web mode: prefer server-side compiled_output, else compile via API
+  // Prefer server-side compiled_output, else compile via API
   if (article.value.compiled_output) {
     compiledHtml.value = renderMathInHtml(article.value.compiled_output)
   } else {
@@ -386,8 +302,6 @@ async function loadReviews() {
   await reviewStore.fetchReviews(id)
 }
 
-const { isSynced } = useNetworkStatus()
-
 // ── L4 Article sync ─────────────────────────────────────────────────────
 const serverCommitHash = ref<string | null>(null)
 const localHeadHash = ref<string | null>(null)
@@ -401,21 +315,16 @@ const sid = () => myArticleId  // UUID unification: draft ID = server article ID
 const sch = () => serverCommitHash.value
 const lh = () => localHeadHash.value
 
-const {
-  syncState,
-  pushing,
-  pushUpdate,
-  useRemote,
-  getContentAtCommit,
-  clearError: clearSyncError,
-} = useArticleSync(draftId, sid, sch, lh)
+// Sync state stubs (web mode — no local git to compare)
+const syncState = ref('synced')
+const pushing = ref(false)
+async function pushUpdate() { return true }
+async function useRemote(_hash: string) { return true }
+async function getContentAtCommit(_hash: string) { return null }
+function clearSyncError() { diffError.value = '' }
 
 async function loadSyncMeta() {
-  if (!tauri.isTauri.value) return
-  const history = await tauri.gitHistory({ article_id: myArticleId })
-  if (history && !('error' in history) && Array.isArray(history) && history.length > 0) {
-    localHeadHash.value = history[0].hash
-  }
+  // Web mode: no local git — remote is source of truth
 }
 
 async function openDiffView() {
@@ -503,35 +412,13 @@ async function toggleBookmark() {
   const wasBookmarked = article.value.is_bookmarked
   article.value.is_bookmarked = !wasBookmarked
 
-  // If server is reachable but we have no token, try to sync local creds first
-  const needsSync = (userStore.isTauriMode || userStore.isBrowserLocal)
-    && isSynced.value
-    && !userStore.token
-
-  if (needsSync) {
-    const synced = await userStore.trySyncServerAuth()
-    if (!synced || !userStore.token) {
-      article.value.is_bookmarked = wasBookmarked
-      return
-    }
-  }
-
   try {
-    if ((tauri.isTauri.value || tauri.isBrowserLocal.value) && !isSynced.value) {
-      if (wasBookmarked) {
-        await tauri.removeBookmark({ user_id: userStore.viewer.id, article_id: article.value.id })
-      } else {
-        await tauri.addBookmark({ user_id: userStore.viewer.id, article_id: article.value.id })
-      }
+    if (wasBookmarked) {
+      await removeBookmark(article.value.id)
+      _syncBookmarkCache(userStore.viewer.id, article.value.id, false)
     } else {
-      if (wasBookmarked) {
-        await removeBookmark(article.value.id)
-        _syncBookmarkCache(userStore.viewer.id, article.value.id, false)
-      } else {
-        const result = await addBookmark(article.value.id)
-        // Update localStorage cache so bookmarks are visible offline.
-        _syncBookmarkCache(userStore.viewer.id, article.value.id, true)
-      }
+      await addBookmark(article.value.id)
+      _syncBookmarkCache(userStore.viewer.id, article.value.id, true)
     }
   } catch {
     article.value.is_bookmarked = wasBookmarked
@@ -697,10 +584,6 @@ defineExpose({ updateSingleScore, reviewStore, mergeError })
             <span v-if="article.forked_from" class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-mono text-neutral bg-neutral/10 rounded">
               <GitFork class="w-3 h-3" stroke-width="2" />
               {{ t('card.forkBadge') }}
-            </span>
-            <span v-if="isFromCache && cachedAt" class="inline-flex items-center gap-1 px-2 py-0.5 text-xs text-ink-muted bg-[#21262d] rounded" :data-tooltip="'This article was cached and may be outdated'">
-              <Clock class="w-3 h-3" stroke-width="2" />
-              Cached {{ cachedAt }}
             </span>
           </div>
           <button
