@@ -16,20 +16,6 @@ A Vue 3 single-page application that connects to a running `peerpedia server` in
 - NOT a backend (see [peerpedia-core](https://github.com/Chenqitrg/peerpedia-core))
 - NOT a standalone product — you need a peerpedia-core server running
 
-## Quick start
-
-```bash
-cd frontend
-npm install
-npm run dev        # → http://localhost:5173
-```
-
-The dev server proxies `/api` requests to `http://localhost:8080`. Start `peerpedia server` on that port:
-
-```bash
-# In peerpedia-core repo:
-peerpedia server start --port 8080
-```
 
 ## Architecture
 
